@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#080b0f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>SOHELATOR</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+  <link rel="manifest" href='data:application/json,{"name":"SOHELATOR","short_name":"SOHELATOR","display":"standalone","background_color":"%23080b0f","theme_color":"%23080b0f","start_url":"/"}' />
+  <style>
+    :root {
+      --bg: #080b0f;
+      --accent: #00e5ff;
+      --green: #00ff87;
+      --red: #ff3b5c;
+      --yellow: #ffd000;
+      --text: #e8f0f7;
+      --muted: #6b7a8c;
+      --card: #0f141c;
+      --border: #1a2433;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bot: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: "DM Sans", system-ui, sans-serif; -webkit-tap-highlight-color: transparent; overflow: hidden; }
+    .font-bebas { font-family: "Bebas Neue", sans-serif; letter-spacing: 0.04em; }
+    .font-mono { font-family: "Space Mono", monospace; }
+
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+      padding: calc(8px + var(--safe-top)) 12px 10px;
+      background: linear-gradient(180deg, #0c1018 0%, rgba(8,11,15,0.96) 100%);
+      border-bottom: 1px solid var(--border);
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    }
+    .logo { font-family: "Bebas Neue", sans-serif; font-size: 1.5rem; color: var(--accent); text-shadow: 0 0 12px rgba(0,229,255,0.35); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
+    .dot.open { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .dot.closed { background: var(--red); }
+    .dot.ext { background: var(--yellow); }
+    .chip {
+      font-family: "Space Mono", monospace; font-size: 0.7rem;
+      padding: 4px 8px; border-radius: 999px; background: var(--card); border: 1px solid var(--border); color: var(--accent);
+    }
+    .ticker-wrap { flex: 1; min-width: 120px; display: flex; gap: 6px; align-items: center; }
+    .ticker-wrap input {
+      flex: 1; background: var(--card); border: 1px solid var(--border); color: var(--text);
+      padding: 8px 10px; border-radius: 8px; font-family: "Space Mono", monospace; text-transform: uppercase; font-size: 0.85rem;
+    }
+    .btn-go {
+      background: var(--accent); color: #000; border: none; padding: 8px 14px; border-radius: 8px;
+      font-weight: 700; font-size: 0.8rem; cursor: pointer;
+    }
+    .btn-go:active { transform: scale(0.97); }
+
+    .main {
+      position: absolute; top: calc(56px + var(--safe-top)); bottom: calc(56px + var(--safe-bot)); left: 0; right: 0;
+      overflow: hidden; touch-action: pan-y;
+    }
+    .pages {
+      display: flex; width: 500%; height: 100%; transition: transform 0.28s ease-out; will-change: transform;
+    }
+    .page {
+      width: 20%; height: 100%; overflow-y: auto; overflow-x: hidden; padding: 12px 12px 24px; -webkit-overflow-scrolling: touch;
+    }
+
+    .bottomnav {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+      padding: 6px 8px calc(8px + var(--safe-bot));
+      background: rgba(12,16,24,0.98); border-top: 1px solid var(--border);
+      display: flex; justify-content: space-around; align-items: stretch;
+    }
+    .nav-item {
+      flex: 1; text-align: center; padding: 6px 2px; border: none; background: transparent; color: var(--muted);
+      font-size: 0.62rem; font-weight: 600; cursor: pointer; position: relative;
+    }
+    .nav-item.active { color: var(--accent); }
+    .nav-item .emoji { display: block; font-size: 1.1rem; margin-bottom: 2px; }
+    .badge {
+      position: absolute; top: 2px; right: 8%; min-width: 16px; height: 16px; padding: 0 4px;
+      background: var(--accent); color: #000; border-radius: 8px; font-size: 0.6rem; line-height: 16px; font-family: "Space Mono", monospace;
+    }
+
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px;
+    }
+    .hero {
+      border-top-width: 4px; border-top-style: solid;
+    }
+    .hero.bull { border-top-color: var(--green); }
+    .hero.bear { border-top-color: var(--red); }
+    .hero.wait { border-top-color: var(--yellow); }
+
+    .pill {
+      display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px;
+      font-weight: 700; font-size: 0.9rem; margin: 12px 0;
+    }
+    .pill.calls { background: rgba(0,255,135,0.15); color: var(--green); border: 1px solid var(--green); }
+    .pill.puts { background: rgba(255,59,92,0.15); color: var(--red); border: 1px solid var(--red); }
+    .pill.wait { background: rgba(255,208,0,0.12); color: var(--yellow); border: 1px solid var(--yellow); }
+    .pill.watch { background: rgba(0,229,255,0.12); color: var(--accent); border: 1px solid var(--accent); }
+    .pulse {
+      width: 10px; height: 10px; border-radius: 50%; animation: pulse 1.4s ease infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.15); }
+    }
+
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+    .stat-cell {
+      background: #0a0e14; border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-align: center;
+    }
+    .stat-cell .label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; }
+    .stat-cell .val { font-family: "Space Mono", monospace; font-size: 0.95rem; margin-top: 4px; color: var(--accent); }
+
+    .tf-strip { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0; }
+    .tf-pill {
+      flex: 1; min-width: 52px; text-align: center; padding: 8px 4px; border-radius: 8px; background: #0a0e14; border: 1px solid var(--border);
+      font-family: "Space Mono", monospace; font-size: 0.65rem;
+    }
+    .tf-pill .dir { font-size: 1rem; margin-top: 4px; }
+    .up { color: var(--green); }
+    .down { color: var(--red); }
+    .flat { color: var(--muted); }
+
+    .setup-row {
+      display: flex; align-items: flex-start; gap: 10px; padding: 10px; border-radius: 10px; background: #0a0e14; margin-bottom: 8px; border: 1px solid var(--border);
+    }
+    .setup-badge { font-size: 0.65rem; padding: 4px 8px; border-radius: 6px; background: var(--accent); color: #000; font-weight: 700; white-space: nowrap; }
+    .setup-q { font-family: "Space Mono", monospace; font-size: 0.75rem; color: var(--green); margin-left: auto; }
+
+    .trio { display: grid; gap: 8px; }
+    .trio-card { padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: linear-gradient(135deg, #0f141c, #0a0d12); }
+    .trio-card h4 { font-size: 0.7rem; color: var(--accent); margin-bottom: 6px; text-transform: uppercase; }
+    .trio-card p { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
+
+    .bar-row { margin: 10px 0; }
+    .bar-label { display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 4px; }
+    .bar-track { height: 8px; background: #0a0e14; border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
+    .bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+    .bar-fill.accent { background: linear-gradient(90deg, var(--accent), #00b8cc); }
+    .bar-fill.green { background: var(--green); }
+    .bar-fill.red { background: var(--red); }
+    .bar-fill.yellow { background: var(--yellow); }
+
+    .gauge-wrap { position: relative; height: 100px; margin: 16px 0; }
+    .gauge-arc {
+      width: 160px; height: 80px; margin: 0 auto; border: 12px solid var(--border); border-bottom: none;
+      border-radius: 160px 160px 0 0; position: relative;
+    }
+    .gauge-needle {
+      position: absolute; bottom: 0; left: 50%; width: 4px; height: 72px; background: var(--accent);
+      transform-origin: bottom center; -webkit-transform-origin: bottom center; border-radius: 2px; margin-left: -2px; transition: transform 0.4s ease;
+    }
+
+    .opt-card { border-left: 4px solid var(--border); }
+    .opt-card.call { border-left-color: var(--green); }
+    .opt-card.put { border-left-color: var(--red); }
+    .big-btn {
+      width: 100%; margin-top: 12px; padding: 14px; border: none; border-radius: 10px; font-weight: 800; font-size: 1rem; cursor: pointer;
+    }
+    .big-btn.call { background: var(--green); color: #000; }
+    .big-btn.put { background: var(--red); color: #fff; }
+
+    table.chain { width: 100%; border-collapse: collapse; font-family: "Space Mono", monospace; font-size: 0.7rem; }
+    table.chain th, table.chain td { padding: 8px 4px; text-align: right; border-bottom: 1px solid var(--border); }
+    table.chain th:first-child, table.chain td:first-child { text-align: left; }
+    table.chain tr:active { background: rgba(0,229,255,0.08); }
+
+    .modal-back {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+    }
+    .modal-back.on { opacity: 1; pointer-events: auto; }
+    .modal-sheet {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 101;
+      background: #0f141c; border-radius: 16px 16px 0 0; border: 1px solid var(--border);
+      padding: 16px 16px calc(20px + var(--safe-bot)); transform: translateY(100%); transition: transform 0.3s ease;
+      max-height: 85vh; overflow-y: auto;
+    }
+    .modal-sheet.on { transform: translateY(0); }
+    .modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 12px; }
+    .qty-row { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 16px 0; }
+    .qty-row button {
+      width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--text); font-size: 1.4rem; cursor: pointer;
+    }
+    .qty-row span { font-family: "Space Mono", monospace; font-size: 1.5rem; min-width: 48px; text-align: center; }
+    .toggle-row { display: flex; gap: 8px; margin: 12px 0; }
+    .toggle-row button {
+      flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer;
+    }
+    .toggle-row button.active { border-color: var(--accent); color: var(--accent); }
+    .confirm-btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-weight: 800; margin-top: 12px; cursor: pointer; }
+
+    .toast-wrap { position: fixed; top: calc(12px + var(--safe-top)); left: 12px; right: 12px; z-index: 200; pointer-events: none; }
+    .toast {
+      padding: 12px 14px; border-radius: 10px; margin-bottom: 8px; font-size: 0.85rem; font-weight: 600;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4); pointer-events: auto; animation: toastIn 0.25s ease;
+    }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    .toast.ok { background: rgba(0,255,135,0.95); color: #000; }
+    .toast.err { background: rgba(255,59,92,0.95); color: #fff; }
+    .toast.info { background: rgba(0,229,255,0.95); color: #000; }
+
+    .subtabs { display: flex; gap: 6px; margin-bottom: 12px; }
+    .subtabs button { flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font-size: 0.7rem; cursor: pointer; }
+    .subtabs button.active { color: var(--accent); border-color: var(--accent); }
+
+    .pos-card { margin-bottom: 10px; }
+    .progress { height: 6px; background: #0a0e14; border-radius: 3px; overflow: hidden; margin: 8px 0; }
+    .progress > div { height: 100%; border-radius: 3px; }
+    .order-row { display: flex; align-items: center; gap: 8px; padding: 10px; border-bottom: 1px solid var(--border); font-size: 0.78rem; flex-wrap: wrap; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .wl-row { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 8px; cursor: pointer; }
+    .spark { display: flex; align-items: flex-end; gap: 2px; height: 28px; }
+    .spark div { width: 4px; background: var(--accent); border-radius: 1px; opacity: 0.7; }
+
+    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .summary-cell { padding: 12px; border-radius: 10px; background: #0a0e14; border: 1px solid var(--border); text-align: center; }
+    .summary-cell .k { font-size: 0.65rem; color: var(--muted); }
+    .summary-cell .v { font-family: "Space Mono", monospace; font-size: 1rem; color: var(--accent); margin-top: 4px; }
+
+    h2.section { font-family: "Bebas Neue", sans-serif; font-size: 1.4rem; color: var(--accent); margin-bottom: 10px; }
+    .muted { color: var(--muted); font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <span class="logo">SOHELATOR</span>
+    <span id="mktLabel" class="muted font-mono" style="font-size:0.7rem;"><span class="dot closed" id="mktDot"></span><span id="mktText">—</span></span>
+    <span class="chip" id="equityChip">EQ —</span>
+    <div class="ticker-wrap">
+      <input id="tickerInput" type="text" maxlength="8" placeholder="TICKER" value="NVDA" />
+      <button type="button" class="btn-go" id="goBtn">GO</button>
+    </div>
+  </header>
+
+  <div class="main" id="mainSwipe">
+    <div class="pages" id="pages">
+      <!-- 0 SIGNAL -->
+      <section class="page" id="page-0">
+        <div class="card hero wait" id="heroCard">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <div class="font-bebas" style="font-size:2.2rem;" id="heroSym">NVDA</div>
+              <div class="font-mono" style="font-size:1.4rem;margin-top:4px;" id="heroPrice">—</div>
+            </div>
+            <div class="font-mono" style="text-align:right;font-size:1rem;" id="heroChg">—</div>
+          </div>
+          <div id="signalPill" class="pill wait"><span class="pulse" style="background:currentColor;"></span><span id="signalText">WAIT</span></div>
+          <div class="grid-3">
+            <div class="stat-cell"><div class="label">Trend (ADX/50)</div><div class="val" id="stAdx">—</div></div>
+            <div class="stat-cell"><div class="label">ATM IV%</div><div class="val" id="stIv">—</div></div>
+            <div class="stat-cell"><div class="label">TF Align</div><div class="val" id="stTf">—</div></div>
+          </div>
+          <div class="tf-strip" id="tfStrip"></div>
+          <h2 class="section" style="margin-top:16px;">Setups</h2>
+          <div id="setupsList"></div>
+          <h2 class="section" style="margin-top:16px;">Action</h2>
+          <div class="trio">
+            <div class="trio-card"><h4>Entry conditions</h4><p id="actEntry">—</p></div>
+            <div class="trio-card"><h4>Exit when</h4><p id="actExit">—</p></div>
+            <div class="trio-card"><h4>Stay out if</h4><p id="actStay">—</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 1 INDS -->
+      <section class="page" id="page-1">
+        <h2 class="section">Indicators (5m)</h2>
+        <div class="card" id="indsCard"></div>
+        <h2 class="section">IV</h2>
+        <div class="card">
+          <div class="gauge-wrap">
+            <div class="gauge-arc"><div class="gauge-needle" id="ivNeedle"></div></div>
+            <div class="font-mono" style="text-align:center;margin-top:4px;" id="ivGaugeLabel">ATM IV —</div>
+          </div>
+          <div class="grid-3">
+            <div class="stat-cell"><div class="label">ATM IV%</div><div class="val" id="iv1">—</div></div>
+            <div class="stat-cell"><div class="label">Delta</div><div class="val" id="iv2">—</div></div>
+            <div class="stat-cell"><div class="label">Premium</div><div class="val" id="iv3">—</div></div>
+          </div>
+          <div class="stat-cell" style="margin-top:8px;"><div class="label">Expiry (signal)</div><div class="val" id="iv4">—</div></div>
+        </div>
+        <h2 class="section">Risk environment</h2>
+        <div class="card" id="riskCard"></div>
+      </section>
+
+      <!-- 2 OPTIONS -->
+      <section class="page" id="page-2">
+        <h2 class="section">Suggested</h2>
+        <div id="suggestedWrap"></div>
+        <h2 class="section">Chain</h2>
+        <div class="card" style="padding:0;overflow-x:auto;">
+          <table class="chain" id="chainTable"><thead><tr><th>Strike</th><th>Type</th><th>Mid</th><th>Δ</th><th>IV</th></tr></thead><tbody></tbody></table>
+        </div>
+      </section>
+
+      <!-- 3 TRADES -->
+      <section class="page" id="page-3">
+        <div class="summary-grid" id="acctSummary"></div>
+        <div class="subtabs" style="margin-top:14px;">
+          <button type="button" class="active" data-sub="pos">Positions</button>
+          <button type="button" data-sub="ord">Orders</button>
+          <button type="button" data-sub="wl">Watchlist</button>
+        </div>
+        <div id="subPos"></div>
+        <div id="subOrd" style="display:none;"></div>
+        <div id="subWl" style="display:none;"></div>
+      </section>
+
+      <!-- 4 GUIDE -->
+      <section class="page" id="page-4">
+        <h2 class="section">Playbook</h2>
+        <div id="guideCards"></div>
+      </section>
+    </div>
+  </div>
+
+  <nav class="bottomnav" id="bottomnav">
+    <button type="button" class="nav-item active" data-i="0"><span class="emoji">⚡</span>SIGNAL</button>
+    <button type="button" class="nav-item" data-i="1"><span class="emoji">📊</span>INDS</button>
+    <button type="button" class="nav-item" data-i="2"><span class="emoji">🎯</span>OPTIONS</button>
+    <button type="button" class="nav-item" data-i="3"><span class="emoji">💼</span>TRADES<span class="badge" id="posBadge" style="display:none;">0</span></button>
+    <button type="button" class="nav-item" data-i="4"><span class="emoji">📖</span>GUIDE</button>
+  </nav>
+
+  <div class="modal-back" id="modalBack"></div>
+  <div class="modal-sheet" id="orderModal">
+    <div class="modal-handle"></div>
+    <div class="font-mono" style="font-size:0.75rem;color:var(--muted);" id="omOcc">—</div>
+    <div class="font-bebas" style="font-size:1.6rem;margin-top:4px;" id="omUnd">—</div>
+    <div style="margin-top:8px;font-size:0.85rem;" id="omSide">BUY TO OPEN</div>
+    <div class="qty-row">
+      <button type="button" id="qtyMinus">−</button>
+      <span id="qtyVal">1</span>
+      <button type="button" id="qtyPlus">+</button>
+    </div>
+    <div class="toggle-row">
+      <button type="button" class="active" data-ot="market">MARKET</button>
+      <button type="button" data-ot="limit">LIMIT</button>
+    </div>
+    <div id="limitRow" style="display:none;margin-top:8px;">
+      <label class="muted" style="font-size:0.75rem;">Limit price</label>
+      <input id="limitPrice" type="number" step="0.01" style="width:100%;margin-top:4px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-family:Space Mono,monospace;" />
+    </div>
+    <div class="font-mono" style="margin-top:12px;font-size:0.9rem;" id="estCost">Est. —</div>
+    <button type="button" class="confirm-btn" id="confirmOrder">CONFIRM</button>
+  </div>
+
+  <div class="toast-wrap" id="toasts"></div>
+
+  <script>
+    async function api(path, method = "GET", params = {}, body = {}) {
+      const res = await fetch("/api/tradier", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path, method, params, body }),
+      });
+      return res.json();
+    }
+
+    const state = {
+      page: 0,
+      ticker: "NVDA",
+      quote: null,
+      candles5m: [],
+      tf: {},
+      signal: "WAIT",
+      signalDetail: "wait",
+      ivAtm: null,
+      chainExpiry: null,
+      chainRows: [],
+      suggested: [],
+      balances: null,
+      positions: [],
+      orders: [],
+      orderModal: { occ: "", underlying: "", optType: "call", mid: 0 },
+      orderQty: 1,
+      orderType: "market",
+      touch: { x0: 0, y0: 0, t: 0 },
+      wl: ["NVDA", "TSLA", "SPY", "QQQ", "AAPL"],
+      wlHist: {},
+      subTab: "pos",
+    };
+
+    function toast(msg, type = "info") {
+      const w = document.getElementById("toasts");
+      const el = document.createElement("div");
+      el.className = "toast " + (type === "success" ? "ok" : type === "error" ? "err" : "info");
+      el.textContent = msg;
+      w.appendChild(el);
+      setTimeout(() => el.remove(), 3000);
+    }
+
+    function normList(x) {
+      if (!x) return [];
+      if (Array.isArray(x)) return x;
+      return [x];
+    }
+
+    function parseQuote(q) {
+      if (!q) return null;
+      const last = parseFloat(q.last ?? q.close ?? q.bid ?? 0);
+      const chg = parseFloat(q.change ?? 0);
+      const pct = parseFloat(q.change_percentage ?? q.percent_change ?? 0);
+      return { ...q, last, chg, pct };
+    }
+
+    async function fetchQuote(sym) {
+      const data = await api("/v1/markets/quotes", "GET", { symbols: sym, greeks: "false" });
+      if (data.error) { toast(data.error, "error"); return null; }
+      const q = data.quotes?.quote;
+      const arr = normList(q);
+      return parseQuote(arr[0]);
+    }
+
+    function ymd(d) {
+      return d.toISOString().slice(0, 10);
+    }
+
+    async function fetchTimesales(sym, interval) {
+      const end = new Date();
+      const start = new Date(end.getTime() - 14 * 86400000);
+      const data = await api("/v1/markets/timesales", "GET", {
+        symbol: sym,
+        interval,
+        start: ymd(start),
+        end: ymd(end),
+        session_filter: "open",
+      });
+      if (data.error || !data.series?.data) return [];
+      const raw = normList(data.series.data);
+      return raw.map((c) => ({
+        t: c.time || c.timestamp,
+        o: parseFloat(c.open),
+        h: parseFloat(c.high),
+        l: parseFloat(c.low),
+        c: parseFloat(c.close),
+        v: parseFloat(c.volume || c.volum || 0),
+      })).filter((x) => !isNaN(x.c));
+    }
+
+    async function fetchHistoryDaily(sym) {
+      const data = await api("/v1/markets/history", "GET", {
+        symbol: sym,
+        interval: "daily",
+        start: ymd(new Date(Date.now() - 400 * 86400000)),
+      });
+      if (!data.history?.day) return [];
+      const days = normList(data.history.day);
+      return days.map((d) => ({
+        t: d.date,
+        o: parseFloat(d.open),
+        h: parseFloat(d.high),
+        l: parseFloat(d.low),
+        c: parseFloat(d.close),
+        v: parseFloat(d.volume || 0),
+      }));
+    }
+
+    function emaSeries(arr, period) {
+      if (!arr.length) return [];
+      const k = 2 / (period + 1);
+      const out = [];
+      let e = arr[0];
+      out.push(e);
+      for (let i = 1; i < arr.length; i++) {
+        e = arr[i] * k + e * (1 - k);
+        out.push(e);
+      }
+      return out;
+    }
+
+    function tfDir(closes) {
+      if (closes.length < 25) return "—";
+      const e9 = emaSeries(closes, 9);
+      const e21 = emaSeries(closes, 21);
+      const a = e9[e9.length - 1];
+      const b = e21[e21.length - 1];
+      if (a > b * 1.0005) return "▲";
+      if (a < b * 0.9995) return "▼";
+      return "—";
+    }
+
+    function rsi(closes, period = 14) {
+      if (closes.length < period + 1) return 50;
+      let gains = 0, losses = 0;
+      for (let i = closes.length - period; i < closes.length; i++) {
+        const ch = closes[i] - closes[i - 1];
+        if (ch >= 0) gains += ch; else losses -= ch;
+      }
+      const ag = gains / period;
+      const al = losses / period;
+      if (al === 0) return 100;
+      const rs = ag / al;
+      return 100 - 100 / (1 + rs);
+    }
+
+    function macdHist(closes) {
+      if (closes.length < 35) return 0;
+      const ema12 = emaSeries(closes, 12);
+      const ema26 = emaSeries(closes, 26);
+      const macd = ema12.map((v, i) => v - ema26[i]);
+      const signal = emaSeries(macd, 9);
+      const i = macd.length - 1;
+      return macd[i] - signal[i];
+    }
+
+    function adx(candles, period = 14) {
+      if (candles.length < period * 2) return 0;
+      const tr = [], pdm = [], mdm = [];
+      for (let i = 1; i < candles.length; i++) {
+        const h = candles[i].h, l = candles[i].l, pc = candles[i - 1].c;
+        const trv = Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc));
+        tr.push(trv);
+        const up = h - candles[i - 1].h;
+        const dn = candles[i - 1].l - l;
+        pdm.push(up > dn && up > 0 ? up : 0);
+        mdm.push(dn > up && dn > 0 ? dn : 0);
+      }
+      const n = tr.length;
+      if (n < period) return 0;
+      let atr = 0, sp = 0, sm = 0;
+      for (let i = 0; i < period; i++) { atr += tr[i]; sp += pdm[i]; sm += mdm[i]; }
+      atr /= period; sp /= period; sm /= period;
+      let dip = 100 * (sp / atr);
+      let dim = 100 * (sm / atr);
+      for (let i = period; i < n; i++) {
+        atr = (atr * (period - 1) + tr[i]) / period;
+        sp = (sp * (period - 1) + pdm[i]) / period;
+        sm = (sm * (period - 1) + mdm[i]) / period;
+        dip = 100 * (sp / atr);
+        dim = 100 * (sm / atr);
+      }
+      const dx = (Math.abs(dip - dim) / (dip + dim || 1)) * 100;
+      let adxVal = dx;
+      for (let j = 0; j < 5; j++) adxVal = (adxVal * (period - 1) + dx) / period;
+      return isFinite(adxVal) ? adxVal : 0;
+    }
+
+    function bollingerPctB(closes, period = 20) {
+      if (closes.length < period) return 0.5;
+      const slice = closes.slice(-period);
+      const mean = slice.reduce((a, b) => a + b, 0) / period;
+      const varc = slice.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / period;
+      const sd = Math.sqrt(varc);
+      const upper = mean + 2 * sd;
+      const lower = mean - 2 * sd;
+      const last = closes[closes.length - 1];
+      const w = upper - lower || 1e-9;
+      return (last - lower) / w;
+    }
+
+    function vwapSession(candles) {
+      if (!candles.length) return 0;
+      const today = new Date().toDateString();
+      let pv = 0, vv = 0;
+      for (const c of candles) {
+        const d = new Date(c.t).toDateString();
+        if (d !== today) continue;
+        const tp = (c.h + c.l + c.c) / 3;
+        pv += tp * c.v;
+        vv += c.v;
+      }
+      if (vv === 0) {
+        const tp = (candles[candles.length - 1].h + candles[candles.length - 1].l + candles[candles.length - 1].c) / 3;
+        return tp;
+      }
+      return pv / vv;
+    }
+
+    function aggregateFromHourly(hourly, group) {
+      const out = [];
+      for (let i = 0; i + group <= hourly.length; i += group) {
+        const chunk = hourly.slice(i, i + group);
+        out.push(chunk[chunk.length - 1].c);
+      }
+      return out;
+    }
+
+    function computeSignal(adxVal, macdH, price, vwap, rsiVal, bbB) {
+      if (adxVal < 20) return { key: "WAIT", detail: "chop" };
+      if (macdH > 0 && price > vwap && rsiVal >= 50 && rsiVal <= 70 && bbB > 0.5)
+        return { key: "BUY CALLS", detail: "calls" };
+      if (macdH < 0 && price < vwap && rsiVal >= 30 && rsiVal <= 50 && bbB < 0.5)
+        return { key: "BUY PUTS", detail: "puts" };
+      return { key: "WATCH", detail: "watch" };
+    }
+
+    function alignCount(dirs) {
+      const ups = dirs.filter((d) => d === "▲").length;
+      const downs = dirs.filter((d) => d === "▼").length;
+      if (ups >= 4) return { n: ups, label: ups + "/5 bull" };
+      if (downs >= 4) return { n: downs, label: downs + "/5 bear" };
+      return { n: Math.max(ups, downs), label: Math.max(ups, downs) + "/5" };
+    }
+
+    function renderTfStrip(dirs) {
+      const labels = ["5M", "15M", "1H", "4H", "DAY"];
+      const el = document.getElementById("tfStrip");
+      el.innerHTML = labels.map((lb, i) => {
+        const d = dirs[i] || "—";
+        const cls = d === "▲" ? "up" : d === "▼" ? "down" : "flat";
+        return `<div class="tf-pill"><div>${lb}</div><div class="dir ${cls}">${d}</div></div>`;
+      }).join("");
+    }
+
+    function renderInds(adxVal, macdH, rsiVal, bbB, vwapDist) {
+      const rows = [
+        ["ADX(14)", adxVal, 50, "accent"],
+        ["MACD hist", macdH.toFixed(4), 2, macdH >= 0 ? "green" : "red"],
+        ["RSI(14)", rsiVal.toFixed(1), 100, rsiVal > 70 ? "red" : rsiVal < 30 ? "green" : "accent"],
+        ["BB %B (20)", (bbB * 100).toFixed(0) + "%", 100, "yellow"],
+        ["VWAP dist", vwapDist.toFixed(2) + "%", 5, vwapDist >= 0 ? "green" : "red"],
+      ];
+      document.getElementById("indsCard").innerHTML = rows.map(([name, val, max, tone]) => {
+        const num = typeof val === "number" ? val : parseFloat(String(val).replace(/[^\d.-]/g, "")) || 0;
+        const pct = Math.min(100, (Math.abs(num) / max) * 100);
+        return `<div class="bar-row"><div class="bar-label"><span>${name}</span><span class="font-mono">${val}</span></div><div class="bar-track"><div class="bar-fill ${tone}" style="width:${pct}%"></div></div></div>`;
+      }).join("");
+    }
+
+    function renderRisk(adxVal, ivRankish, tfN, rsiVal, chop) {
+      const rsiZone = rsiVal > 70 ? 90 : rsiVal < 30 ? 90 : 40;
+      const rows = [
+        ["TREND", Math.min(100, adxVal * 2), adxVal >= 25 ? "green" : "yellow"],
+        ["IV RISK", ivRankish, "accent"],
+        ["TF ALIGN", tfN * 20, "accent"],
+        ["RSI ZONE", rsiZone, rsiVal > 70 || rsiVal < 30 ? "red" : "green"],
+        ["CHOP", chop, chop > 50 ? "red" : "green"],
+      ];
+      document.getElementById("riskCard").innerHTML = rows.map(([name, w, tone]) =>
+        `<div class="bar-row"><div class="bar-label"><span>${name}</span></div><div class="bar-track"><div class="bar-fill ${tone}" style="width:${Math.min(100, w)}%"></div></div></div>`
+      ).join("");
+    }
+
+    function buildSetups(sig, adxVal, rsiVal, macdH, bbB) {
+      const list = [];
+      if (adxVal >= 25 && macdH > 0) list.push({ b: "TREND", d: "Bullish MACD with strengthening trend (ADX elevated).", q: 72 });
+      if (adxVal >= 25 && macdH < 0) list.push({ b: "TREND", d: "Bearish MACD with trend participation.", q: 72 });
+      if (bbB > 0.85) list.push({ b: "EXT", d: "Price riding upper band — extension risk.", q: 55 });
+      if (bbB < 0.15) list.push({ b: "EXT", d: "Price at lower band — mean reversion watch.", q: 55 });
+      if (rsiVal > 70) list.push({ b: "RSI", d: "Overbought — favor trims on longs.", q: 48 });
+      if (rsiVal < 30) list.push({ b: "RSI", d: "Oversold — bounce or breakdown decision zone.", q: 48 });
+      if (list.length === 0) list.push({ b: "SCAN", d: "No high-conviction pattern — reduce size.", q: 35 });
+      return list.slice(0, 5);
+    }
+
+    function actionCopy(sig) {
+      if (sig.detail === "calls") return {
+        entry: "Confirm ADX ≥ 20, price above VWAP, RSI 50–70, MACD histogram positive, BB %B > 0.5. Prefer 7–14 DTE.",
+        exit: "Trail under prior 5m swing low or MACD hist flip negative. Target partial into next resistance.",
+        stay: "ADX < 20, RSI > 75, or price lost VWAP on a closing 15m basis.",
+      };
+      if (sig.detail === "puts") return {
+        entry: "Confirm ADX ≥ 20, price below VWAP, RSI 30–50, MACD histogram negative, BB %B < 0.5.",
+        exit: "Cover into support or MACD hist turning positive. Scale at VWAP reclaim.",
+        stay: "ADX < 20, RSI < 25 on downtrend (squeeze risk), or sharp reclaim above VWAP.",
+      };
+      if (sig.detail === "chop") return {
+        entry: "No new swing — wait for ADX expansion and directional VWAP reclaim.",
+        exit: "N/A — stand down.",
+        stay: "Low ADX + whipsaw around VWAP — avoid directional premium.",
+      };
+      return {
+        entry: "Observe only — wait for clean call/put trigger per checklist.",
+        exit: "If testing, keep size minimal and time-stop under 2–3 sessions.",
+        stay: "Mixed signals between timeframes or IV spike without follow-through.",
+      };
+    }
+
+    async function loadMarketData() {
+      const sym = state.ticker.toUpperCase();
+      const [quote, c5, c15, c60, daily] = await Promise.all([
+        fetchQuote(sym),
+        fetchTimesales(sym, "5min"),
+        fetchTimesales(sym, "15min"),
+        fetchTimesales(sym, "1hour"),
+        fetchHistoryDaily(sym),
+      ]);
+      state.quote = quote;
+      state.candles5m = c5;
+      const closes5 = c5.map((x) => x.c);
+      const rsiVal = rsi(closes5);
+      const macdH = macdHist(closes5);
+      const adxVal = adx(c5);
+      const bbB = bollingerPctB(closes5);
+      const vwap = vwapSession(c5);
+      const price = quote?.last || closes5[closes5.length - 1] || 0;
+      const vwapDist = vwap ? ((price - vwap) / vwap) * 100 : 0;
+      const sig = computeSignal(adxVal, macdH, price, vwap, rsiVal, bbB);
+      state.signal = sig.key;
+      state.signalDetail = sig.detail;
+
+      const d15 = tfDir(c15.map((x) => x.c));
+      const d60 = tfDir(c60.map((x) => x.c));
+      const h4closes = aggregateFromHourly(c60.map((x) => x.c), 4);
+      const d4h = h4closes.length >= 25 ? tfDir(h4closes) : "—";
+      const d1d = tfDir(daily.map((x) => x.c));
+      const d5 = tfDir(closes5);
+      const dirs = [d5, d15, d60, d4h, d1d];
+      state.tf = { dirs, align: alignCount(dirs) };
+
+      document.getElementById("heroSym").textContent = sym;
+      document.getElementById("heroPrice").textContent = price ? price.toFixed(2) : "—";
+      const chg = quote;
+      const chgStr = chg ? (chg.chg >= 0 ? "+" : "") + chg.chg.toFixed(2) + " (" + (chg.pct >= 0 ? "+" : "") + chg.pct.toFixed(2) + "%)" : "—";
+      document.getElementById("heroChg").textContent = chgStr;
+      document.getElementById("heroChg").style.color = chg && chg.chg >= 0 ? "var(--green)" : "var(--red)";
+
+      const hero = document.getElementById("heroCard");
+      hero.classList.remove("bull", "bear", "wait");
+      if (sig.detail === "calls") hero.classList.add("bull");
+      else if (sig.detail === "puts") hero.classList.add("bear");
+      else hero.classList.add("wait");
+
+      const pill = document.getElementById("signalPill");
+      pill.className = "pill " + (sig.detail === "calls" ? "calls" : sig.detail === "puts" ? "puts" : sig.detail === "chop" ? "wait" : "watch");
+      document.getElementById("signalText").textContent = sig.key;
+
+      document.getElementById("stAdx").textContent = Math.min(adxVal, 50).toFixed(1) + " / 50";
+      document.getElementById("stTf").textContent = state.tf.align.label;
+
+      renderTfStrip(dirs);
+      document.getElementById("setupsList").innerHTML = buildSetups(sig, adxVal, rsiVal, macdH, bbB).map((s) =>
+        `<div class="setup-row"><span class="setup-badge">${s.b}</span><div style="flex:1;font-size:0.8rem;">${s.d}</div><span class="setup-q">${s.q}</span></div>`
+      ).join("");
+      const ac = actionCopy(sig);
+      document.getElementById("actEntry").textContent = ac.entry;
+      document.getElementById("actExit").textContent = ac.exit;
+      document.getElementById("actStay").textContent = ac.stay;
+
+      renderInds(adxVal, macdH, rsiVal, bbB, vwapDist);
+
+      await loadOptionsForSignal(sym, price, sig);
+
+      const chop = adxVal < 20 ? 80 : 30;
+      const ivGuess = state.ivAtm?.iv != null ? Math.min(100, state.ivAtm.iv) : 40;
+      renderRisk(adxVal, ivGuess, state.tf.align.n, rsiVal, chop);
+    }
+
+    function dteDays(exp) {
+      const t = new Date(exp + "T12:00:00");
+      return Math.round((t - Date.now()) / 86400000);
+    }
+
+    async function loadOptionsForSignal(sym, underlying, sig) {
+      const expData = await api("/v1/markets/options/expirations", "GET", { symbol: sym, includeAllRoots: "true" });
+      const dates = expData.expirations?.date || expData.expirations?.expiration;
+      const expList = normList(dates).map(String).sort();
+      let pick = null;
+      for (const e of expList) {
+        const d = dteDays(e);
+        if (d >= 5 && d <= 21) { pick = e; break; }
+      }
+      if (!pick && expList.length) {
+        pick = expList.find((e) => dteDays(e) >= 3) || expList[0];
+      }
+      state.chainExpiry = pick;
+      document.getElementById("iv4").textContent = pick || "—";
+
+      if (!pick) {
+        document.getElementById("stIv").textContent = "—";
+        document.getElementById("ivNeedle").style.transform = "rotate(-90deg)";
+        document.getElementById("suggestedWrap").innerHTML = `<div class="card muted">No expirations returned.</div>`;
+        document.querySelector("#chainTable tbody").innerHTML = "";
+        return;
+      }
+
+      const chain = await api("/v1/markets/options/chains", "GET", {
+        symbol: sym,
+        expiration: pick,
+        greeks: "true",
+      });
+      const opts = normList(chain.options?.option);
+      state.chainRows = opts;
+
+      const strikes = [...new Set(opts.map((o) => parseFloat(o.strike)))].sort((a, b) => a - b);
+      let atm = strikes[0];
+      let best = Infinity;
+      for (const s of strikes) {
+        const d = Math.abs(s - underlying);
+        if (d < best) { best = d; atm = s; }
+      }
+
+      const callAtm = opts.filter((o) => o.option_type === "call" && parseFloat(o.strike) === atm);
+      const putAtm = opts.filter((o) => o.option_type === "put" && parseFloat(o.strike) === atm);
+      const atmCall = callAtm[0];
+      const atmPut = putAtm[0];
+
+      const callOtm = opts.filter((o) => o.option_type === "call" && parseFloat(o.strike) > atm).sort((a, b) => parseFloat(a.strike) - parseFloat(b.strike))[0];
+      const putOtm = opts.filter((o) => o.option_type === "put" && parseFloat(o.strike) < atm).sort((a, b) => parseFloat(b.strike) - parseFloat(a.strike))[0];
+
+      function midOpt(o) {
+        if (!o) return 0;
+        const bid = parseFloat(o.bid || 0), ask = parseFloat(o.ask || 0);
+        if (bid && ask) return (bid + ask) / 2;
+        return parseFloat(o.last || o.mid || 0);
+      }
+      function ivOpt(o) {
+        if (!o?.greeks?.mid_iv) return parseFloat(o.implied_volatility || 0) * (parseFloat(o.implied_volatility || 0) < 2 ? 100 : 1);
+        return parseFloat(o.greeks.mid_iv) * 100;
+      }
+
+      const ref = atmCall || atmPut;
+      const ivAtm = ref ? ivOpt(ref) : 0;
+      const delt = ref?.greeks?.delta != null ? parseFloat(ref.greeks.delta) : parseFloat(ref?.delta || 0);
+      state.ivAtm = { iv: ivAtm, delta: delt };
+
+      document.getElementById("stIv").textContent = ivAtm ? ivAtm.toFixed(1) + "%" : "—";
+      document.getElementById("iv1").textContent = ivAtm ? ivAtm.toFixed(1) + "%" : "—";
+      document.getElementById("iv2").textContent = isFinite(delt) ? delt.toFixed(2) : "—";
+      const qual = ivAtm < 35 ? "CHEAP" : ivAtm < 55 ? "FAIR" : "EXP";
+      document.getElementById("iv3").textContent = qual;
+      document.getElementById("ivGaugeLabel").textContent = "ATM IV " + (ivAtm ? ivAtm.toFixed(0) + "%" : "—");
+      const needle = document.getElementById("ivNeedle");
+      const ang = -90 + Math.min(180, (ivAtm / 100) * 180);
+      needle.style.transform = "rotate(" + ang + "deg)";
+
+      const sug = [];
+      if (sig.detail === "calls") {
+        if (atmCall) sug.push({ ...atmCall, tag: "ATM CALL" });
+        if (callOtm) sug.push({ ...callOtm, tag: "OTM CALL" });
+      } else if (sig.detail === "puts") {
+        if (atmPut) sug.push({ ...atmPut, tag: "ATM PUT" });
+        if (putOtm) sug.push({ ...putOtm, tag: "OTM PUT" });
+      }
+      state.suggested = sug;
+
+      const wrap = document.getElementById("suggestedWrap");
+      if (sig.detail !== "calls" && sig.detail !== "puts") {
+        wrap.innerHTML = `<div class="card" style="text-align:center;padding:24px;"><div class="font-bebas" style="font-size:1.5rem;color:var(--yellow);">No signal</div><p class="muted" style="margin-top:8px;">WAIT/WATCH — no directional option sleeve.</p></div>`;
+      } else if (!sug.length) {
+        wrap.innerHTML = `<div class="card muted">No contracts at selected expiry.</div>`;
+      } else {
+        wrap.innerHTML = sug.map((o) => {
+          const typ = o.option_type === "call" ? "call" : "put";
+          const mid = midOpt(o);
+          const iv = ivOpt(o);
+          const del = o.greeks?.delta != null ? parseFloat(o.greeks.delta) : "—";
+          return `<div class="card opt-card ${typ}" data-occ="${o.symbol}">
+            <div class="font-mono" style="font-size:0.7rem;color:var(--accent);">${o.tag}</div>
+            <div style="display:flex;justify-content:space-between;margin-top:8px;">
+              <div><div class="font-bebas" style="font-size:1.2rem;">${typ.toUpperCase()}</div><div class="font-mono" style="font-size:0.75rem;">${o.symbol}</div></div>
+              <div style="text-align:right;font-mono;font-size:0.8rem;"><div>$${parseFloat(o.strike).toFixed(2)}</div><div class="muted">${pick}</div></div>
+            </div>
+            <div class="grid-3" style="margin-top:10px;">
+              <div class="stat-cell"><div class="label">Mid</div><div class="val">${mid.toFixed(2)}</div></div>
+              <div class="stat-cell"><div class="label">Delta</div><div class="val">${del}</div></div>
+              <div class="stat-cell"><div class="label">IV</div><div class="val">${iv.toFixed(0)}%</div></div>
+            </div>
+            <button type="button" class="big-btn ${typ}" data-open-order="${o.symbol}" data-mid="${mid}" data-type="${typ}">${typ === "call" ? "▲ BUY CALL" : "▼ BUY PUT"}</button>
+          </div>`;
+        }).join("");
+        wrap.querySelectorAll("[data-open-order]").forEach((btn) => {
+          btn.addEventListener("click", () => openOrderModal(btn.dataset.openOrder, sym, btn.dataset.type, parseFloat(btn.dataset.mid)));
+        });
+      }
+
+      const rows = opts.slice().sort((a, b) => parseFloat(a.strike) - parseFloat(b.strike));
+      document.querySelector("#chainTable tbody").innerHTML = rows.map((o) => {
+        const mid = midOpt(o);
+        const iv = ivOpt(o);
+        const del = o.greeks?.delta != null ? parseFloat(o.greeks.delta).toFixed(2) : "—";
+        return `<tr data-occ="${o.symbol}" data-mid="${mid}" data-type="${o.option_type}">
+          <td>${o.strike}</td><td>${o.option_type}</td><td>${mid.toFixed(2)}</td><td>${del}</td><td>${iv.toFixed(0)}%</td>
+        </tr>`;
+      }).join("");
+      document.querySelectorAll("#chainTable tbody tr").forEach((tr) => {
+        tr.addEventListener("click", () => openOrderModal(tr.dataset.occ, sym, tr.dataset.type, parseFloat(tr.dataset.mid)));
+      });
+    }
+
+    async function loadClock() {
+      const c = await api("/v1/markets/clock", "GET", {});
+      const dot = document.getElementById("mktDot");
+      const tx = document.getElementById("mktText");
+      if (c.error) { tx.textContent = "clock err"; return; }
+      const cl = c.clock || c;
+      const desc = cl.description || (cl.state === "open" ? "OPEN" : "CLOSED");
+      dot.className = "dot " + (cl.state === "open" ? "open" : cl.state === "extended" ? "ext" : "closed");
+      tx.textContent = desc;
+    }
+
+    async function loadBalances() {
+      const data = await api("/v1/accounts/{ACCOUNT_ID}/balances", "GET", {});
+      if (data.error) return;
+      state.balances = data.balances || data;
+      const b = state.balances;
+      const eq = parseFloat(b.total_equity ?? b.equity ?? 0);
+      const cash = parseFloat(b.cash?.cash_available ?? b.cash_available ?? 0);
+      const dpl = parseFloat(b.open_pl_day ?? b.day_change ?? 0);
+      const tpl = parseFloat(b.open_pl ?? b.total_open_pl ?? 0);
+      document.getElementById("equityChip").textContent = "EQ " + (eq ? eq.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—");
+      document.getElementById("acctSummary").innerHTML = [
+        ["Equity", eq], ["Cash", cash], ["Day P&L", dpl], ["Total P&L", tpl],
+      ].map(([k, v]) =>
+        `<div class="summary-cell"><div class="k">${k}</div><div class="v" style="color:${v >= 0 ? "var(--green)" : v < 0 ? "var(--red)" : "var(--accent)"}">${typeof v === "number" ? (k.includes("P") ? (v >= 0 ? "+" : "") + v.toFixed(0) : v.toFixed(0)) : "—"}</div></div>`
+      ).join("");
+    }
+
+    async function loadPositions() {
+      const data = await api("/v1/accounts/{ACCOUNT_ID}/positions", "GET", {});
+      if (data.error) { toast(data.error, "error"); return; }
+      const pos = normList(data.positions?.position);
+      state.positions = pos;
+      document.getElementById("posBadge").style.display = pos.length ? "inline-block" : "none";
+      document.getElementById("posBadge").textContent = String(pos.length);
+
+      const syms = [...new Set(pos.map((p) => p.symbol).filter(Boolean))];
+      let quotes = {};
+      if (syms.length) {
+        const qd = await api("/v1/markets/quotes", "GET", { symbols: syms.join(","), greeks: "false" });
+        const ql = normList(qd.quotes?.quote);
+        ql.forEach((q) => { quotes[q.symbol] = parseQuote(q); });
+      }
+
+      const el = document.getElementById("subPos");
+      if (!pos.length) {
+        el.innerHTML = `<div class="card muted">No open positions.</div>`;
+        return;
+      }
+      el.innerHTML = pos.map((p) => {
+        const qty = parseFloat(p.quantity || 0);
+        const cost = parseFloat(p.cost_basis || p.cost || 0);
+        const per = Math.abs(qty) > 0 ? cost / Math.abs(qty) / 100 : 0;
+        const qu = quotes[p.symbol];
+        const last = qu?.last || parseFloat(p.last || 0);
+        const mult = 100 * Math.abs(qty);
+        const mktVal = last * mult;
+        const pl = mktVal - cost * Math.sign(qty);
+        const plp = cost ? (pl / Math.abs(cost)) * 100 : 0;
+        const win = pl >= 0;
+        return `<div class="card pos-card">
+          <div class="font-mono" style="font-size:0.75rem;">${p.symbol}</div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:0.85rem;">
+            <span>Qty ${qty}</span><span>Cost/ctr ${per.toFixed(2)}</span><span>Last ${last.toFixed(2)}</span>
+          </div>
+          <div class="progress"><div style="width:${Math.min(100, Math.abs(plp))}%;background:${win ? "var(--green)" : "var(--red)"}"></div></div>
+          <div class="font-mono" style="margin-top:6px;">P&L ${win ? "+" : ""}${pl.toFixed(0)} (${plp.toFixed(1)}%)</div>
+          <button type="button" class="big-btn ${win ? "call" : "put"}" style="margin-top:10px;padding:10px;font-size:0.9rem;" data-close="${p.symbol}" data-qty="${Math.abs(qty)}">${win ? "TAKE PROFIT" : "CLOSE POSITION"}</button>
+        </div>`;
+      }).join("");
+
+      el.querySelectorAll("[data-close]").forEach((btn) => {
+        btn.addEventListener("click", () => closePosition(btn.dataset.close, btn.dataset.qty));
+      });
+    }
+
+    async function closePosition(occ, qty) {
+      const body = {
+        class: "option",
+        symbol: occ,
+        side: "sell_to_close",
+        quantity: String(qty),
+        type: "market",
+        duration: "day",
+      };
+      const res = await api("/v1/accounts/{ACCOUNT_ID}/orders", "POST", {}, body);
+      if (res.error || res.errors) {
+        toast((res.errors?.error?.[0] || res.error || JSON.stringify(res)).toString(), "error");
+        return;
+      }
+      toast("Close order sent", "success");
+      loadPositions();
+    }
+
+    async function loadOrders() {
+      const data = await api("/v1/accounts/{ACCOUNT_ID}/orders", "GET", {});
+      const el = document.getElementById("subOrd");
+      if (data.error) { el.innerHTML = `<div class="muted">${data.error}</div>`; return; }
+      const ords = normList(data.orders?.order);
+      state.orders = ords;
+      if (!ords.length) { el.innerHTML = `<div class="card muted">No orders.</div>`; return; }
+      el.innerHTML = ords.map((o) => {
+        const st = (o.status || "").toLowerCase();
+        const col = st.includes("fill") ? "var(--green)" : st.includes("cancel") ? "var(--muted)" : "var(--yellow)";
+        const pend = st === "open" || st === "pending" || st === "submitted";
+        return `<div class="order-row">
+          <span class="status-dot" style="background:${col}"></span>
+          <div style="flex:1;">
+            <div class="font-mono">${o.symbol}</div>
+            <div class="muted">${o.side} ×${o.quantity} · ${o.type} · ${o.status}</div>
+          </div>
+          ${pend ? `<button type="button" class="btn-go" style="padding:6px 10px;font-size:0.7rem;background:var(--red);color:#fff;" data-cancel="${o.id}">CANCEL</button>` : ""}
+        </div>`;
+      }).join("");
+      el.querySelectorAll("[data-cancel]").forEach((btn) => {
+        btn.addEventListener("click", () => cancelOrder(btn.dataset.cancel));
+      });
+    }
+
+    async function cancelOrder(id) {
+      const res = await api("/v1/accounts/{ACCOUNT_ID}/orders/" + id, "DELETE", {}, {});
+      if (res.error || res.errors) {
+        toast((res.errors?.error?.[0] || res.error || "Cancel failed").toString(), "error");
+        return;
+      }
+      toast("Cancel requested", "success");
+      loadOrders();
+    }
+
+    async function loadWatchlist() {
+      const syms = state.wl.join(",");
+      const qd = await api("/v1/markets/quotes", "GET", { symbols: syms, greeks: "false" });
+      const ql = normList(qd.quotes?.quote);
+      const el = document.getElementById("subWl");
+      el.innerHTML = ql.map((q) => {
+        const p = parseQuote(q);
+        const sym = p.symbol;
+        if (!state.wlHist[sym]) state.wlHist[sym] = [];
+        state.wlHist[sym].push(p.last);
+        if (state.wlHist[sym].length > 14) state.wlHist[sym].shift();
+        const hist = state.wlHist[sym];
+        const mx = Math.max(...hist), mn = Math.min(...hist);
+        const spark = hist.map((v) => {
+          const h = mx === mn ? 50 : ((v - mn) / (mx - mn)) * 100;
+          return `<div style="height:${Math.max(8, h * 0.25)}px"></div>`;
+        }).join("");
+        const sig = p.pct > 0.3 ? "bull" : p.pct < -0.3 ? "bear" : "neut";
+        const sc = sig === "bull" ? "var(--green)" : sig === "bear" ? "var(--red)" : "var(--muted)";
+        return `<div class="wl-row" data-sym="${sym}">
+          <div class="spark">${spark}</div>
+          <div style="flex:1;">
+            <div class="font-bebas" style="font-size:1.2rem;">${sym}</div>
+            <div class="font-mono" style="font-size:0.85rem;">${p.last.toFixed(2)} <span style="color:${p.pct >= 0 ? "var(--green)" : "var(--red)"}">${p.pct >= 0 ? "+" : ""}${p.pct.toFixed(2)}%</span></div>
+          </div>
+          <div style="font-size:0.65rem;color:${sc};text-transform:uppercase;">${sig}</div>
+        </div>`;
+      }).join("");
+      el.querySelectorAll(".wl-row").forEach((row) => {
+        row.addEventListener("click", () => {
+          document.getElementById("tickerInput").value = row.dataset.sym;
+          goTicker();
+          setPage(0);
+        });
+      });
+    }
+
+    function openOrderModal(occ, underlying, optType, mid) {
+      state.orderModal = { occ, underlying, optType, mid: mid || 0 };
+      state.orderQty = 1;
+      state.orderType = "market";
+      document.getElementById("omOcc").textContent = occ;
+      document.getElementById("omUnd").textContent = underlying + " · " + optType.toUpperCase();
+      document.getElementById("qtyVal").textContent = "1";
+      document.querySelectorAll(".toggle-row button").forEach((b) => b.classList.toggle("active", b.dataset.ot === "market"));
+      document.getElementById("limitRow").style.display = "none";
+      document.getElementById("limitPrice").value = (mid || 0).toFixed(2);
+      document.getElementById("confirmOrder").className = "confirm-btn " + (optType === "call" ? "call" : "put");
+      document.getElementById("confirmOrder").style.background = optType === "call" ? "var(--green)" : "var(--red)";
+      document.getElementById("confirmOrder").style.color = optType === "call" ? "#000" : "#fff";
+      updateEstCost();
+      document.getElementById("modalBack").classList.add("on");
+      document.getElementById("orderModal").classList.add("on");
+    }
+
+    function closeOrderModal() {
+      document.getElementById("modalBack").classList.remove("on");
+      document.getElementById("orderModal").classList.remove("on");
+    }
+
+    function updateEstCost() {
+      const mid = parseFloat(document.getElementById("limitPrice").value) || state.orderModal.mid;
+      const px = state.orderType === "limit" ? mid : state.orderModal.mid;
+      const est = state.orderQty * px * 100;
+      document.getElementById("estCost").textContent = "Est. cost ≈ $" + est.toFixed(2) + " (qty × price × 100)";
+    }
+
+    async function submitOrder() {
+      const { occ, underlying } = state.orderModal;
+      const px = parseFloat(document.getElementById("limitPrice").value) || state.orderModal.mid;
+      const body = {
+        class: "option",
+        symbol: occ,
+        side: "buy_to_open",
+        quantity: String(state.orderQty),
+        type: state.orderType === "limit" ? "limit" : "market",
+        duration: "day",
+        preview: "false",
+      };
+      if (state.orderType === "limit") body.price = String(px);
+
+      const res = await api("/v1/accounts/{ACCOUNT_ID}/orders", "POST", {}, body);
+      if (res.error || res.errors) {
+        toast((res.errors?.error?.[0] || res.error || "Order failed").toString(), "error");
+        return;
+      }
+      toast("Order submitted", "success");
+      closeOrderModal();
+      setPage(3);
+      state.subTab = "ord";
+      document.querySelectorAll(".subtabs button").forEach((b) => b.classList.toggle("active", b.dataset.sub === "ord"));
+      document.getElementById("subPos").style.display = "none";
+      document.getElementById("subOrd").style.display = "block";
+      document.getElementById("subWl").style.display = "none";
+      loadOrders();
+    }
+
+    function setPage(i) {
+      state.page = i;
+      document.getElementById("pages").style.transform = "translateX(-" + i * 20 + "%)";
+      document.querySelectorAll(".nav-item").forEach((n) => n.classList.toggle("active", parseInt(n.dataset.i, 10) === i));
+    }
+
+    function goTicker() {
+      const v = document.getElementById("tickerInput").value.trim();
+      if (v) state.ticker = v.toUpperCase();
+      loadMarketData();
+    }
+
+    document.getElementById("goBtn").addEventListener("click", goTicker);
+    document.getElementById("tickerInput").addEventListener("keydown", (e) => { if (e.key === "Enter") goTicker(); });
+
+    document.querySelectorAll(".nav-item").forEach((n) => {
+      n.addEventListener("click", () => setPage(parseInt(n.dataset.i, 10)));
+    });
+
+    const main = document.getElementById("mainSwipe");
+    main.addEventListener("touchstart", (e) => {
+      state.touch.x0 = e.changedTouches[0].clientX;
+      state.touch.y0 = e.changedTouches[0].clientY;
+      state.touch.t = Date.now();
+    }, { passive: true });
+    main.addEventListener("touchend", (e) => {
+      const x = e.changedTouches[0].clientX;
+      const y = e.changedTouches[0].clientY;
+      const dx = x - state.touch.x0;
+      const dy = y - state.touch.y0;
+      if (Math.abs(dx) < 50 || Math.abs(dy) > 80) return;
+      if (dx < 0 && state.page < 4) setPage(state.page + 1);
+      if (dx > 0 && state.page > 0) setPage(state.page - 1);
+    }, { passive: true });
+
+    document.querySelectorAll(".subtabs button").forEach((b) => {
+      b.addEventListener("click", () => {
+        state.subTab = b.dataset.sub;
+        document.querySelectorAll(".subtabs button").forEach((x) => x.classList.toggle("active", x === b));
+        document.getElementById("subPos").style.display = state.subTab === "pos" ? "block" : "none";
+        document.getElementById("subOrd").style.display = state.subTab === "ord" ? "block" : "none";
+        document.getElementById("subWl").style.display = state.subTab === "wl" ? "block" : "none";
+      });
+    });
+
+    document.getElementById("modalBack").addEventListener("click", closeOrderModal);
+    document.getElementById("qtyMinus").addEventListener("click", () => {
+      state.orderQty = Math.max(1, state.orderQty - 1);
+      document.getElementById("qtyVal").textContent = String(state.orderQty);
+      updateEstCost();
+    });
+    document.getElementById("qtyPlus").addEventListener("click", () => {
+      state.orderQty = Math.min(50, state.orderQty + 1);
+      document.getElementById("qtyVal").textContent = String(state.orderQty);
+      updateEstCost();
+    });
+    document.querySelectorAll(".toggle-row button").forEach((b) => {
+      b.addEventListener("click", () => {
+        state.orderType = b.dataset.ot;
+        document.querySelectorAll(".toggle-row button").forEach((x) => x.classList.toggle("active", x === b));
+        document.getElementById("limitRow").style.display = state.orderType === "limit" ? "block" : "none";
+        updateEstCost();
+      });
+    });
+    document.getElementById("limitPrice").addEventListener("input", updateEstCost);
+    document.getElementById("confirmOrder").addEventListener("click", submitOrder);
+
+    function guideHtml() {
+      const cards = [
+        { t: "Bull trend calls", d: "ADX > 25, price above VWAP, MACD histogram positive, RSI 50–70, 7–14 DTE. Buy ATM or slight OTM calls; risk below last swing low." },
+        { t: "Bear trend puts", d: "ADX > 25, price below VWAP, MACD histogram negative, RSI 30–50. Favor ATM/OTM puts; cover on VWAP reclaim." },
+        { t: "Reversal play", d: "RSI(2) extreme + exhaustion candle. ATM only, small size, tight time stop. Needs volatility contraction or pattern failure to invalidate." },
+        { t: "Breakdown play", d: "Volume surge through support with follow-through bar. Prefer puts with defined risk; avoid first bounce without confirmation." },
+        { t: "Rejection play", d: "Two-candle rule at resistance: wick rejection + lower close. Short-vol only if trend aligned; else debit puts for convexity." },
+        { t: "Stay out", d: "ADX < 20 chop, conflicting timeframe alignment, IV spike without price trend, or immediate post-event binary risk." },
+      ];
+      return cards.map((c) => `<div class="card trio-card"><h4>${c.t}</h4><p>${c.d}</p></div>`).join("");
+    }
+    document.getElementById("guideCards").innerHTML = guideHtml();
+
+    setInterval(() => { loadClock(); loadWatchlist(); loadMarketData(); }, 30000);
+    setInterval(() => { loadBalances(); loadPositions(); loadOrders(); }, 60000);
+
+    loadClock();
+    loadBalances();
+    loadPositions();
+    loadOrders();
+    loadWatchlist();
+    loadMarketData();
+  </script>
+</body>
+</html>
