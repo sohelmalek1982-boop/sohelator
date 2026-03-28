@@ -8,6 +8,36 @@
   status = 200
 
 [[redirects]]
+  from = "/api/alerts"
+  to = "/.netlify/functions/alerts"
+  status = 200
+
+[[redirects]]
+  from = "/api/learn"
+  to = "/.netlify/functions/learn"
+  status = 200
+
+[[redirects]]
+  from = "/api/push-subscribe"
+  to = "/.netlify/functions/push-subscribe"
+  status = 200
+
+[[redirects]]
+  from = "/api/push-send"
+  to = "/.netlify/functions/push-send"
+  status = 200
+
+[[redirects]]
+  from = "/api/scan-now"
+  to = "/.netlify/functions/scan-now"
+  status = 200
+
+[[redirects]]
+  from = "/api/vapid-public"
+  to = "/.netlify/functions/vapid-public"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

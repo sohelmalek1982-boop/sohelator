@@ -61,11 +61,12 @@
       position: absolute; top: calc(56px + var(--safe-top)); bottom: calc(56px + var(--safe-bot)); left: 0; right: 0;
       overflow: hidden; touch-action: pan-y;
     }
+    .main.has-banner { top: calc(102px + var(--safe-top)); }
     .pages {
-      display: flex; width: 500%; height: 100%; transition: transform 0.28s ease-out; will-change: transform;
+      display: flex; width: 600%; height: 100%; transition: transform 0.28s ease-out; will-change: transform;
     }
     .page {
-      width: 20%; height: 100%; overflow-y: auto; overflow-x: hidden; padding: 12px 12px 24px; -webkit-overflow-scrolling: touch;
+      width: 16.666%; height: 100%; overflow-y: auto; overflow-x: hidden; padding: 12px 12px 24px; -webkit-overflow-scrolling: touch;
     }
 
     .bottomnav {
@@ -75,11 +76,23 @@
       display: flex; justify-content: space-around; align-items: stretch;
     }
     .nav-item {
-      flex: 1; text-align: center; padding: 6px 2px; border: none; background: transparent; color: var(--muted);
-      font-size: 0.62rem; font-weight: 600; cursor: pointer; position: relative;
+      flex: 1; text-align: center; padding: 5px 1px; border: none; background: transparent; color: var(--muted);
+      font-size: 0.52rem; font-weight: 600; cursor: pointer; position: relative;
     }
     .nav-item.active { color: var(--accent); }
-    .nav-item .emoji { display: block; font-size: 1.1rem; margin-bottom: 2px; }
+    .nav-item .emoji { display: block; font-size: 1rem; margin-bottom: 1px; }
+
+    .alert-banner {
+      position: fixed; top: calc(52px + var(--safe-top)); left: 0; right: 0; z-index: 60;
+      padding: 10px 12px; background: linear-gradient(90deg, rgba(0,229,255,0.2), rgba(0,255,135,0.15));
+      border-bottom: 1px solid var(--accent); font-size: 0.8rem; font-weight: 600;
+      display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    }
+    .alert-banner button { background: var(--accent); color: #000; border: none; padding: 6px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; }
+    .scanner-alert-card { border-left: 4px solid var(--accent); margin-bottom: 10px; }
+    .scanner-alert-card .ai-note { color: var(--accent); font-style: italic; font-size: 0.85rem; margin-top: 8px; }
+    .score-bar { height: 10px; border-radius: 5px; background: #0a0e14; overflow: hidden; margin: 8px 0; border: 1px solid var(--border); }
+    .score-bar > div { height: 100%; border-radius: 5px; transition: width 0.3s; }
     .badge {
       position: absolute; top: 2px; right: 8%; min-width: 16px; height: 16px; padding: 0 4px;
       background: var(--accent); color: #000; border-radius: 8px; font-size: 0.6rem; line-height: 16px; font-family: "Space Mono", monospace;
@@ -239,6 +252,12 @@
     </div>
   </header>
 
+  <div id="alertBanner" class="alert-banner" style="display:none;">
+    <span id="alertBannerText">New scanner setup</span>
+    <button type="button" id="alertBannerGo">VIEW</button>
+    <button type="button" id="alertBannerDismiss" style="background:transparent;color:var(--muted);border:1px solid var(--border);">✕</button>
+  </div>
+
   <div class="main" id="mainSwipe">
     <div class="pages" id="pages">
       <!-- 0 SIGNAL -->
@@ -317,6 +336,31 @@
       <section class="page" id="page-4">
         <h2 class="section">Playbook</h2>
         <div id="guideCards"></div>
+        <h2 class="section" style="margin-top:20px;">AI &amp; learning</h2>
+        <div class="card" style="margin-bottom:12px;">
+          <button type="button" class="big-btn call" id="btnWhatsScanning" style="margin-top:0;padding:12px;font-size:0.9rem;">What&apos;s the scanner finding?</button>
+          <p class="muted" style="margin-top:10px;font-size:0.75rem;">Runs a live scan (same as SCAN NOW). Check the SCAN tab for results.</p>
+        </div>
+        <h2 class="section">Learning log</h2>
+        <div id="learningLogWrap" class="muted" style="font-size:0.8rem;">Loading…</div>
+      </section>
+
+      <!-- 5 SCAN -->
+      <section class="page" id="page-5">
+        <h2 class="section">Scanner status</h2>
+        <div class="card" id="scannerStatusCard">
+          <div class="grid-3">
+            <div class="stat-cell"><div class="label">Last scan</div><div class="val" id="scLast">—</div></div>
+            <div class="stat-cell"><div class="label">Tickers</div><div class="val" id="scTickers">—</div></div>
+            <div class="stat-cell"><div class="label">Setups</div><div class="val" id="scSetups">—</div></div>
+          </div>
+          <p class="muted" style="margin-top:12px;font-size:0.75rem;" id="scNext">Next scan: every 5 min (Mon–Fri, 9:30–4pm ET window; Netlify cron UTC)</p>
+          <button type="button" class="big-btn call" id="btnScanNow" style="margin-top:14px;padding:12px;">SCAN NOW</button>
+        </div>
+        <h2 class="section">Live alerts</h2>
+        <div id="liveAlertsWrap" class="muted">No pending alerts. Polling every 30s…</div>
+        <h2 class="section">Scan history</h2>
+        <div id="scanHistoryWrap" class="muted">—</div>
       </section>
     </div>
   </div>
@@ -324,9 +368,10 @@
   <nav class="bottomnav" id="bottomnav">
     <button type="button" class="nav-item active" data-i="0"><span class="emoji">⚡</span>SIGNAL</button>
     <button type="button" class="nav-item" data-i="1"><span class="emoji">📊</span>INDS</button>
-    <button type="button" class="nav-item" data-i="2"><span class="emoji">🎯</span>OPTIONS</button>
+    <button type="button" class="nav-item" data-i="2"><span class="emoji">🎯</span>OPTS</button>
     <button type="button" class="nav-item" data-i="3"><span class="emoji">💼</span>TRADES<span class="badge" id="posBadge" style="display:none;">0</span></button>
     <button type="button" class="nav-item" data-i="4"><span class="emoji">📖</span>GUIDE</button>
+    <button type="button" class="nav-item" data-i="5"><span class="emoji">🔍</span>SCAN</button>
   </nav>
 
   <div class="modal-back" id="modalBack"></div>
@@ -386,6 +431,9 @@
       wl: ["NVDA", "TSLA", "SPY", "QQQ", "AAPL"],
       wlHist: {},
       subTab: "pos",
+      liveFeed: [],
+      lastScanMeta: null,
+      bannerTicker: null,
     };
 
     function toast(msg, type = "info") {
@@ -943,16 +991,18 @@
           </div>
           <div class="progress"><div style="width:${Math.min(100, Math.abs(plp))}%;background:${win ? "var(--green)" : "var(--red)"}"></div></div>
           <div class="font-mono" style="margin-top:6px;">P&L ${win ? "+" : ""}${pl.toFixed(0)} (${plp.toFixed(1)}%)</div>
-          <button type="button" class="big-btn ${win ? "call" : "put"}" style="margin-top:10px;padding:10px;font-size:0.9rem;" data-close="${p.symbol}" data-qty="${Math.abs(qty)}">${win ? "TAKE PROFIT" : "CLOSE POSITION"}</button>
+          <button type="button" class="big-btn ${win ? "call" : "put"}" style="margin-top:10px;padding:10px;font-size:0.9rem;" data-close="${p.symbol}" data-qty="${Math.abs(qty)}" data-plp="${plp.toFixed(1)}">${win ? "TAKE PROFIT" : "CLOSE POSITION"}</button>
         </div>`;
       }).join("");
 
       el.querySelectorAll("[data-close]").forEach((btn) => {
-        btn.addEventListener("click", () => closePosition(btn.dataset.close, btn.dataset.qty));
+        btn.addEventListener("click", () =>
+          closePosition(btn.dataset.close, btn.dataset.qty, parseFloat(btn.dataset.plp))
+        );
       });
     }
 
-    async function closePosition(occ, qty) {
+    async function closePosition(occ, qty, plpPct) {
       const body = {
         class: "option",
         symbol: occ,
@@ -967,6 +1017,24 @@
         return;
       }
       toast("Close order sent", "success");
+      try {
+        const und = underlyingFromOcc(occ);
+        await fetch("/api/learn", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ticker: und,
+            entrySignal: state.signal || "",
+            entryScore: 0,
+            pnlPct: plpPct != null ? plpPct : 0,
+            holdDays: 1,
+            optionType: /put/i.test(occ) ? "put" : "call",
+          }),
+        });
+        loadLearnings();
+      } catch {
+        /* learn optional */
+      }
       loadPositions();
     }
 
@@ -1104,8 +1172,203 @@
 
     function setPage(i) {
       state.page = i;
-      document.getElementById("pages").style.transform = "translateX(-" + i * 20 + "%)";
+      const pct = (100 / 6) * i;
+      document.getElementById("pages").style.transform = "translateX(-" + pct + "%)";
       document.querySelectorAll(".nav-item").forEach((n) => n.classList.toggle("active", parseInt(n.dataset.i, 10) === i));
+    }
+
+    function underlyingFromOcc(occ) {
+      const m = String(occ || "").match(/^([A-Za-z]+)/);
+      return m ? m[1].toUpperCase() : String(occ || "").slice(0, 4);
+    }
+
+    function updateScannerStatus() {
+      const m = state.lastScanMeta;
+      document.getElementById("scLast").textContent = m?.timestamp
+        ? new Date(m.timestamp).toLocaleString()
+        : "—";
+      const n = m?.tickersScanned?.length ?? m?.tickersScanned;
+      document.getElementById("scTickers").textContent =
+        typeof n === "number" ? String(n) : Array.isArray(n) ? String(n.length) : "—";
+      const sf = m?.setupsFound;
+      document.getElementById("scSetups").textContent = Array.isArray(sf)
+        ? String(sf.length)
+        : "—";
+    }
+
+    function renderHistory(rows) {
+      const el = document.getElementById("scanHistoryWrap");
+      if (!rows || !rows.length) {
+        el.innerHTML = '<span class="muted">No history yet.</span>';
+        return;
+      }
+      el.innerHTML = rows
+        .map(
+          (r) =>
+            `<div class="card" style="padding:10px;margin-bottom:8px;font-size:0.8rem;">
+            <strong>${r.ticker}</strong> · ${r.setupType} · score ${r.score}
+            <div class="muted" style="margin-top:4px;">${r.outcome != null ? "Outcome: " + (typeof r.outcome === "object" ? r.outcome.pnlPct + "%" : r.outcome) : "—"}</div>
+            <div class="muted" style="font-size:0.7rem;">${r.timestamp ? new Date(r.timestamp).toLocaleString() : ""}</div>
+          </div>`
+        )
+        .join("");
+    }
+
+    function renderLiveAlerts() {
+      const el = document.getElementById("liveAlertsWrap");
+      if (!state.liveFeed.length) {
+        el.innerHTML = '<span class="muted">No alerts in this session yet.</span>';
+        return;
+      }
+      el.innerHTML = state.liveFeed
+        .map((a) => {
+          const o = a.option || {};
+          const sc = a.score >= 75 ? "var(--green)" : a.score >= 50 ? "var(--yellow)" : "var(--red)";
+          return `<div class="card scanner-alert-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span class="font-bebas" style="font-size:1.6rem;">${a.ticker}</span>
+              <span class="setup-badge">${a.setupType}</span>
+            </div>
+            <div class="score-bar"><div style="width:${Math.min(100, a.score)}%;background:${sc}"></div></div>
+            <div class="font-mono" style="font-size:0.75rem;margin-top:8px;">ADX ${a.indicators?.adx} · RSI ${a.indicators?.rsi} · MACD ${a.macdDir} · VWAP ${a.indicators?.vwapDist}%</div>
+            <div class="muted" style="font-size:0.8rem;margin-top:6px;">${o.strike} ${o.expiry} · mid $${(o.mid || 0).toFixed(2)} · Δ ${o.delta} · IV ${o.iv}%</div>
+            <div class="ai-note">${(a.aiAnalysis || "").replace(/</g, "&lt;")}</div>
+            <div class="muted" style="font-size:0.65rem;margin-top:6px;">${a.timestamp ? new Date(a.timestamp).toLocaleString() : ""}</div>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+              <button type="button" class="big-btn call" style="margin:0;padding:10px;font-size:0.85rem;flex:1;" data-buy-occ="${o.occ || ""}" data-buy-mid="${o.mid || 0}" data-buy-type="${o.optType || "call"}" data-buy-und="${a.ticker}">BUY NOW</button>
+              <button type="button" class="btn-go" style="flex:1;padding:10px;" data-load-t="${a.ticker}">LOAD TICKER</button>
+            </div>
+          </div>`;
+        })
+        .join("");
+      el.querySelectorAll("[data-buy-occ]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const occ = btn.dataset.buyOcc;
+          if (!occ) {
+            toast("No OCC on alert", "error");
+            return;
+          }
+          openOrderModal(
+            occ,
+            btn.dataset.buyUnd,
+            btn.dataset.buyType,
+            parseFloat(btn.dataset.buyMid) || 0
+          );
+        });
+      });
+      el.querySelectorAll("[data-load-t]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.getElementById("tickerInput").value = btn.dataset.loadT;
+          goTicker();
+          setPage(0);
+        });
+      });
+    }
+
+    function showAlertBanner(sample) {
+      state.bannerTicker = sample?.ticker || "Setup";
+      document.getElementById("alertBannerText").textContent =
+        "🔥 Scanner: " + state.bannerTicker + " · " + (sample?.setupType || "Alert");
+      document.getElementById("alertBanner").style.display = "flex";
+      document.getElementById("mainSwipe").classList.add("has-banner");
+    }
+
+    function hideAlertBanner() {
+      document.getElementById("alertBanner").style.display = "none";
+      document.getElementById("mainSwipe").classList.remove("has-banner");
+    }
+
+    async function pollAlerts() {
+      try {
+        const r = await fetch("/api/alerts");
+        const d = await r.json();
+        if (d.last_scan) {
+          state.lastScanMeta = d.last_scan;
+          updateScannerStatus();
+        }
+        if (d.history) renderHistory(d.history);
+        if (d.pending && d.pending.length) {
+          d.pending.forEach((p) => state.liveFeed.unshift({ ...p }));
+          state.liveFeed = state.liveFeed.slice(0, 40);
+          renderLiveAlerts();
+          showAlertBanner(d.pending[0]);
+        }
+      } catch {
+        /* offline */
+      }
+    }
+
+    async function scanNow() {
+      try {
+        toast("Starting scan…", "info");
+        const r = await fetch("/api/scan-now", { method: "POST", headers: { "Content-Type": "application/json" } });
+        const d = await r.json();
+        if (d.error) {
+          toast(d.error, "error");
+          return;
+        }
+        toast("Scan complete · setups " + (d.setupsFound ?? 0), "success");
+        await pollAlerts();
+      } catch (e) {
+        toast("Scan failed", "error");
+      }
+    }
+
+    async function loadLearnings() {
+      const el = document.getElementById("learningLogWrap");
+      try {
+        const r = await fetch("/api/learn");
+        const d = await r.json();
+        const items = d.learnings || [];
+        if (!items.length) {
+          el.innerHTML = '<span class="muted">No closed-trade notes yet.</span>';
+          return;
+        }
+        el.innerHTML = items
+          .map(
+            (x) =>
+              `<div class="card trio-card" style="margin-bottom:8px;"><p style="font-size:0.75rem;color:var(--accent);">${x.ticker} · ${x.entrySignal} · ${x.pnlPct}% / ${x.holdDays}d</p><p style="margin-top:6px;">${(x.feedback || "").replace(/</g, "&lt;")}</p></div>`
+          )
+          .join("");
+      } catch {
+        el.innerHTML = '<span class="muted">Could not load learning log.</span>';
+      }
+    }
+
+    function urlBase64ToUint8Array(base64String) {
+      const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+      const rawData = atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+      return outputArray;
+    }
+
+    async function initPushAndSw() {
+      if (!("serviceWorker" in navigator)) return;
+      try {
+        await navigator.serviceWorker.register("/sw.js");
+        const vr = await fetch("/api/vapid-public");
+        const { publicKey } = await vr.json();
+        if (!publicKey || !("PushManager" in window)) return;
+        const reg = await navigator.serviceWorker.ready;
+        const perm = await Notification.requestPermission();
+        if (perm !== "granted") return;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey),
+          });
+        }
+        await fetch("/api/push-subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subscription: sub.toJSON() }),
+        });
+      } catch {
+        /* push optional */
+      }
     }
 
     function goTicker() {
@@ -1133,7 +1396,7 @@
       const dx = x - state.touch.x0;
       const dy = y - state.touch.y0;
       if (Math.abs(dx) < 50 || Math.abs(dy) > 80) return;
-      if (dx < 0 && state.page < 4) setPage(state.page + 1);
+      if (dx < 0 && state.page < 5) setPage(state.page + 1);
       if (dx > 0 && state.page > 0) setPage(state.page - 1);
     }, { passive: true });
 
@@ -1169,6 +1432,17 @@
     document.getElementById("limitPrice").addEventListener("input", updateEstCost);
     document.getElementById("confirmOrder").addEventListener("click", submitOrder);
 
+    document.getElementById("alertBannerGo").addEventListener("click", () => {
+      hideAlertBanner();
+      setPage(5);
+    });
+    document.getElementById("alertBannerDismiss").addEventListener("click", hideAlertBanner);
+    document.getElementById("btnScanNow").addEventListener("click", scanNow);
+    document.getElementById("btnWhatsScanning").addEventListener("click", () => {
+      setPage(5);
+      scanNow();
+    });
+
     function guideHtml() {
       const cards = [
         { t: "Bull trend calls", d: "ADX > 25, price above VWAP, MACD histogram positive, RSI 50–70, 7–14 DTE. Buy ATM or slight OTM calls; risk below last swing low." },
@@ -1184,6 +1458,7 @@
 
     setInterval(() => { loadClock(); loadWatchlist(); loadMarketData(); }, 30000);
     setInterval(() => { loadBalances(); loadPositions(); loadOrders(); }, 60000);
+    setInterval(pollAlerts, 30000);
 
     loadClock();
     loadBalances();
@@ -1191,6 +1466,9 @@
     loadOrders();
     loadWatchlist();
     loadMarketData();
+    pollAlerts();
+    loadLearnings();
+    initPushAndSw();
   </script>
 </body>
 </html>
