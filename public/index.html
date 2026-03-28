@@ -14,14 +14,19 @@
   <style>
     :root {
       --bg: #080b0f;
+      --bg2: #0d1117;
+      --bg3: #111820;
       --accent: #00e5ff;
       --green: #00ff87;
       --red: #ff3b5c;
-      --yellow: #ffd000;
+      --yellow: #ffd700;
+      --orange: #ff8c42;
+      --purple: #a855f7;
       --text: #e8f0f7;
       --muted: #6b7a8c;
       --card: #0f141c;
-      --border: #1a2433;
+      --border: #1e2a36;
+      --border2: #243040;
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-bot: env(safe-area-inset-bottom, 0px);
     }
@@ -122,6 +127,42 @@
     @keyframes pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.5; transform: scale(1.15); }
+    }
+    @keyframes dangerPulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,59,92,0.4); }
+      50% { opacity: 0.85; box-shadow: 0 0 12px 2px rgba(255,59,92,0.35); }
+    }
+
+    .stage-strip-wrap { margin: 12px 0 8px; }
+    .stage-strip {
+      display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px;
+      -webkit-overflow-scrolling: touch; scrollbar-width: thin;
+    }
+    .stage-btn {
+      flex: 0 0 auto; min-width: 76px; max-width: 100px;
+      padding: 8px 6px 10px; border-radius: 10px; position: relative;
+      background: var(--bg2); border: 1px solid var(--border);
+      color: #4a6070; opacity: 0.35; text-align: center; cursor: default;
+      transition: border-color 0.2s, color 0.2s, opacity 0.2s, box-shadow 0.2s;
+    }
+    .stage-btn .sb-ico { font-size: 16px; display: block; margin-bottom: 2px; }
+    .stage-btn .sb-lbl { font-family: "Space Mono", monospace; font-size: 7px; letter-spacing: 0.5px; line-height: 1.2; text-transform: uppercase; }
+    .stage-btn .sb-pct { font-family: "Bebas Neue", sans-serif; font-size: 13px; margin-top: 4px; color: var(--muted); }
+    .stage-btn .sb-dot { position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--muted); opacity: 0; }
+    .stage-btn.on { opacity: 1; }
+    .stage-btn.on .sb-dot { opacity: 1; animation: pulse 2s infinite; }
+    .stage-btn.st-setup_bull.on { border-color: var(--accent); color: var(--accent); animation: pulse 2s infinite; }
+    .stage-btn.st-bull.on { border-color: var(--green); color: var(--green); box-shadow: 0 0 14px rgba(0,255,135,0.2); }
+    .stage-btn.st-fading.on { border-color: var(--yellow); color: var(--yellow); }
+    .stage-btn.st-rev_setup.on { border-color: var(--orange); color: var(--orange); animation: pulse 1.5s infinite; }
+    .stage-btn.st-reversal.on { border-color: var(--red); color: var(--red); animation: dangerPulse 1s infinite; }
+    .stage-btn.st-setup_bear.on { border-color: var(--purple); color: var(--purple); animation: pulse 2s infinite; }
+    .stage-btn.st-bear.on { border-color: var(--red); color: var(--red); }
+    .stage-btn.st-chop.on { border-color: #4a6070; color: #4a6070; }
+    #stageDetailCard { background: var(--bg3); border: 1px solid var(--border2); }
+    .scan-sticky-bar {
+      position: sticky; bottom: 0; z-index: 6; margin-top: 16px; padding: 12px 0 8px;
+      background: linear-gradient(180deg, transparent, rgba(8,11,15,0.97) 30%);
     }
 
     .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
@@ -270,7 +311,9 @@
             </div>
             <div class="font-mono" style="text-align:right;font-size:1rem;" id="heroChg">—</div>
           </div>
-          <div id="signalPill" class="pill wait"><span class="pulse" style="background:currentColor;"></span><span id="signalText">WAIT</span></div>
+          <div class="stage-strip-wrap"><div class="stage-strip" id="stageStripInner"></div></div>
+          <div id="stageDetailCard" class="card" style="padding:12px;margin-bottom:12px;border-left:4px solid var(--border);"></div>
+          <div id="signalPill" class="pill wait" style="display:none;"><span class="pulse" style="background:currentColor;"></span><span id="signalText">WAIT</span></div>
           <div class="grid-3">
             <div class="stat-cell"><div class="label">Trend (ADX/50)</div><div class="val" id="stAdx">—</div></div>
             <div class="stat-cell"><div class="label">ATM IV%</div><div class="val" id="stIv">—</div></div>
@@ -343,10 +386,25 @@
         </div>
         <h2 class="section">Learning log</h2>
         <div id="learningLogWrap" class="muted" style="font-size:0.8rem;">Loading…</div>
+        <h2 class="section">EOD reviews</h2>
+        <div id="eodLearningWrap" class="muted" style="font-size:0.8rem;">—</div>
+        <button type="button" class="big-btn call" id="btnReviewEod" style="margin-top:12px;padding:12px;font-size:0.9rem;">REVIEW TODAY&apos;S PERFORMANCE</button>
       </section>
 
       <!-- 5 SCAN -->
       <section class="page" id="page-5">
+        <h2 class="section">Morning brief</h2>
+        <div class="card" id="morningBriefCard" style="background:var(--bg3);border-color:var(--border2);">
+          <div class="font-mono" style="font-size:0.7rem;color:var(--muted);margin-bottom:8px;" id="mbDate">—</div>
+          <div id="mbContext" class="muted" style="font-size:0.8rem;margin-bottom:10px;">Loading scan data…</div>
+          <div id="mbBody" style="font-size:0.85rem;line-height:1.55;max-height:220px;overflow-y:auto;"></div>
+          <div id="mbWatch" style="margin-top:12px;font-size:0.75rem;"></div>
+          <button type="button" class="btn-go" id="btnLoadBestPlay" style="margin-top:10px;display:none;">LOAD BEST PLAY</button>
+        </div>
+        <h2 class="section">9:55 opening range</h2>
+        <div class="card" id="openingRangeCard" style="background:var(--bg3);border-color:var(--border2);">
+          <div id="orBody" class="muted" style="font-size:0.8rem;">—</div>
+        </div>
         <h2 class="section">Scanner status</h2>
         <div class="card" id="scannerStatusCard">
           <div class="grid-3">
@@ -354,13 +412,23 @@
             <div class="stat-cell"><div class="label">Tickers</div><div class="val" id="scTickers">—</div></div>
             <div class="stat-cell"><div class="label">Setups</div><div class="val" id="scSetups">—</div></div>
           </div>
-          <p class="muted" style="margin-top:12px;font-size:0.75rem;" id="scNext">Next scan: every 5 min (Mon–Fri, 9:30–4pm ET window; Netlify cron UTC)</p>
-          <button type="button" class="big-btn call" id="btnScanNow" style="margin-top:14px;padding:12px;">SCAN NOW</button>
+          <p class="muted" style="margin-top:12px;font-size:0.75rem;" id="scNext">Next scan: every 5 min (Mon–Fri, 9:30–4pm ET)</p>
         </div>
-        <h2 class="section">Live alerts</h2>
+        <h2 class="section">Intraday signals</h2>
         <div id="liveAlertsWrap" class="muted">No pending alerts. Polling every 30s…</div>
+        <h2 class="section">Today&apos;s performance</h2>
+        <div class="card" id="eodCard" style="display:none;background:var(--bg3);border-color:var(--border2);">
+          <div id="eodBody" class="muted" style="font-size:0.8rem;">—</div>
+        </div>
+        <h2 class="section">System performance</h2>
+        <div class="card" id="runningStatsCard" style="background:var(--bg3);border-color:var(--border2);">
+          <div id="runStatsBody" class="muted" style="font-size:0.8rem;">—</div>
+        </div>
         <h2 class="section">Scan history</h2>
         <div id="scanHistoryWrap" class="muted">—</div>
+        <div class="scan-sticky-bar">
+          <button type="button" class="big-btn call" id="btnScanNow" style="margin:0;padding:14px;width:100%;">RUN SCAN NOW</button>
+        </div>
       </section>
     </div>
   </div>
@@ -434,7 +502,80 @@
       liveFeed: [],
       lastScanMeta: null,
       bannerTicker: null,
+      scanData: null,
+      activeStage: "chop",
     };
+
+    const STAGE_DEFS = [
+      { key: "setup_bull", icon: "🔍", label: "BULL SETUP", cls: "st-setup_bull" },
+      { key: "bull", icon: "✅", label: "BULL", cls: "st-bull" },
+      { key: "fading", icon: "⚡", label: "FADING", cls: "st-fading" },
+      { key: "rev_setup", icon: "👀", label: "REV SETUP", cls: "st-rev_setup" },
+      { key: "reversal", icon: "🚨", label: "REVERSAL", cls: "st-reversal" },
+      { key: "setup_bear", icon: "🔍", label: "BEAR SETUP", cls: "st-setup_bear" },
+      { key: "bear", icon: "🔴", label: "BEAR", cls: "st-bear" },
+      { key: "chop", icon: "⚠️", label: "CHOP", cls: "st-chop" },
+    ];
+
+    function detectStageClient(adxVal, macdH, rsiVal, bbB, vwapDist, rsi2) {
+      const aboveVWAP = vwapDist > 0;
+      const macdPos = macdH > 0;
+      if (adxVal < 20) return { key: "chop", win: "—" };
+      if (rsi2 < 8 || rsi2 > 92) return { key: "reversal", win: "55%" };
+      if (macdPos && !aboveVWAP && adxVal >= 20) return { key: "fading", win: "—" };
+      if (macdPos && aboveVWAP && rsiVal >= 50 && rsiVal <= 70 && bbB > 0.5)
+        return { key: "bull", win: "72%" };
+      if (!macdPos && !aboveVWAP && rsiVal >= 30 && rsiVal <= 50 && bbB < 0.5)
+        return { key: "bear", win: "68%" };
+      if (macdPos && aboveVWAP) return { key: "setup_bull", win: "—" };
+      if (!macdPos && !aboveVWAP) return { key: "setup_bear", win: "—" };
+      return { key: "chop", win: "0%" };
+    }
+
+    function renderStageStrip(ctx) {
+      const { adxVal, macdH, rsiVal, bbB, vwapDist, rsi2 } = ctx;
+      const d = detectStageClient(adxVal, macdH, rsiVal, bbB, vwapDist, rsi2);
+      state.activeStage = d.key;
+      const el = document.getElementById("stageStripInner");
+      el.innerHTML = STAGE_DEFS.map((s) => {
+        const on = s.key === d.key ? " on" : "";
+        const pct = s.key === d.key && d.win ? d.win : "—";
+        return `<div class="stage-btn ${s.cls}${on}" data-sk="${s.key}">
+          <span class="sb-ico">${s.icon}</span><span class="sb-lbl">${s.label}</span><span class="sb-pct">${pct}</span><span class="sb-dot"></span>
+        </div>`;
+      }).join("");
+      const card = document.getElementById("stageDetailCard");
+      const border =
+        d.key === "bull" || d.key === "setup_bull"
+          ? "var(--green)"
+          : d.key === "bear" || d.key === "setup_bear"
+            ? "var(--red)"
+            : d.key === "fading"
+              ? "var(--yellow)"
+              : "var(--border)";
+      card.style.borderLeftColor = border;
+      const narr =
+        d.key === "chop"
+          ? "EDGE SCORE: ~0%. ADX below 20 — no clean trend. Standing aside avoids paying theta for a coin flip."
+          : d.key === "bull"
+            ? "Trend and momentum align for calls: VWAP, MACD, RSI band. Prefer 7–14 DTE; stop −40% premium."
+            : d.key === "bear"
+              ? "Bearish alignment for puts: below VWAP, MACD negative, RSI 30–50. Target +80–150% on premium."
+              : d.key === "setup_bull"
+                ? "Bullish ingredients building — wait for volume/structure confirmation before sizing."
+                : d.key === "setup_bear"
+                  ? "Bearish ingredients building — confirm with hold below VWAP."
+                  : d.key === "fading"
+                    ? "Prior long-side momentum failing vs VWAP — fade risk; cut losers past −40%."
+                    : d.key === "reversal"
+                      ? "Extreme RSI(2) + exhaustion — reversal playbook; keep size small."
+                      : "Monitor for regime shift.";
+      card.innerHTML = `<div style="font-family:Bebas Neue,sans-serif;font-size:1rem;color:var(--accent);margin-bottom:8px;">REGIME: ${d.key.toUpperCase()}</div>
+        <p style="font-size:12px;line-height:1.6;color:var(--text);">${narr}</p>
+        <div style="margin-top:10px;font-family:Space Mono,monospace;font-size:10px;color:var(--muted);">
+          👁 ADX ${adxVal.toFixed(1)} · MACD ${macdH >= 0 ? "+" : ""}${macdH.toFixed(3)} · RSI ${rsiVal.toFixed(1)} · VWAP ${vwapDist >= 0 ? "+" : ""}${vwapDist.toFixed(2)}%
+        </div>`;
+    }
 
     function toast(msg, type = "info") {
       const w = document.getElementById("toasts");
@@ -744,6 +885,16 @@
       const sig = computeSignal(adxVal, macdH, price, vwap, rsiVal, bbB);
       state.signal = sig.key;
       state.signalDetail = sig.detail;
+
+      const rsi2v = rsi(closes5, 2);
+      renderStageStrip({
+        adxVal,
+        macdH,
+        rsiVal,
+        bbB,
+        vwapDist,
+        rsi2: rsi2v,
+      });
 
       const d15 = tfDir(c15.map((x) => x.c));
       const d60 = tfDir(c60.map((x) => x.c));
@@ -1226,8 +1377,8 @@
           const sc = a.score >= 75 ? "var(--green)" : a.score >= 50 ? "var(--yellow)" : "var(--red)";
           return `<div class="card scanner-alert-card">
             <div style="display:flex;justify-content:space-between;align-items:center;">
-              <span class="font-bebas" style="font-size:1.6rem;">${a.ticker}</span>
-              <span class="setup-badge">${a.setupType}</span>
+              <span class="font-bebas" style="font-size:1.6rem;">${(a.stageEmoji || "🔥") + " " + a.ticker}</span>
+              <span class="setup-badge">${a.stageLabel || a.setupType}</span>
             </div>
             <div class="score-bar"><div style="width:${Math.min(100, a.score)}%;background:${sc}"></div></div>
             <div class="font-mono" style="font-size:0.75rem;margin-top:8px;">ADX ${a.indicators?.adx} · RSI ${a.indicators?.rsi} · MACD ${a.macdDir} · VWAP ${a.indicators?.vwapDist}%</div>
@@ -1278,6 +1429,133 @@
       document.getElementById("mainSwipe").classList.remove("has-banner");
     }
 
+    async function pollScanData() {
+      try {
+        const r = await fetch("/api/scan-data");
+        const d = await r.json();
+        state.scanData = d;
+        renderScanDashboard(d);
+      } catch {
+        /* offline */
+      }
+    }
+
+    function renderScanDashboard(d) {
+      const s925 = d.scan925;
+      const s955 = d.scan955;
+      const eod = d.eodLatest;
+      const run = d.runningStats;
+      const mbDate = document.getElementById("mbDate");
+      const mbCtx = document.getElementById("mbContext");
+      const mbBody = document.getElementById("mbBody");
+      const mbWatch = document.getElementById("mbWatch");
+      const btnBest = document.getElementById("btnLoadBestPlay");
+      if (s925) {
+        mbDate.textContent = (s925.date || "") + " · 9:25 pre-market";
+        const mc = s925.marketContext || {};
+        mbCtx.innerHTML =
+          "VIX " +
+          (mc.vix != null ? mc.vix.toFixed(2) : "—") +
+          " · SPY " +
+          (mc.spyPct != null ? (mc.spyPct >= 0 ? "+" : "") + mc.spyPct.toFixed(2) : "—") +
+          "% · QQQ " +
+          (mc.qqqPct != null ? (mc.qqqPct >= 0 ? "+" : "") + mc.qqqPct.toFixed(2) : "—") +
+          "% · " +
+          (mc.sentiment || "—");
+        mbBody.textContent = s925.claudeAnalysis || "";
+        const bulls = s925.watchlistBull || [];
+        const bears = s925.watchlistBear || [];
+        const avoid = s925.watchlistAvoid || [];
+        mbWatch.innerHTML = [
+          bulls.length
+            ? '<div><strong style="color:var(--green)">Bull</strong> · ' +
+              bulls.map((x) => x.symbol).join(", ") +
+              "</div>"
+            : "",
+          bears.length
+            ? '<div><strong style="color:var(--red)">Bear</strong> · ' +
+              bears.map((x) => x.symbol).join(", ") +
+              "</div>"
+            : "",
+          avoid.length
+            ? '<div style="text-decoration:line-through;opacity:0.75"><strong>Avoid</strong> · ' +
+              avoid.map((x) => x.symbol).join(", ") +
+              "</div>"
+            : "",
+        ].join("");
+        if (bulls[0]) {
+          btnBest.style.display = "inline-block";
+          btnBest.dataset.sym = bulls[0].symbol;
+        } else {
+          btnBest.style.display = "none";
+        }
+      } else {
+        mbDate.textContent = "Next brief · 9:25am ET";
+        mbCtx.textContent =
+          "No pre-market data in blob store yet — deploy scans or wait for schedule.";
+        mbBody.textContent = "";
+        mbWatch.textContent = "";
+        btnBest.style.display = "none";
+      }
+      const orBody = document.getElementById("orBody");
+      if (s955 && s955.confirmedTickers && s955.confirmedTickers.length) {
+        const conf = s955.confirmedTickers.length;
+        const watch = (s955.watchingTickers || []).length;
+        const fail = (s955.failedTickers || []).length;
+        orBody.innerHTML =
+          `<div class="muted" style="margin-bottom:8px;">Confirmed ${conf} · Watching ${watch} · Failed/skip ${fail}</div>` +
+          s955.confirmedTickers
+            .map(
+              (t) =>
+                `<div class="card" style="margin-bottom:8px;padding:10px;background:var(--bg2);border-color:var(--border2);"><strong>${t.symbol}</strong> · ${(t.stage && t.stage.label) || ""}<div class="font-mono" style="font-size:0.7rem;margin-top:6px;">${t.option ? t.option.strike + " " + t.option.expiry + " · $" + (typeof t.option.mid === "number" ? t.option.mid.toFixed(2) : t.option.mid) : "—"}</div><button type="button" class="btn-go load-or-t" data-sym="${t.symbol}" style="margin-top:8px;">LOAD TICKER</button></div>`
+            )
+            .join("") +
+          `<p class="muted" style="margin-top:10px;max-height:160px;overflow-y:auto;">${(s955.claudeAnalysis || "").replace(/</g, "&lt;").slice(0, 900)}</p>`;
+        orBody.querySelectorAll(".load-or-t").forEach((b) => {
+          b.addEventListener("click", () => {
+            document.getElementById("tickerInput").value = b.dataset.sym;
+            goTicker();
+            setPage(0);
+          });
+        });
+      } else {
+        orBody.textContent =
+          "Opening range scan runs at 9:55am ET — no data yet.";
+      }
+      const eodCard = document.getElementById("eodCard");
+      const eodBody = document.getElementById("eodBody");
+      if (eod && eod.claudeAnalysis) {
+        eodCard.style.display = "block";
+        eodBody.innerHTML =
+          '<div style="font-family:Bebas Neue,sans-serif;font-size:1.3rem;color:var(--accent);">Win rate ' +
+          (eod.winRate != null ? eod.winRate + "%" : "—") +
+          " · Calls " +
+          (eod.correctCalls ?? "—") +
+          "/" +
+          (eod.totalCalls ?? "—") +
+          '</div><p style="margin-top:10px;font-size:0.82rem;line-height:1.55;white-space:pre-wrap;">' +
+          String(eod.claudeAnalysis || "")
+            .replace(/</g, "&lt;")
+            .slice(0, 2000) +
+          "</p>";
+      } else {
+        eodCard.style.display = "none";
+      }
+      const rs = document.getElementById("runStatsBody");
+      if (run && run.winRateHistory && run.winRateHistory.length) {
+        const last = run.winRateHistory.slice(-10);
+        rs.innerHTML =
+          last.map((x) => "<div>" + x.date + ": " + (x.winRate ?? "—") + "%</div>").join("") +
+          '<div style="margin-top:10px;">Total calls: ' +
+          (run.totalCalls ?? "—") +
+          " · Correct: " +
+          (run.totalCorrect ?? "—") +
+          "</div>";
+      } else {
+        rs.textContent = "Not enough history yet.";
+      }
+    }
+
     async function pollAlerts() {
       try {
         const r = await fetch("/api/alerts");
@@ -1309,6 +1587,7 @@
         }
         toast("Scan complete · setups " + (d.setupsFound ?? 0), "success");
         await pollAlerts();
+        await pollScanData();
       } catch (e) {
         toast("Scan failed", "error");
       }
@@ -1322,16 +1601,31 @@
         const items = d.learnings || [];
         if (!items.length) {
           el.innerHTML = '<span class="muted">No closed-trade notes yet.</span>';
-          return;
+        } else {
+          el.innerHTML = items
+            .map(
+              (x) =>
+                `<div class="card trio-card" style="margin-bottom:8px;"><p style="font-size:0.75rem;color:var(--accent);">${x.ticker} · ${x.entrySignal} · ${x.pnlPct}% / ${x.holdDays}d</p><p style="margin-top:6px;">${(x.feedback || "").replace(/</g, "&lt;")}</p></div>`
+            )
+            .join("");
         }
-        el.innerHTML = items
-          .map(
-            (x) =>
-              `<div class="card trio-card" style="margin-bottom:8px;"><p style="font-size:0.75rem;color:var(--accent);">${x.ticker} · ${x.entrySignal} · ${x.pnlPct}% / ${x.holdDays}d</p><p style="margin-top:6px;">${(x.feedback || "").replace(/</g, "&lt;")}</p></div>`
-          )
-          .join("");
       } catch {
         el.innerHTML = '<span class="muted">Could not load learning log.</span>';
+      }
+      try {
+        const r2 = await fetch("/api/scan-data");
+        const d2 = await r2.json();
+        const eod = d2.eodLatest;
+        const el2 = document.getElementById("eodLearningWrap");
+        if (eod && eod.date) {
+          const lesson = String(eod.claudeAnalysis || "").split("\n").slice(0, 2).join(" ");
+          el2.innerHTML =
+            `<div class="card trio-card"><p style="font-size:0.75rem;color:var(--accent);">${eod.date} · WR ${eod.winRate != null ? eod.winRate + "%" : "—"}</p><p style="margin-top:6px;font-size:0.8rem;">${lesson.replace(/</g, "&lt;").slice(0, 280)}…</p></div>`;
+        } else {
+          el2.innerHTML = '<span class="muted">No EOD blob yet.</span>';
+        }
+      } catch {
+        /* optional */
       }
     }
 
@@ -1438,6 +1732,23 @@
     });
     document.getElementById("alertBannerDismiss").addEventListener("click", hideAlertBanner);
     document.getElementById("btnScanNow").addEventListener("click", scanNow);
+    document.getElementById("btnLoadBestPlay").addEventListener("click", (e) => {
+      const sym = e.currentTarget.dataset.sym;
+      if (!sym) return;
+      document.getElementById("tickerInput").value = sym;
+      goTicker();
+      setPage(0);
+    });
+    document.getElementById("btnReviewEod").addEventListener("click", () => {
+      const t =
+        "Review today's trading performance and tell me what we need to improve (options only, swing 1–3d, no earnings, stops/targets per SOHEL rules).";
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(t);
+        toast("Prompt copied to clipboard.", "ok");
+      } else {
+        toast(t.slice(0, 80) + "…", "info");
+      }
+    });
     document.getElementById("btnWhatsScanning").addEventListener("click", () => {
       setPage(5);
       scanNow();
@@ -1459,6 +1770,7 @@
     setInterval(() => { loadClock(); loadWatchlist(); loadMarketData(); }, 30000);
     setInterval(() => { loadBalances(); loadPositions(); loadOrders(); }, 60000);
     setInterval(pollAlerts, 30000);
+    setInterval(pollScanData, 30000);
 
     loadClock();
     loadBalances();
@@ -1467,6 +1779,7 @@
     loadWatchlist();
     loadMarketData();
     pollAlerts();
+    pollScanData();
     loadLearnings();
     initPushAndSw();
   </script>

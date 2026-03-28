@@ -1,5 +1,6 @@
 const fetch = require("node-fetch");
 const { getStore } = require("@netlify/blobs");
+const { withSohelContext } = require("./lib/sohelContext");
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -10,8 +11,11 @@ const cors = {
 async function claudeLearn(note) {
   const key = process.env.ANTHROPIC_API_KEY;
   const model =
-    process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
+    process.env.ANTHROPIC_MODEL_CHAT || "claude-sonnet-4-20250514";
   if (!key) return "Add ANTHROPIC_API_KEY for learning notes.";
+  const system = withSohelContext(
+    "You summarize closed options trades for Sohel. Be concise (max 5 sentences). Tie feedback to his swing rules, stops/targets, and when to use spreads."
+  );
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -22,6 +26,7 @@ async function claudeLearn(note) {
     body: JSON.stringify({
       model,
       max_tokens: 500,
+      system,
       messages: [
         {
           role: "user",
@@ -36,7 +41,7 @@ async function claudeLearn(note) {
             note.holdDays +
             " days, result: " +
             note.pnlPct +
-            "%. What worked, what did not, what should we watch for next time? Be concise (max 5 sentences).",
+            "%. What worked, what did not, what should we watch for next time?",
         },
       ],
     }),

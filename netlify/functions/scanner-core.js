@@ -1,6 +1,7 @@
 const fetch = require("node-fetch");
 const { getStore } = require("@netlify/blobs");
 const { sendPushToAll } = require("./lib/pushAll");
+const { withSohelContext } = require("./lib/sohelContext");
 
 const BASE_WATCH = [
   "NVDA", "TSLA", "SPY", "QQQ", "AAPL", "AMD", "MSFT", "META", "GOOGL",
@@ -136,16 +137,21 @@ function escapeHtml(s) {
     .replace(/>/g, "&gt;");
 }
 
+function tradierBase() {
+  return (process.env.TRADIER_ENV || "production").toLowerCase() === "sandbox"
+    ? "https://sandbox.tradier.com"
+    : "https://api.tradier.com";
+}
+
 async function tradier(path, params = {}) {
   const token = process.env.TRADIER_TOKEN;
   if (!token) throw new Error("TRADIER_TOKEN missing");
-  const base = "https://api.tradier.com";
   const qs = new URLSearchParams(
     Object.fromEntries(
       Object.entries(params).map(([k, v]) => [k, String(v)])
     )
   ).toString();
-  const url = base + path + (qs ? "?" + qs : "");
+  const url = tradierBase() + path + (qs ? "?" + qs : "");
   const res = await fetch(url, {
     headers: { Authorization: "Bearer " + token, Accept: "application/json" },
   });
@@ -155,6 +161,159 @@ async function tradier(path, params = {}) {
 function normList(x) {
   if (!x) return [];
   return Array.isArray(x) ? x : [x];
+}
+
+async function fetchUnderlyingPnlMap() {
+  const acc = process.env.TRADIER_ACCOUNT_ID;
+  if (!acc) return {};
+  try {
+    const j = await tradier("/v1/accounts/" + acc + "/positions", {});
+    const map = {};
+    for (const p of normList(j.positions?.position)) {
+      const u = String(p.underlying_symbol || "").toUpperCase().trim();
+      if (!u) continue;
+      const cost = parseFloat(p.cost_basis || 0);
+      const mv = parseFloat(p.market_value || 0);
+      const pl = cost ? ((mv - cost) / Math.abs(cost)) * 100 : 0;
+      if (map[u] == null || pl < map[u]) map[u] = pl;
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+function detectIntradayStage(ctx) {
+  const {
+    adxVal,
+    adxSlope,
+    macdHist,
+    macdSlope,
+    rsi14,
+    vwapDist,
+    bbB,
+    bull,
+    bear,
+    breakout,
+    reversal,
+    rsi2,
+    ema8,
+    ema21,
+    bullOk,
+    bearOk,
+  } = ctx;
+  const rsiNum = Number(rsi14);
+  const aboveVWAP = vwapDist > 0;
+  const macdPos = macdHist > 0;
+
+  if (adxVal < 20) {
+    return {
+      stage: "chop",
+      stageLabel: "CHOP",
+      stageEmoji: "⚠️",
+      action: "NO EDGE",
+    };
+  }
+
+  if (reversal) {
+    return {
+      stage: "reversal",
+      stageLabel: "REVERSAL",
+      stageEmoji: "🚨",
+      action: "SMALL SIZE",
+    };
+  }
+
+  if (breakout && macdPos && aboveVWAP) {
+    return {
+      stage: "bull",
+      stageLabel: "BULL CONFIRMED",
+      stageEmoji: "✅",
+      action: "BUY CALLS NOW",
+    };
+  }
+  if (breakout && !macdPos && !aboveVWAP) {
+    return {
+      stage: "bear",
+      stageLabel: "BEAR CONFIRMED",
+      stageEmoji: "🔴",
+      action: "BUY PUTS NOW",
+    };
+  }
+
+  if (
+    bullOk &&
+    macdPos &&
+    aboveVWAP &&
+    rsiNum >= 50 &&
+    rsiNum <= 70
+  ) {
+    return {
+      stage: "bull",
+      stageLabel: "BULL CONFIRMED",
+      stageEmoji: "✅",
+      action: "BUY CALLS NOW",
+    };
+  }
+  if (
+    bearOk &&
+    !macdPos &&
+    !aboveVWAP &&
+    rsiNum >= 30 &&
+    rsiNum <= 50
+  ) {
+    return {
+      stage: "bear",
+      stageLabel: "BEAR CONFIRMED",
+      stageEmoji: "🔴",
+      action: "BUY PUTS NOW",
+    };
+  }
+
+  if (bull >= 55 && bull < 75 && macdPos) {
+    return {
+      stage: "setup_bull",
+      stageLabel: "BULL SETUP",
+      stageEmoji: "🔍",
+      action: "WATCH — CONFIRM",
+    };
+  }
+  if (bear >= 55 && bear < 75 && !macdPos) {
+    return {
+      stage: "setup_bear",
+      stageLabel: "BEAR SETUP",
+      stageEmoji: "🔍",
+      action: "WATCH — CONFIRM",
+    };
+  }
+
+  const fading =
+    (macdPos && !aboveVWAP && (adxSlope < 0 || macdSlope < 0)) ||
+    (bullOk && !aboveVWAP);
+  if (fading) {
+    return {
+      stage: "fading",
+      stageLabel: "FADING",
+      stageEmoji: "⚡",
+      action: "SKIP / CUT",
+    };
+  }
+
+  return {
+    stage: "chop",
+    stageLabel: "NO EDGE",
+    stageEmoji: "⚠️",
+    action: "SKIP",
+  };
+}
+
+function shouldSendStageAlert(stage, ticker, pnlMap) {
+  if (stage === "chop" || stage === "reversal") return false;
+  if (stage === "fading") {
+    const p = pnlMap[ticker];
+    return p != null && p <= -35;
+  }
+  return ["bull", "bear", "setup_bull", "setup_bear"].includes(stage);
 }
 
 function extractTickersFromText(text) {
@@ -200,40 +359,36 @@ async function serperQueries(apiKey) {
 async function claudeAnalyze(setup) {
   const key = process.env.ANTHROPIC_API_KEY;
   const model =
-    process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
+    process.env.ANTHROPIC_MODEL_SCANNER || "claude-haiku-4-5-20251001";
   if (!key) return "AI key not configured.";
-  const system =
-    "You are Sohel's options trading partner. He swings options 1-3 days. Rules: ADX>25, MACD direction, RSI 50-70 calls/30-50 puts, above VWAP for bulls, IV rank low=buy outright, high=spread. Stop -40 to -50% premium. Target +80 to +150%. Be direct and specific. Max 3 sentences per alert.";
+  const system = withSohelContext(
+    "Trading signal analyzer. Maximum 2 sentences. Sentence 1: name the setup type and key condition. Sentence 2: exact option to buy and why. No fluff."
+  );
+  const macdN = parseFloat(setup.macd);
   const user =
-    "Setup found on " +
     setup.ticker +
-    ".\nPrice: $" +
-    setup.price +
-    " (" +
-    setup.change +
-    "%)\nSignal: " +
+    " " +
     setup.setupType +
-    "\nADX: " +
-    setup.adx +
-    ", MACD: " +
-    setup.macd +
-    ", RSI: " +
-    setup.rsi +
-    ", VWAP dist: " +
-    setup.vwapDist +
-    "%\nBest option: " +
-    setup.strike +
-    " exp " +
-    setup.expiry +
-    " at $" +
-    setup.mid +
-    " delta " +
-    setup.delta +
-    " IV " +
-    setup.iv +
-    "%\nScore: " +
+    " | Score: " +
     setup.score +
-    "/100\nShould Sohel take this trade? What exactly should he do?";
+    "/100\nADX:" +
+    setup.adx +
+    " MACD:" +
+    (macdN >= 0 ? "+" : "") +
+    setup.macd +
+    "\nRSI:" +
+    setup.rsi +
+    " VWAP:" +
+    (parseFloat(setup.vwapDist) >= 0 ? "+" : "") +
+    setup.vwapDist +
+    "%\nOption: " +
+    setup.strike +
+    " " +
+    setup.expiry +
+    " $" +
+    setup.mid +
+    " Δ" +
+    setup.delta;
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -243,7 +398,7 @@ async function claudeAnalyze(setup) {
     },
     body: JSON.stringify({
       model,
-      max_tokens: 400,
+      max_tokens: 200,
       system,
       messages: [{ role: "user", content: user }],
     }),
@@ -416,6 +571,13 @@ async function runScan() {
     /* continue if clock fails */
   }
 
+  let pnlMap = {};
+  try {
+    pnlMap = await fetchUnderlyingPnlMap();
+  } catch {
+    pnlMap = {};
+  }
+
   const serperKey = process.env.SERPER_API_KEY;
   let discovered = new Set();
   if (serperKey) {
@@ -538,7 +700,37 @@ async function runScan() {
 
           const bullOk = bull >= 75;
           const bearOk = bear >= 75;
-          if (!bullOk && !bearOk && !breakout && !reversal) return;
+
+          const adxSlope =
+            adxCandles.length >= 18
+              ? adxVal - calcADX(adxCandles.slice(0, -3), 14)
+              : 0;
+          const macdHistPast =
+            closes.length >= 38
+              ? calcMACD(closes.slice(0, -3)).hist
+              : macdHist;
+          const macdSlope = macdHist - macdHistPast;
+
+          const stageInfo = detectIntradayStage({
+            adxVal,
+            adxSlope,
+            macdHist,
+            macdSlope,
+            rsi14,
+            vwapDist,
+            bbB,
+            bull,
+            bear,
+            breakout,
+            reversal,
+            rsi2,
+            ema8,
+            ema21,
+            bullOk,
+            bearOk,
+          });
+
+          if (!shouldSendStageAlert(stageInfo.stage, symbol, pnlMap)) return;
 
           let setupType = "";
           let rank = 0;
@@ -560,6 +752,15 @@ async function runScan() {
             setupType = setupType ? setupType + " + " + tag : tag;
             rank = Math.max(rank, 78);
           }
+          if (!setupType) {
+            setupType =
+              stageInfo.stage === "setup_bull"
+                ? "BULL SETUP"
+                : stageInfo.stage === "setup_bear"
+                  ? "BEAR SETUP"
+                  : stageInfo.stageLabel || "SCAN";
+            rank = Math.max(rank, Math.max(bull, bear, 60));
+          }
 
           analyzed.push({
             ticker: symbol,
@@ -578,6 +779,12 @@ async function runScan() {
             breakout,
             reversal,
             rsi2,
+            stage: stageInfo.stage,
+            stageLabel: stageInfo.stageLabel,
+            stageEmoji: stageInfo.stageEmoji,
+            stageAction: stageInfo.action,
+            adxSlope,
+            macdSlope,
           });
         } catch {
           /* one symbol failed */
@@ -624,6 +831,8 @@ async function runScan() {
       delta: opt.delta,
       iv: opt.iv,
       score: s.score,
+      stage: s.stage,
+      stageLabel: s.stageLabel,
     });
 
     const indicators = {
@@ -632,6 +841,9 @@ async function runScan() {
       macd: s.macd,
       vwapDist: s.vwapDist,
       bbB: s.bbB,
+      price: s.price,
+      adxSlope: s.adxSlope,
+      macdSlope: s.macdSlope,
     };
 
     const pending = {
@@ -641,6 +853,10 @@ async function runScan() {
       price: s.price,
       change: s.change,
       aiAnalysis,
+      stage: s.stage,
+      stageLabel: s.stageLabel,
+      stageEmoji: s.stageEmoji,
+      action: s.stageAction,
       option: {
         strike: opt.strike,
         expiry: opt.expiry,
@@ -663,6 +879,10 @@ async function runScan() {
       ticker: s.ticker,
       setupType: s.setupType,
       score: s.score,
+      stage: s.stage,
+      stageLabel: s.stageLabel,
+      stageEmoji: s.stageEmoji,
+      action: s.stageAction,
       indicators,
       option: pending.option,
       aiAnalysis,
@@ -670,14 +890,24 @@ async function runScan() {
       outcome: null,
     });
 
+    const holdType =
+      /PUT|BEAR|fade/i.test(revType) && !/BULL|CALL bounce/i.test(revType)
+        ? "SWING (bear)"
+        : "SWING (bull)";
     const tg =
-      "🔥 <b>SETUP ALERT — " +
+      (s.stageEmoji || "🔥") +
+      " <b>" +
+      escapeHtml(s.stageLabel || s.setupType) +
+      " — " +
       escapeHtml(s.ticker) +
       "</b>\n\n" +
       escapeHtml(s.setupType) +
       " | Score: " +
       s.score +
       "/100\n" +
+      "HOLD TYPE: " +
+      holdType +
+      " | EXIT: structure break / -40% prem | TIME: 1–3d swing\n" +
       "💰 Price: $" +
       s.price.toFixed(2) +
       " (" +
@@ -797,4 +1027,10 @@ async function runScan() {
   };
 }
 
-module.exports = { runScan, calcRSI, calcMACD, calcADX };
+module.exports = {
+  runScan,
+  calcRSI,
+  calcMACD,
+  calcADX,
+  detectStage: detectIntradayStage,
+};
