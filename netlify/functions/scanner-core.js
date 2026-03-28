@@ -440,10 +440,13 @@ async function runScan() {
         symbol: q.symbol,
         last,
         change: parseFloat(q.change_percentage ?? q.percent_change ?? 0),
+        vol,
         raw: q,
       });
     }
   }
+  filtered.sort((a, b) => b.vol - a.vol);
+  const capped = filtered.slice(0, 18);
 
   const end = new Date();
   const start = new Date(end.getTime() - 2 * 86400000);
@@ -451,8 +454,8 @@ async function runScan() {
 
   const analyzed = [];
   const batchSize = 6;
-  for (let i = 0; i < filtered.length; i += batchSize) {
-    const chunk = filtered.slice(i, i + batchSize);
+  for (let i = 0; i < capped.length; i += batchSize) {
+    const chunk = capped.slice(i, i + batchSize);
     await Promise.all(
       chunk.map(async ({ symbol, last, change }) => {
         try {

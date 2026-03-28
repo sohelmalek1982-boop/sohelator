@@ -2,6 +2,8 @@
   publish = "public"
   functions = "netlify/functions"
 
+# Scanner runs many Tradier calls: in Netlify → Functions → increase timeout (e.g. 60–120s) if scans fail.
+
 [[redirects]]
   from = "/api/tradier"
   to = "/.netlify/functions/tradier"
