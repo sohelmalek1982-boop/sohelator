@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>SOHELATOR</title>
-  <meta name="sohel-build" content="alert-tracking-20260328" />
+  <meta name="sohel-build" content="tab-dom-fix-20260329" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Chakra+Petch:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
@@ -1596,7 +1596,6 @@
             <div class="trio-card"><h4>Exit when</h4><p id="actExit">—</p></div>
             <div class="trio-card"><h4>Stay out if</h4><p id="actStay">—</p></div>
           </div>
-        </div>
       </section>
 
       <!-- 1 INDS — interpreted (IV gauge + chain data still loaded on SIGNAL for IV) -->
@@ -5020,12 +5019,13 @@
       loadOrders();
     }
 
-    /** Show one #pages > .page at a time — reliable on iPhone WebKit (avoids blank carousel panels). */
+    /** Show one tab at a time — use #page-0 … #page-6 so DOM order / stray tags can’t break toggling. */
     function syncTabPageVisibility() {
       const idx = Math.max(0, Math.min(6, state.page | 0));
-      document.querySelectorAll("#pages > .page").forEach((el, i) => {
-        el.classList.toggle("page--active", i === idx);
-      });
+      for (let i = 0; i <= 6; i++) {
+        const el = document.getElementById("page-" + i);
+        if (el) el.classList.toggle("page--active", i === idx);
+      }
     }
 
     function setPage(i) {
