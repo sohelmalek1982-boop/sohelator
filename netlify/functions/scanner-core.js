@@ -561,10 +561,13 @@ async function runScan() {
   const confirmedSetups = [];
   const tickerList = [];
 
+  let clockState = "unknown";
   try {
     const clock = await tradier("/v1/markets/clock", {});
     const st = clock.clock?.state || clock.state;
+    clockState = st != null ? String(st) : "unknown";
     if (st !== "open") {
+      console.log("market status:", clockState);
       await scannerStore.setJSON("last_scan", {
         timestamp: Date.now(),
         tickersScanned: [],
@@ -576,8 +579,10 @@ async function runScan() {
       return { ok: true, skipped: true, reason: "market not open" };
     }
   } catch (e) {
+    clockState = "error";
     /* continue if clock fails */
   }
+  console.log("market status:", clockState);
 
   let pnlMap = {};
   try {
@@ -617,6 +622,7 @@ async function runScan() {
   }
   filtered.sort((a, b) => b.vol - a.vol);
   const capped = filtered.slice(0, 18);
+  console.log("tickers fetched:", quotes.length, "after filter:", capped.length);
 
   const end = new Date();
   const start = new Date(end.getTime() - 2 * 86400000);
@@ -801,6 +807,7 @@ async function runScan() {
     );
   }
 
+  console.log("setups found:", analyzed.length);
   analyzed.sort((a, b) => b.score - a.score);
   const top5 = analyzed.slice(0, 5);
 
@@ -824,6 +831,7 @@ async function runScan() {
       s.price
     );
     const macdDir = s.macdHist >= 0 ? "bullish" : "bearish";
+    console.log("calling Claude...", s.ticker);
     const aiAnalysis = await claudeAnalyze({
       ticker: s.ticker,
       price: s.price.toFixed(2),
@@ -842,6 +850,7 @@ async function runScan() {
       stage: s.stage,
       stageLabel: s.stageLabel,
     });
+    console.log("Claude response received", s.ticker);
 
     const indicators = {
       adx: s.adx,

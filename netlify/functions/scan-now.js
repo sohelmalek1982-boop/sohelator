@@ -7,6 +7,7 @@ const cors = {
 };
 
 exports.handler = async (event) => {
+  console.log("scan-now triggered", new Date().toISOString());
   const headers = { ...cors, "Content-Type": "application/json" };
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 204, headers, body: "" };
