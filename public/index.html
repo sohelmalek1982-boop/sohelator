@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>SOHELATOR</title>
-  <meta name="sohel-build" content="ui-parked-quick-20260328" />
+  <meta name="sohel-build" content="ui-command-layout-20260328" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
@@ -35,12 +35,13 @@
       --hairline: rgba(0, 242, 255, 0.06);
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-bot: env(safe-area-inset-bottom, 0px);
-      /* Logo row + ticker/GO only (Play radar scrolls inside SIGNAL tab) */
-      --topbar-h: 116px;
+      /* Logo row + tagline + ticker/GO (Play radar scrolls inside SIGNAL tab) */
+      --topbar-h: 126px;
       --nav-float-h: 64px;
       --font-ui: "Chakra Petch", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --font-data: "JetBrains Mono", "SF Mono", "Menlo", ui-monospace, monospace;
-      --radius-lg: 10px;
+      --radius-lg: 12px;
+      --radius-command: 14px;
       --radius-md: 8px;
       --radius-pill: 980px;
       --glass: blur(20px) saturate(160%);
@@ -152,6 +153,16 @@
       color: var(--cyan);
       text-shadow: 0 0 20px rgba(0, 242, 255, 0.55), 0 0 40px rgba(0, 242, 255, 0.2);
     }
+    .logo-stack { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .logo-tagline {
+      font-size: 0.52rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--green);
+      text-shadow: 0 0 10px rgba(0, 255, 136, 0.35);
+    }
+
     .logo span.term-tag {
       display: inline-block;
       margin-right: 5px;
@@ -304,12 +315,210 @@
     .hero::after {
       content: ""; position: absolute; inset: -45% -20% auto -20%; height: 70%; pointer-events: none; opacity: 1;
     }
+    .hero.command-hero { padding: 16px 16px 14px; border-radius: var(--radius-command); }
     .hero.bull { border-top-color: var(--green); box-shadow: 0 0 36px rgba(0, 255, 136, 0.2), inset 0 1px 0 rgba(0, 255, 136, 0.2); }
     .hero.bull::after { background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(0, 255, 136, 0.18), transparent 65%); }
     .hero.bear { border-top-color: var(--red); box-shadow: 0 0 36px rgba(255, 45, 106, 0.15), inset 0 1px 0 rgba(255, 45, 106, 0.15); }
     .hero.bear::after { background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255, 45, 106, 0.14), transparent 65%); }
     .hero.wait { border-top-color: var(--yellow); box-shadow: 0 0 28px rgba(255, 204, 0, 0.12), inset 0 1px 0 rgba(255, 204, 0, 0.15); }
     .hero.wait::after { background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255, 204, 0, 0.1), transparent 65%); }
+
+    .command-hero-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      position: relative;
+      z-index: 1;
+    }
+    .command-ticker {
+      font-size: 2.65rem;
+      line-height: 0.95;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+    .command-hero-right { text-align: right; flex-shrink: 0; }
+    .command-price {
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: var(--cyan);
+      letter-spacing: -0.03em;
+      text-shadow: 0 0 18px rgba(0, 242, 255, 0.35);
+    }
+    .command-chg { font-size: 0.88rem; margin-top: 6px; font-weight: 600; }
+    .command-vol { font-size: 0.68rem; color: var(--green); margin-top: 4px; opacity: 0.95; }
+
+    .hero-cta {
+      width: 100%;
+      margin-top: 16px;
+      padding: 16px 18px;
+      border-radius: 999px;
+      border: 2px solid transparent;
+      font-family: var(--font-ui);
+      font-size: 1.05rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      position: relative;
+      z-index: 1;
+      transition: transform 0.15s, opacity 0.2s;
+    }
+    .hero-cta:active:not(:disabled) { transform: scale(0.98); }
+    .hero-cta:disabled { opacity: 0.45; cursor: not-allowed; }
+    .hero-cta .hero-cta-dot { font-size: 0.85rem; }
+    .hero-cta.calls {
+      background: linear-gradient(135deg, rgba(0, 255, 136, 0.22) 0%, rgba(0, 200, 110, 0.12) 100%);
+      color: var(--green);
+      border-color: var(--green);
+      box-shadow: var(--glow-lime), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      animation: ctaPulseGreen 2.2s ease-in-out infinite;
+    }
+    .hero-cta.puts {
+      background: linear-gradient(135deg, rgba(255, 45, 106, 0.2) 0%, rgba(180, 0, 90, 0.12) 100%);
+      color: #ff6b9d;
+      border-color: var(--red);
+      box-shadow: 0 0 24px rgba(255, 45, 106, 0.25);
+      animation: ctaPulseRed 2.2s ease-in-out infinite;
+    }
+    .hero-cta.chop, .hero-cta.watch {
+      background: rgba(0, 0, 0, 0.35);
+      color: var(--yellow);
+      border-color: rgba(255, 204, 0, 0.5);
+      box-shadow: 0 0 16px rgba(255, 204, 0, 0.12);
+      animation: none;
+    }
+    .hero-cta.watch { color: var(--cyan); border-color: rgba(0, 242, 255, 0.45); }
+    @keyframes ctaPulseGreen {
+      0%, 100% { box-shadow: var(--glow-lime), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
+      50% { box-shadow: 0 0 32px rgba(0, 255, 136, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+    }
+    @keyframes ctaPulseRed {
+      0%, 100% { box-shadow: 0 0 20px rgba(255, 45, 106, 0.25); }
+      50% { box-shadow: 0 0 34px rgba(255, 45, 106, 0.45); }
+    }
+    .hero-sig-meta {
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .hero-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 16px;
+      position: relative;
+      z-index: 1;
+    }
+    .hero-stat {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(0, 242, 255, 0.12);
+      border-radius: var(--radius-md);
+      padding: 12px 8px;
+      text-align: center;
+    }
+    .hero-stat-label {
+      font-size: 0.52rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    .hero-stat-val {
+      font-family: var(--font-data);
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--cyan);
+      margin-top: 6px;
+      text-shadow: 0 0 10px rgba(0, 242, 255, 0.2);
+    }
+    .hero-stat-hint {
+      font-size: 0.62rem;
+      font-weight: 600;
+      color: var(--green);
+      margin-top: 4px;
+    }
+    .hero-stat-hint.warn { color: var(--yellow); }
+    .hero-stat-hint.muted-h { color: var(--muted); }
+
+    .regime-wrap { border-radius: var(--radius-command); }
+    .section-in-card { margin-top: 0; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(0, 242, 255, 0.2); text-shadow: none; }
+    .stage-strip-wrap { margin: 0; }
+    .stage-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      overflow-x: visible;
+      padding-bottom: 0;
+    }
+    .stage-btn {
+      min-width: 0;
+      max-width: none;
+      width: 100%;
+      aspect-ratio: 1;
+      max-height: 96px;
+      padding: 8px 4px 10px;
+      border-radius: var(--radius-md);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .stage-btn .sb-lbl { font-size: 8px; letter-spacing: 0.4px; line-height: 1.15; }
+    .stage-btn .sb-pct { font-size: 15px; margin-top: 6px; }
+    .stage-detail-inner { margin-top: 12px; padding: 12px; border-radius: var(--radius-md); background: rgba(0, 0, 0, 0.28); border: 1px solid var(--border2); border-left-width: 4px; }
+
+    .mega-intel { margin-top: 0; gap: 12px; }
+    .mega-intel .intel-card {
+      padding: 14px 14px 16px;
+      border-radius: var(--radius-command);
+      min-height: 120px;
+    }
+    .mega-intel .intel-card h5 { font-size: 0.62rem; margin-bottom: 8px; }
+
+    .signal-snapshot-card { padding: 14px 16px 16px; border-radius: var(--radius-command); }
+    .snap-bar-block { margin-bottom: 14px; }
+    .snap-bar-block:last-child { margin-bottom: 0; }
+    .snap-bar-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .snap-bar-head .font-mono { font-size: 0.78rem; color: var(--text); letter-spacing: 0; text-transform: none; }
+    .snap-tag { font-size: 0.58rem; font-weight: 800; letter-spacing: 0.06em; margin-left: 4px; }
+    .snap-tag.cyan { color: var(--cyan); }
+    .snap-tag.green { color: var(--green); }
+    .snap-tag.red { color: #ff6b9d; }
+    .snap-tag.yellow { color: var(--yellow); }
+    .snap-bar-track {
+      height: 8px;
+      background: rgba(0, 0, 0, 0.45);
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid rgba(0, 242, 255, 0.12);
+    }
+    .snap-bar-fill {
+      height: 100%;
+      border-radius: 5px;
+      transition: width 0.35s ease;
+    }
+    .snap-bar-fill.cyan { background: linear-gradient(90deg, var(--cyan), var(--purple)); box-shadow: 0 0 12px rgba(0, 242, 255, 0.35); }
+    .snap-bar-fill.green { background: linear-gradient(90deg, #00ff88, #00aa66); box-shadow: 0 0 10px rgba(0, 255, 136, 0.35); }
+    .snap-bar-fill.red { background: linear-gradient(90deg, #ff2d6a, #aa0066); }
+    .snap-bar-fill.yellow { background: linear-gradient(90deg, #ffcc00, #ff8800); }
 
     .pill {
       display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px;
@@ -621,8 +830,9 @@
     body.parked-mode .big-btn { padding: 18px; font-size: 1.12rem; min-height: 52px; }
     body.parked-mode .confirm-btn { padding: 18px; font-size: 1.1rem; min-height: 54px; }
     body.parked-mode .qty-row button { width: 52px; height: 52px; }
-    body.parked-mode .hero .font-bebas { font-size: 2.5rem !important; }
-    body.parked-mode #heroPrice { font-size: 1.6rem !important; }
+    body.parked-mode .command-ticker { font-size: 2.95rem !important; }
+    body.parked-mode .command-price { font-size: 1.78rem !important; }
+    body.parked-mode .hero-cta { font-size: 1.14rem !important; padding: 18px 22px !important; min-height: 56px; }
     body.parked-mode .play-radar-play { font-size: 0.98rem; }
     body.parked-mode .pill { font-size: 1rem; padding: 12px 18px; }
     body.parked-mode .page { padding-bottom: 32px; }
@@ -679,7 +889,10 @@
 <body class="term-app">
   <header class="topbar">
     <div class="topbar-row">
-      <span class="logo"><span class="term-tag">▸</span>SOHELATOR</span>
+      <div class="logo-stack">
+        <span class="logo"><span class="term-tag">▸</span>SOHELATOR</span>
+        <div class="logo-tagline">LIVE TRADING COMMAND</div>
+      </div>
       <div class="topbar-pills">
         <span class="pill-mkt closed" id="mktPill"><span class="dot closed" id="mktDot"></span><span id="mktText">—</span></span>
         <span class="pill-ticker font-mono" id="activeTickerPill">NVDA</span>
@@ -721,30 +934,61 @@
           </div>
           <p class="safety-hint">Stop in a safe place before trading. Don’t use the screen while the truck is moving — pull over, then GO / 🔊 / orders.</p>
         </div>
-        <div class="card hero wait" id="heroCard">
-          <div style="position:relative;z-index:1;display:flex;justify-content:space-between;align-items:flex-start;">
-            <div>
-              <div class="font-bebas" style="font-size:2.2rem;" id="heroSym">NVDA</div>
-              <div class="font-mono" style="font-size:1.45rem;margin-top:4px;color:var(--cyan);letter-spacing:-0.02em;" id="heroPrice">—</div>
+        <div class="card hero command-hero wait" id="heroCard">
+          <div class="command-hero-top">
+            <div class="command-hero-left">
+              <div class="command-ticker font-bebas" id="heroSym">NVDA</div>
             </div>
-            <div class="font-mono" style="text-align:right;font-size:1rem;" id="heroChg">—</div>
+            <div class="command-hero-right font-mono">
+              <div class="command-price" id="heroPrice">—</div>
+              <div class="command-chg" id="heroChg">—</div>
+              <div class="command-vol" id="heroVolLine">Vol —</div>
+            </div>
           </div>
+          <button type="button" class="hero-cta watch" id="heroActionBtn" disabled>
+            <span class="hero-cta-dot" id="heroCtaDot">○</span>
+            <span id="heroActionLabel">LOADING…</span>
+          </button>
+          <div class="hero-sig-meta"><span id="signalText">WAIT</span></div>
+          <div class="hero-stat-grid">
+            <div class="hero-stat">
+              <div class="hero-stat-label">Trend str</div>
+              <div class="hero-stat-val" id="stAdx">—</div>
+              <div class="hero-stat-hint muted-h" id="stAdxHint">—</div>
+            </div>
+            <div class="hero-stat">
+              <div class="hero-stat-label">ATM IV</div>
+              <div class="hero-stat-val" id="stIv">—</div>
+              <div class="hero-stat-hint muted-h" id="stIvHint">—</div>
+            </div>
+            <div class="hero-stat">
+              <div class="hero-stat-label">TF align</div>
+              <div class="hero-stat-val" id="stTf">—</div>
+              <div class="hero-stat-hint muted-h" id="stTfHint">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card regime-wrap">
+          <h2 class="section section-in-card">Regime detection</h2>
           <div class="stage-strip-wrap"><div class="stage-strip" id="stageStripInner"></div></div>
-          <div id="stageDetailCard" class="card" style="padding:12px;margin-bottom:12px;border-left:4px solid var(--border);"></div>
-          <div class="intel-grid" id="signalIntelGrid">
-            <div class="intel-card" id="intelGexCard"><h5>GEX</h5><span class="muted">Load ticker…</span></div>
-            <div class="intel-card" id="intelFlowCard"><h5>OPTIONS FLOW</h5><span class="muted">—</span></div>
-            <div class="intel-card" id="intelProfileCard"><h5>MARKET PROFILE</h5><span class="muted">—</span></div>
-            <div class="intel-card" id="intelLevelsCard"><h5>KEY LEVELS</h5><span class="muted">—</span></div>
-          </div>
-          <div id="signalPill" class="pill wait" style="margin-top:14px;"><span class="pulse" style="background:currentColor;"></span><span id="signalText">WAIT</span></div>
-          <div class="grid-3">
-            <div class="stat-cell"><div class="label">Trend (ADX/50)</div><div class="val" id="stAdx">—</div></div>
-            <div class="stat-cell"><div class="label">ATM IV%</div><div class="val" id="stIv">—</div></div>
-            <div class="stat-cell"><div class="label">TF Align</div><div class="val" id="stTf">—</div></div>
-          </div>
-          <div class="tf-strip" id="tfStrip"></div>
-          <h2 class="section" style="margin-top:16px;">Setups</h2>
+          <div id="stageDetailCard" class="stage-detail-inner" style="border-left-color:var(--border);"></div>
+        </div>
+
+        <h2 class="section">Market intelligence</h2>
+        <div class="intel-grid mega-intel" id="signalIntelGrid">
+          <div class="intel-card" id="intelGexCard"><h5>GAMMA EXPOSURE</h5><span class="muted">Load ticker…</span></div>
+          <div class="intel-card" id="intelFlowCard"><h5>OPTIONS FLOW</h5><span class="muted">—</span></div>
+          <div class="intel-card" id="intelProfileCard"><h5>MARKET PROFILE</h5><span class="muted">—</span></div>
+          <div class="intel-card" id="intelLevelsCard"><h5>KEY LEVELS</h5><span class="muted">—</span></div>
+        </div>
+
+        <h2 class="section">Tape pulse</h2>
+        <div class="card signal-snapshot-card" id="signalSnapshotCard"><span class="muted" style="font-size:0.8rem;">Loading indicators…</span></div>
+
+        <h2 class="section" style="margin-top:14px;">Timeframes</h2>
+        <div class="tf-strip" id="tfStrip"></div>
+        <h2 class="section" style="margin-top:16px;">Setups</h2>
           <div id="setupsList"></div>
           <h2 class="section" style="margin-top:16px;">Action</h2>
           <div class="trio">
@@ -983,6 +1227,7 @@
       const d = detectStageClient(adxVal, macdH, rsiVal, bbB, vwapDist, rsi2);
       state.activeStage = d.key;
       const el = document.getElementById("stageStripInner");
+      if (!el) return;
       el.innerHTML = STAGE_DEFS.map((s) => {
         const on = s.key === d.key ? " on" : "";
         const pct = s.key === d.key && d.win ? d.win : "—";
@@ -991,6 +1236,7 @@
         </div>`;
       }).join("");
       const card = document.getElementById("stageDetailCard");
+      if (!card) return;
       const border =
         d.key === "bull" || d.key === "setup_bull"
           ? "var(--green)"
@@ -1550,7 +1796,8 @@
       const last = parseFloat(q.last ?? q.close ?? q.bid ?? 0);
       const chg = parseFloat(q.change ?? 0);
       const pct = parseFloat(q.change_percentage ?? q.percent_change ?? 0);
-      return { ...q, last, chg, pct };
+      const vol = parseFloat(q.volume ?? q.last_volume ?? q.adv ?? 0);
+      return { ...q, last, chg, pct, vol: isFinite(vol) ? vol : 0 };
     }
 
     function updateActiveTickerPill() {
@@ -1994,6 +2241,75 @@
       };
     }
 
+    function updateHeroIvHint() {
+      const el = document.getElementById("stIvHint");
+      if (!el) return;
+      const iv = state.ivAtm?.iv;
+      if (iv == null || !isFinite(iv) || iv < 1) {
+        el.textContent = "—";
+        el.className = "hero-stat-hint muted-h";
+        return;
+      }
+      if (iv < 35) {
+        el.textContent = "Cheap ✓";
+        el.className = "hero-stat-hint";
+      } else if (iv < 55) {
+        el.textContent = "Fair";
+        el.className = "hero-stat-hint muted-h";
+      } else {
+        el.textContent = "Rich IV";
+        el.className = "hero-stat-hint warn";
+      }
+    }
+
+    function renderSignalSnapshotBars(adxVal, macdH, rsiVal, bbB, vwapDist) {
+      const card = document.getElementById("signalSnapshotCard");
+      if (!card) return;
+      if (![adxVal, macdH, rsiVal, bbB, vwapDist].every((x) => typeof x === "number" && isFinite(x))) {
+        card.innerHTML = "<span class=\"muted\" style=\"font-size:0.8rem;\">Not enough intraday data for tape pulse.</span>";
+        return;
+      }
+      const adxPct = Math.min(100, Math.max(4, (adxVal / 50) * 100));
+      const macdW = Math.min(100, Math.max(4, 50 + Math.min(46, Math.max(-46, macdH * 420))));
+      const rsiPct = Math.min(100, Math.max(0, rsiVal));
+      const bbPct = Math.min(100, Math.max(0, bbB * 100));
+      const adxTag = adxVal >= 25 ? '<span class="snap-tag cyan">RISING</span>' : '<span class="snap-tag yellow">WEAK</span>';
+      const macdTag =
+        macdH >= 0.02
+          ? '<span class="snap-tag green">↑ EXPAND</span>'
+          : macdH <= -0.02
+            ? '<span class="snap-tag red">↓ FADE</span>'
+            : '<span class="snap-tag yellow">FLAT</span>';
+      const rsiTag =
+        rsiVal >= 70 ? '<span class="snap-tag yellow">HOT</span>' : rsiVal <= 30 ? '<span class="snap-tag cyan">COLD</span>' : '<span class="snap-tag green">NEUTRAL</span>';
+      const bbTag =
+        bbB > 0.85 ? '<span class="snap-tag yellow">UPPER</span>' : bbB < 0.15 ? '<span class="snap-tag cyan">LOWER</span>' : '<span class="snap-tag green">MID</span>';
+      const vwapPct = Math.min(100, Math.max(0, 50 + (vwapDist / 3) * 25));
+      const vwapTag =
+        vwapDist > 0.15 ? '<span class="snap-tag green">ABOVE</span>' : vwapDist < -0.15 ? '<span class="snap-tag red">BELOW</span>' : '<span class="snap-tag yellow">AT</span>';
+      card.innerHTML = `
+        <div class="snap-bar-block">
+          <div class="snap-bar-head"><span>ADX (14)</span><span class="font-mono">${adxVal.toFixed(1)} ${adxTag}</span></div>
+          <div class="snap-bar-track"><div class="snap-bar-fill cyan" style="width:${adxPct}%"></div></div>
+        </div>
+        <div class="snap-bar-block">
+          <div class="snap-bar-head"><span>MACD hist</span><span class="font-mono">${macdH >= 0 ? "+" : ""}${macdH.toFixed(3)} ${macdTag}</span></div>
+          <div class="snap-bar-track"><div class="snap-bar-fill ${macdH >= 0 ? "green" : "red"}" style="width:${macdW}%"></div></div>
+        </div>
+        <div class="snap-bar-block">
+          <div class="snap-bar-head"><span>RSI (14)</span><span class="font-mono">${rsiVal.toFixed(1)} ${rsiTag}</span></div>
+          <div class="snap-bar-track"><div class="snap-bar-fill yellow" style="width:${rsiPct}%"></div></div>
+        </div>
+        <div class="snap-bar-block">
+          <div class="snap-bar-head"><span>%B (20)</span><span class="font-mono">${(bbB * 100).toFixed(0)}% ${bbTag}</span></div>
+          <div class="snap-bar-track"><div class="snap-bar-fill cyan" style="width:${bbPct}%"></div></div>
+        </div>
+        <div class="snap-bar-block">
+          <div class="snap-bar-head"><span>vs VWAP</span><span class="font-mono">${vwapDist >= 0 ? "+" : ""}${vwapDist.toFixed(2)}% ${vwapTag}</span></div>
+          <div class="snap-bar-track"><div class="snap-bar-fill ${vwapDist >= 0 ? "green" : "red"}" style="width:${vwapPct}%"></div></div>
+        </div>`;
+    }
+
     async function loadMarketData() {
       const sym = state.ticker.toUpperCase();
       const triggeredByGo = state.justUserGo;
@@ -2039,24 +2355,73 @@
       state.tf = { dirs, align: alignCount(dirs) };
 
       document.getElementById("heroSym").textContent = sym;
-      document.getElementById("heroPrice").textContent = price ? price.toFixed(2) : "—";
+      document.getElementById("heroPrice").textContent = price ? "$" + price.toFixed(2) : "—";
       const chg = quote;
       const chgStr = chg ? (chg.chg >= 0 ? "+" : "") + chg.chg.toFixed(2) + " (" + (chg.pct >= 0 ? "+" : "") + chg.pct.toFixed(2) + "%)" : "—";
       document.getElementById("heroChg").textContent = chgStr;
       document.getElementById("heroChg").style.color = chg && chg.chg >= 0 ? "var(--green)" : "var(--red)";
+      const volEl = document.getElementById("heroVolLine");
+      if (volEl) {
+        const v = quote?.vol;
+        if (v && v > 0) {
+          const s =
+            v >= 1e9 ? (v / 1e9).toFixed(2) + "B" : v >= 1e6 ? (v / 1e6).toFixed(2) + "M" : v >= 1e3 ? (v / 1e3).toFixed(1) + "K" : String(Math.round(v));
+          volEl.textContent = "Vol " + s;
+        } else volEl.textContent = "Vol —";
+      }
 
       const hero = document.getElementById("heroCard");
-      hero.classList.remove("bull", "bear", "wait");
-      if (sig.detail === "calls") hero.classList.add("bull");
-      else if (sig.detail === "puts") hero.classList.add("bear");
-      else hero.classList.add("wait");
+      if (hero) {
+        hero.classList.remove("bull", "bear", "wait");
+        if (sig.detail === "calls") hero.classList.add("bull");
+        else if (sig.detail === "puts") hero.classList.add("bear");
+        else hero.classList.add("wait");
+      }
 
-      const pill = document.getElementById("signalPill");
-      pill.className = "pill " + (sig.detail === "calls" ? "calls" : sig.detail === "puts" ? "puts" : sig.detail === "chop" ? "wait" : "watch");
+      const hBtn = document.getElementById("heroActionBtn");
+      const hLbl = document.getElementById("heroActionLabel");
+      const hDot = document.getElementById("heroCtaDot");
+      if (hBtn && hLbl && hDot) {
+        if (sig.detail === "calls") {
+          hBtn.className = "hero-cta calls";
+          hLbl.textContent = "BUY CALLS";
+          hDot.textContent = "●";
+          hBtn.disabled = false;
+        } else if (sig.detail === "puts") {
+          hBtn.className = "hero-cta puts";
+          hLbl.textContent = "BUY PUTS";
+          hDot.textContent = "●";
+          hBtn.disabled = false;
+        } else if (sig.detail === "chop") {
+          hBtn.className = "hero-cta chop";
+          hLbl.textContent = "STAND ASIDE · CHOP";
+          hDot.textContent = "○";
+          hBtn.disabled = true;
+        } else {
+          hBtn.className = "hero-cta watch";
+          hLbl.textContent = "WATCH · NO TRIGGER";
+          hDot.textContent = "○";
+          hBtn.disabled = true;
+        }
+      }
       document.getElementById("signalText").textContent = sig.key;
 
       document.getElementById("stAdx").textContent = Math.min(adxVal, 50).toFixed(1) + " / 50";
-      document.getElementById("stTf").textContent = state.tf.align.label;
+      const ups = dirs.filter((d) => d === "▲").length;
+      const downs = dirs.filter((d) => d === "▼").length;
+      const tArr = ups > downs ? "▲" : downs > ups ? "▼" : "◆";
+      document.getElementById("stTf").textContent = state.tf.align.n + "/5 " + tArr;
+      const adxHint = document.getElementById("stAdxHint");
+      if (adxHint) {
+        adxHint.textContent = adxVal >= 25 ? "Trending ✓" : "Chop risk";
+        adxHint.className = "hero-stat-hint" + (adxVal >= 25 ? "" : " warn");
+      }
+      const tfHint = document.getElementById("stTfHint");
+      if (tfHint) {
+        const n = state.tf.align.n;
+        tfHint.textContent = n >= 4 ? "Strong ✓" : n >= 3 ? "Mixed" : "Weak";
+        tfHint.className = "hero-stat-hint" + (n >= 4 ? "" : n >= 3 ? " warn" : " muted-h");
+      }
 
       renderTfStrip(dirs);
       document.getElementById("setupsList").innerHTML = buildSetups(sig, adxVal, rsiVal, macdH, bbB).map((s) =>
@@ -2069,6 +2434,7 @@
       renderPlayRadar(sym, sig, ac);
 
       renderInds(adxVal, macdH, rsiVal, bbB, vwapDist);
+      renderSignalSnapshotBars(adxVal, macdH, rsiVal, bbB, vwapDist);
 
       await Promise.all([loadOptionsForSignal(sym, price, sig), fetchTickerIntel(sym)]);
       renderSignalIntel();
@@ -2110,7 +2476,9 @@
 
       if (!pick) {
         state.suggested = [];
+        state.ivAtm = null;
         document.getElementById("stIv").textContent = "—";
+        updateHeroIvHint();
         document.getElementById("ivNeedle").style.transform = "rotate(-90deg)";
         updateIvContextLine(null);
         document.getElementById("suggestedWrap").innerHTML = `<div class="card muted">No expirations returned.</div>`;
@@ -2154,18 +2522,20 @@
       }
 
       const ref = atmCall || atmPut;
-      const ivAtm = ref ? ivOpt(ref) : 0;
+      const ivRaw = ref ? ivOpt(ref) : 0;
+      const ivAtm = ivRaw >= 1 && isFinite(ivRaw) ? ivRaw : 0;
       const delt = ref?.greeks?.delta != null ? parseFloat(ref.greeks.delta) : parseFloat(ref?.delta || 0);
-      state.ivAtm = { iv: ivAtm, delta: delt };
+      state.ivAtm = ivAtm >= 1 ? { iv: ivAtm, delta: delt } : null;
 
-      document.getElementById("stIv").textContent = ivAtm ? ivAtm.toFixed(1) + "%" : "—";
-      document.getElementById("iv1").textContent = ivAtm ? ivAtm.toFixed(1) + "%" : "—";
+      document.getElementById("stIv").textContent = ivAtm >= 1 ? ivAtm.toFixed(1) + "%" : "—";
+      updateHeroIvHint();
+      document.getElementById("iv1").textContent = ivAtm >= 1 ? ivAtm.toFixed(1) + "%" : "—";
       document.getElementById("iv2").textContent = isFinite(delt) ? delt.toFixed(2) : "—";
-      const qual = ivAtm < 35 ? "CHEAP" : ivAtm < 55 ? "FAIR" : "EXP";
+      const qual = ivAtm >= 1 ? (ivAtm < 35 ? "CHEAP" : ivAtm < 55 ? "FAIR" : "EXP") : "—";
       document.getElementById("iv3").textContent = qual;
-      document.getElementById("ivGaugeLabel").textContent = "ATM IV " + (ivAtm ? ivAtm.toFixed(0) + "%" : "—");
+      document.getElementById("ivGaugeLabel").textContent = "ATM IV " + (ivAtm >= 1 ? ivAtm.toFixed(0) + "%" : "—");
       const needle = document.getElementById("ivNeedle");
-      const ang = -90 + Math.min(180, (ivAtm / 100) * 180);
+      const ang = ivAtm >= 1 ? -90 + Math.min(180, (ivAtm / 100) * 180) : -90;
       needle.style.transform = "rotate(" + ang + "deg)";
       updateIvContextLine(state.ivAtm);
 
@@ -2912,6 +3282,14 @@
     if (btnParkedMode) {
       btnParkedMode.addEventListener("click", () => {
         applyParkedMode(!document.body.classList.contains("parked-mode"));
+      });
+    }
+
+    const heroActionBtn = document.getElementById("heroActionBtn");
+    if (heroActionBtn) {
+      heroActionBtn.addEventListener("click", () => {
+        if (heroActionBtn.disabled) return;
+        setPage(2);
       });
     }
 
