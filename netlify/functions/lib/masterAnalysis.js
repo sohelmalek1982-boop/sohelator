@@ -10,6 +10,7 @@ const { selectOptimalStrike } = require("./strikeSelector");
 const { checkEarnings } = require("./earnings");
 const { calculateRegime } = require("./marketRegime");
 const { getMemoryContext } = require("./memory");
+const { analyzeVolume } = require("./volumeAnalysis");
 
 async function fetchNearestChain(symbol) {
   const expData = await tradierGet("/v1/markets/options/expirations", {
@@ -84,7 +85,8 @@ function buildClaudeContext(
   earnings,
   memory,
   confidence,
-  strike
+  strike,
+  volumeData
 ) {
   const lines = [];
   lines.push(`━━ ${symbol} MASTER ANALYSIS ━━`);
@@ -160,6 +162,18 @@ function buildClaudeContext(
     );
     lines.push(`Optimal call strike: $${momentum.optimalCallStrike}`);
     lines.push(`Optimal put strike: $${momentum.optimalPutStrike}`);
+    lines.push("");
+  }
+
+  if (volumeData) {
+    lines.push("VOLUME ANALYSIS:");
+    lines.push(volumeData.summary);
+    if (volumeData.alerts && volumeData.alerts.length > 0) {
+      lines.push("Volume alerts:");
+      volumeData.alerts.forEach((a) =>
+        lines.push(`  ${a.urgency}: ${a.message}`)
+      );
+    }
     lines.push("");
   }
 
@@ -239,6 +253,18 @@ async function getMasterAnalysis(symbol) {
 
   const tfData = await getFullTimeframeAnalysis(sym);
   const fiveMin = tfData.rawFiveMin || [];
+  const volumeData =
+    fiveMin.length >= 5
+      ? analyzeVolume(
+          fiveMin.map((c) => ({
+            high: c.high,
+            low: c.low,
+            close: c.close,
+            volume: c.volume ?? 0,
+          })),
+          quote
+        )
+      : null;
   const closes = fiveMin.map((c) => c.close);
 
   const [flowRes, sectorRes, earningsRes, memoryRes, chainPack, regime] =
@@ -345,7 +371,8 @@ async function getMasterAnalysis(symbol) {
     earningsData,
     memoryData,
     confidence,
-    optimalStrike
+    optimalStrike,
+    volumeData
   );
 
   return {
@@ -362,6 +389,7 @@ async function getMasterAnalysis(symbol) {
     sector: sectorData,
     earnings: earningsData,
     memory: memoryData,
+    volume: volumeData,
     optimalStrike,
     earningsWarning: earningsData?.warning,
     skipDueToEarnings: !!earningsData?.isThisWeek,

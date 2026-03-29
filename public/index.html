@@ -411,11 +411,14 @@
 
     .hero-stat-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 10px;
       margin-top: 16px;
       position: relative;
       z-index: 1;
+    }
+    @media (max-width: 560px) {
+      .hero-stat-grid { grid-template-columns: repeat(2, 1fr); }
     }
     .hero-stat {
       background: rgba(0, 0, 0, 0.35);
@@ -947,6 +950,33 @@
     .ind-bar-fill2.red { background: linear-gradient(90deg, var(--ind-red), #990033); }
     .ind-bar-fill2.cyan { background: linear-gradient(90deg, var(--ind-cyan), #8860ff); }
     .ind-bar-fill2.yellow { background: linear-gradient(90deg, var(--ind-yellow), #ff8800); }
+    .ind-bar-fill2.vol-gray { background: #4a6070; }
+    .ind-bar-fill2.vol-cyan { background: linear-gradient(90deg, var(--ind-cyan), #0088aa); }
+    .ind-bar-fill2.vol-green { background: linear-gradient(90deg, var(--ind-green), #00aa66); }
+    .ind-bar-fill2.vol-surge { background: linear-gradient(90deg, #00ff87, #00cc6a); box-shadow: 0 0 14px rgba(0, 255, 135, 0.45); }
+    @keyframes volBarPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.72; } }
+    .ind-bar-fill2.vol-surge.pulse { animation: volBarPulse 1.2s ease-in-out infinite; }
+    .ind-vol-bar-labels {
+      display: flex; justify-content: space-between; font-family: var(--font-data); font-size: 7px;
+      letter-spacing: 0.06em; color: var(--muted); margin: 4px 0 6px;
+    }
+    .ind-vol-alerts { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .ind-vol-alert-pill {
+      font-size: 0.65rem; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255, 215, 0, 0.35);
+      background: rgba(0, 0, 0, 0.35); color: var(--text); line-height: 1.35;
+    }
+    .stage-volume-note {
+      margin-top: 10px; padding: 12px; border-radius: var(--radius-md);
+      background: rgba(0, 0, 0, 0.28); border: 1px solid var(--border2); font-size: 0.75rem; line-height: 1.45; color: var(--text);
+    }
+    .at-vol-pill {
+      display: inline-block; font-size: 0.58rem; font-weight: 800; letter-spacing: 0.08em;
+      padding: 4px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle;
+    }
+    .at-vol-pill.surge { background: rgba(0, 255, 135, 0.2); color: var(--ind-green); border: 1px solid var(--ind-green); }
+    .at-vol-pill.conf { background: rgba(0, 229, 255, 0.15); color: var(--ind-cyan); border: 1px solid var(--ind-cyan); }
+    .at-vol-pill.light { background: rgba(255, 215, 0, 0.12); color: var(--ind-yellow); border: 1px solid var(--ind-yellow); }
+    .at-vol-line { font-size: 0.68rem; color: var(--cyan); margin-top: 8px; font-family: var(--font-data); }
     .ind-action { font-family: "DM Sans", sans-serif; font-size: 11px; font-weight: 600; color: var(--ind-green); margin-top: 10px; }
     .ind-action.bear { color: var(--ind-red); }
     .ind-action.warn { color: var(--ind-yellow); }
@@ -1074,6 +1104,11 @@
               <div class="hero-stat-val" id="stTf">—</div>
               <div class="hero-stat-hint muted-h" id="stTfHint">—</div>
             </div>
+            <div class="hero-stat">
+              <div class="hero-stat-label">Volume</div>
+              <div class="hero-stat-val" id="stVol">—</div>
+              <div class="hero-stat-hint muted-h" id="stVolHint">—</div>
+            </div>
           </div>
         </div>
 
@@ -1081,6 +1116,7 @@
           <h2 class="section section-in-card">Regime detection</h2>
           <div class="stage-strip-wrap"><div class="stage-strip" id="stageStripInner"></div></div>
           <div id="stageDetailCard" class="stage-detail-inner" style="border-left-color:var(--border);"></div>
+          <div id="volumeSignalNarrative" class="stage-volume-note" style="display:none;"></div>
         </div>
 
         <h2 class="section">Market intelligence</h2>
@@ -1255,6 +1291,7 @@
 
   <div class="toast-wrap" id="toasts"></div>
 
+  <script src="/volumeAnalysis.js"></script>
   <script>
     async function api(path, method = "GET", params = {}, body = {}) {
       const res = await fetch("/api/tradier", {
@@ -1295,6 +1332,7 @@
       masterIntel: null,
       optionLegQuotes: {},
       alertTrackerList: [],
+      volumeAnalysis: null,
       trackerBannerDismissed: false,
       /** True only when user tapped GO — cleared inside loadMarketData (not on 30s poll). */
       justUserGo: false,
@@ -1837,10 +1875,25 @@
           const pnlStr = pnl != null ? (pnl >= 0 ? "+" : "") + pnl.toFixed(1) + "%" : "—";
           const act = alertActionHeadline(a);
           const th = live ? parseFloat(live.theta || 0) * 100 : null;
+          const vr = a.volume != null && a.volume.ratio != null ? +a.volume.ratio : null;
+          let volBadgeHtml = "";
+          if (vr != null) {
+            if (vr > 2) volBadgeHtml = '<span class="at-vol-pill surge">SURGE</span>';
+            else if (vr >= 1.3) volBadgeHtml = '<span class="at-vol-pill conf">CONFIRMED</span>';
+            else if (vr < 0.8) volBadgeHtml = '<span class="at-vol-pill light">LIGHT</span>';
+          }
+          const volLine =
+            vr != null
+              ? "VOL AT ALERT: " +
+                vr +
+                "x avg — " +
+                (vr > 2 ? "SURGE CONFIRMED" : vr < 0.8 ? "light volume" : "normal flow")
+              : "";
           return `<div class="card at-card ${pnlCls}">
             <span class="tier-pill ${tier.cls}">${tier.key}</span>
             <span class="setup-badge" style="margin-left:0;">${a.stageLabel || a.setupType || "ALERT"}</span>
-            <div class="at-headline">${formatBuyLine(a)}</div>
+            <div class="at-headline">${formatBuyLine(a)} ${volBadgeHtml}</div>
+            ${volLine ? `<div class="at-vol-line">${volLine}</div>` : ""}
             <div class="font-mono" style="font-size:0.72rem;color:var(--muted);line-height:1.5;">
               Alerted at: stock <span class="font-mono">$${(+und0).toFixed(2)}</span> · premium <span class="font-mono">$${(+prem0).toFixed(2)}</span><br/>
               Now: stock <span class="font-mono">$${(+undNow).toFixed(2)}</span> · option P&amp;L <strong style="color:${pnl == null ? "var(--muted)" : pnl >= 0 ? "var(--green)" : "var(--red)"};">${pnlStr}</strong>
@@ -2269,6 +2322,82 @@
         }),
       });
       return res.json();
+    }
+
+    function indVolumeCardHtml(va, c5) {
+      if (!va) return "";
+      const r = va.currentVolRatio;
+      const dirArrow =
+        va.volumeTrend === "RISING" ? "↑ Rising" : va.volumeTrend === "FALLING" ? "↓ Falling" : "→ Flat";
+      const v0 = c5.length >= 6 ? c5[c5.length - 6].v : c5[0].v;
+      const v1 = c5[c5.length - 1].v;
+      const dirLine =
+        dirArrow +
+        " — from " +
+        Math.round(v0).toLocaleString() +
+        " → " +
+        Math.round(v1).toLocaleString() +
+        " in 6 candles (vs 20-bar avg).";
+      const barPct = Math.min(100, Math.max(0, r * 50));
+      let tone = "vol-cyan";
+      if (r < 0.7) tone = "vol-gray";
+      else if (r < 1.3) tone = "vol-cyan";
+      else if (r < 2) tone = "vol-green";
+      else tone = "vol-surge pulse";
+
+      let badge = "NORMAL";
+      let pillCls = "neutral";
+      if (va.isClimaxVolume) {
+        badge = "CLIMAX";
+        pillCls = "warn";
+      } else if (va.isVolumeDryUp) {
+        badge = "DRY-UP";
+        pillCls = "bull";
+      } else if (va.hasVolumeDivergence) {
+        badge = "DIVERGENCE";
+        pillCls = "warn";
+      } else if (va.isMegaSurge || (va.isSurge && r >= 2)) {
+        badge = "SURGE";
+        pillCls = "bull";
+      } else if (va.priceVolumeSignal === "BULLISH CONFIRMATION") {
+        badge = "CONFIRMING";
+        pillCls = "bull";
+      } else if (va.priceVolumeSignal === "WEAK MOVE") {
+        badge = "WEAK";
+        pillCls = "warn";
+      } else if (va.priceVolumeSignal === "BEARISH CONFIRMATION") {
+        badge = "CONFIRMING";
+        pillCls = "bear";
+      }
+
+      const inter = va.interpretation;
+      const alertsHtml = (va.alerts || [])
+        .map(
+          (a) =>
+            `<div class="ind-vol-alert-pill">${esc(a.message)}</div>`
+        )
+        .join("");
+
+      return `<div class="ind-card ind-vol-card">
+        <div class="ind-card-head">
+          <div>
+            <div class="ind-mono-7">VOLUME — CONVICTION CHECK</div>
+            <div class="ind-val-big" style="color:${inter.color}">${esc(r.toFixed(2))}x average</div>
+          </div>
+          <span class="ind-pill ${pillCls}">${esc(badge)}</span>
+        </div>
+        <div class="ind-dir">${esc(dirLine)}</div>
+        <div class="ind-vol-bar-labels"><span>LOW</span><span>1x AVG</span><span>2x SURGE</span><span>4x EXTREME</span></div>
+        <div class="ind-bar-wrap">
+          <div class="ind-bar-track2"><div class="ind-bar-fill2 ${tone}" style="width:${barPct}%"></div></div>
+        </div>
+        <p class="ind-dm"><strong>What it measures:</strong> Volume confirms whether price moves are backed by real participation — institutions leave footprints in volume.</p>
+        <p class="ind-dm"><strong>Right now:</strong> ${esc(inter.headline)} — ${esc(inter.detail)}</p>
+        <p class="ind-dm"><strong>Position:</strong> ${esc(va.priceVolumeInterpretation)}</p>
+        <div class="ind-action">${esc(inter.action)}</div>
+        ${alertsHtml ? `<div class="ind-vol-alerts">${alertsHtml}</div>` : ""}
+        <div class="ind-watch"><strong>Watch:</strong> Volume dropping while price rises → conviction fading, tighten stop. Volume surge on a down candle → real selling, exit calls immediately.</div>
+      </div>`;
     }
 
     function indCardHtml(o) {
@@ -2759,6 +2888,7 @@
           actionCls: justDnVwap ? "bear" : "",
           watch: vwWatch,
         }),
+        indVolumeCardHtml(state.volumeAnalysis, c5),
         indCardHtml({
           name: "BOLLINGER %B",
           val: (bbB * 100).toFixed(0) + "%",
@@ -3119,6 +3249,13 @@
       const vwap = vwapSession(c5);
       const price = quote?.last || closes5[closes5.length - 1] || 0;
       const vwapDist = vwap ? ((price - vwap) / vwap) * 100 : 0;
+      state.volumeAnalysis =
+        typeof window.analyzeVolumeForUi === "function" && c5.length >= 5
+          ? window.analyzeVolumeForUi(
+              c5.map((x) => ({ h: x.h, l: x.l, c: x.c, v: x.v || 0 })),
+              { last: price }
+            )
+          : null;
       const sig = computeSignal(adxVal, macdH, price, vwap, rsiVal, bbB);
       state.signal = sig.key;
       state.signalDetail = sig.detail;
@@ -3132,6 +3269,29 @@
         vwapDist,
         rsi2: rsi2v,
       });
+
+      const vn = document.getElementById("volumeSignalNarrative");
+      if (vn) {
+        const v = state.volumeAnalysis;
+        let vtxt = "";
+        if (v) {
+          if (v.isSurge && v.priceVolumeSignal && v.priceVolumeSignal.indexOf("BULLISH") >= 0) {
+            vtxt =
+              "Volume confirming the move — " +
+              v.currentVolRatio +
+              "x average. Institutions are buying. High conviction.";
+          } else if (v.hasVolumeDivergence) {
+            vtxt = "⚠️ Volume warning — price rising but volume shrinking. Watch this closely.";
+          }
+        }
+        if (vtxt) {
+          vn.style.display = "block";
+          vn.textContent = vtxt;
+        } else {
+          vn.style.display = "none";
+          vn.textContent = "";
+        }
+      }
 
       const d15 = tfDir(c15.map((x) => x.c));
       const d60 = tfDir(c60.map((x) => x.c));
@@ -3209,6 +3369,32 @@
         const n = state.tf.align.n;
         tfHint.textContent = n >= 4 ? "Strong ✓" : n >= 3 ? "Mixed" : "Weak";
         tfHint.className = "hero-stat-hint" + (n >= 4 ? "" : n >= 3 ? " warn" : " muted-h");
+      }
+
+      const stVol = document.getElementById("stVol");
+      const stVolHint = document.getElementById("stVolHint");
+      const va = state.volumeAnalysis;
+      if (stVol && stVolHint) {
+        if (va) {
+          stVol.textContent = va.currentVolRatio + "x avg";
+          const ic = va.interpretation && va.interpretation.color ? va.interpretation.color : "var(--cyan)";
+          stVol.style.color = ic;
+          if (va.isMegaSurge || (va.isSurge && va.currentVolRatio >= 2)) {
+            stVolHint.textContent = "SURGE ✓";
+            stVolHint.className = "hero-stat-hint";
+          } else if (va.currentVolRatio < 0.8) {
+            stVolHint.textContent = "THIN";
+            stVolHint.className = "hero-stat-hint warn";
+          } else {
+            stVolHint.textContent = "NORMAL";
+            stVolHint.className = "hero-stat-hint muted-h";
+          }
+        } else {
+          stVol.textContent = "—";
+          stVol.style.color = "var(--cyan)";
+          stVolHint.textContent = "—";
+          stVolHint.className = "hero-stat-hint muted-h";
+        }
       }
 
       renderTfStrip(dirs);

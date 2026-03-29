@@ -8,6 +8,7 @@ const { predictSetup, calculateRetestEntry } = require("./lib/predictive");
 const { calculateUrgency, buildTelegramMessage } = require("./lib/urgency");
 const { recommendSize } = require("./lib/sizing");
 const { getMasterAnalysis } = require("./lib/masterAnalysis");
+const { analyzeVolume } = require("./lib/volumeAnalysis");
 
 const BASE_WATCH = [
   "NVDA", "TSLA", "SPY", "QQQ", "AAPL", "AMD", "MSFT", "META", "GOOGL",
@@ -942,6 +943,30 @@ async function runScan() {
             rank = Math.max(rank, Math.max(bull, bear, 60));
           }
 
+          const candlesForVol = candles.map((c) => ({
+            high: c.high,
+            low: c.low,
+            close: c.close,
+            volume: c.vol || 0,
+          }));
+          const volAnalysis = analyzeVolume(candlesForVol, { last: price });
+
+          let adjRank = rank;
+          if (volAnalysis) {
+            if (
+              volAnalysis.isSurge &&
+              volAnalysis.priceVolumeSignal &&
+              volAnalysis.priceVolumeSignal.includes("BULLISH")
+            ) {
+              adjRank += 15;
+            }
+            if (volAnalysis.hasVolumeDivergence) adjRank -= 20;
+            if (volAnalysis.isClimaxVolume) adjRank -= 15;
+            if (volAnalysis.isVolumeDryUp) adjRank += 10;
+            if (volAnalysis.vwapCrossVolume) adjRank += 20;
+          }
+          adjRank = Math.max(0, Math.min(100, Math.round(adjRank)));
+
           analyzed.push({
             ticker: symbol,
             price,
@@ -953,7 +978,7 @@ async function runScan() {
             vwapDist: vwapDist.toFixed(2),
             bbB,
             setupType,
-            score: Math.round(rank),
+            score: adjRank,
             bull,
             bear,
             breakout,
@@ -965,6 +990,7 @@ async function runScan() {
             stageAction: stageInfo.action,
             adxSlope,
             macdSlope,
+            volAnalysis,
           });
         } catch {
           /* one symbol failed */
@@ -989,7 +1015,6 @@ async function runScan() {
       continue;
     }
 
-    confirmedSetups.push(Object.assign({}, s, { alertScore: finalScore }));
     let revType = s.setupType;
     if (s.reversal) {
       revType =
@@ -1010,6 +1035,8 @@ async function runScan() {
     const macdDir = s.macdHist >= 0 ? "bullish" : "bearish";
     const finalScore =
       master?.confidence != null ? master.confidence : s.score;
+
+    confirmedSetups.push(Object.assign({}, s, { alertScore: finalScore }));
 
     const memParts = [];
     if (memory?.insights?.length) {
@@ -1057,6 +1084,15 @@ async function runScan() {
 
     const ivNum = parseFloat(String(opt.iv).replace(/%/g, "")) || 0;
 
+    const volAtAlert = s.volAnalysis
+      ? {
+          ratio: s.volAnalysis.currentVolRatio,
+          signal: s.volAnalysis.priceVolumeSignal,
+          alerts: s.volAnalysis.alerts,
+          interpretation: s.volAnalysis.interpretation,
+        }
+      : null;
+
     const pending = {
       ticker: s.ticker,
       setupType: s.setupType,
@@ -1074,6 +1110,7 @@ async function runScan() {
       ivAtEntry: ivNum,
       underlyingAtAlert: s.price,
       direction: opt.optType,
+      volume: volAtAlert,
       masterAnalysis: master
         ? {
             confidence: master.confidence,
@@ -1123,10 +1160,15 @@ async function runScan() {
       underlyingAtAlert: s.price,
       direction: opt.optType,
       masterAnalysis: pending.masterAnalysis,
+      volume: volAtAlert,
       aiAnalysis,
       timestamp: Date.now(),
       outcome: null,
     });
+
+    const volLine = s.volAnalysis?.isSurge
+      ? `🔊 VOL: ${s.volAnalysis.currentVolRatio}x avg — ${s.volAnalysis.priceVolumeSignal}`
+      : `📊 VOL: ${s.volAnalysis?.currentVolRatio ?? "—"}x avg`;
 
     const holdType =
       /PUT|BEAR|fade/i.test(revType) && !/BULL|CALL bounce/i.test(revType)
@@ -1157,6 +1199,8 @@ async function runScan() {
       s.rsi +
       " | MACD: " +
       macdDir +
+      "\n" +
+      volLine +
       "\n" +
       "🎯 <b>Play: " +
       escapeHtml(String(opt.strike)) +
