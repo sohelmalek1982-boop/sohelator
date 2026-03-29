@@ -397,6 +397,7 @@
         <div class="card" id="morningBriefCard" style="background:var(--bg3);border-color:var(--border2);">
           <div class="font-mono" style="font-size:0.7rem;color:var(--muted);margin-bottom:8px;" id="mbDate">—</div>
           <div id="mbContext" class="muted" style="font-size:0.8rem;margin-bottom:10px;">Loading scan data…</div>
+          <div id="mbGexFlow" class="muted" style="font-size:0.72rem;margin-bottom:8px;line-height:1.45;"></div>
           <div id="mbBody" style="font-size:0.85rem;line-height:1.55;max-height:220px;overflow-y:auto;"></div>
           <div id="mbWatch" style="margin-top:12px;font-size:0.75rem;"></div>
           <button type="button" class="btn-go" id="btnLoadBestPlay" style="margin-top:10px;display:none;">LOAD BEST PLAY</button>
@@ -1447,6 +1448,7 @@
       const run = d.runningStats;
       const mbDate = document.getElementById("mbDate");
       const mbCtx = document.getElementById("mbContext");
+      const mbGexFlow = document.getElementById("mbGexFlow");
       const mbBody = document.getElementById("mbBody");
       const mbWatch = document.getElementById("mbWatch");
       const btnBest = document.getElementById("btnLoadBestPlay");
@@ -1463,6 +1465,29 @@
           "% · " +
           (mc.sentiment || "—");
         mbBody.textContent = s925.claudeAnalysis || "";
+        const g = s925.gexSpy;
+        const snap = (s925.masterSnapshots || []).find(
+          (x) => x.ok && x.data && x.data.optionsFlow
+        );
+        const flowB = snap?.data?.optionsFlow?.smartMoneyBias;
+        if (g || flowB) {
+          mbGexFlow.innerHTML =
+            (g
+              ? "<strong>GEX (SPY)</strong> " +
+                (g.gexRegime || "") +
+                " · " +
+                String(g.interpretation || "").slice(0, 120) +
+                (String(g.interpretation || "").length > 120 ? "…" : "")
+              : "") +
+            (flowB
+              ? (g ? "<br>" : "") +
+                "<strong>Flow bias</strong> " +
+                flowB +
+                (snap?.data?.ticker ? " · " + snap.data.ticker : "")
+              : "");
+        } else {
+          mbGexFlow.textContent = "";
+        }
         const bulls = s925.watchlistBull || [];
         const bears = s925.watchlistBear || [];
         const avoid = s925.watchlistAvoid || [];
@@ -1494,6 +1519,7 @@
         mbCtx.textContent =
           "No pre-market data in blob store yet — deploy scans or wait for schedule.";
         mbBody.textContent = "";
+        mbGexFlow.textContent = "";
         mbWatch.textContent = "";
         btnBest.style.display = "none";
       }

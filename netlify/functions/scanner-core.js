@@ -2,6 +2,12 @@ const fetch = require("node-fetch");
 const { getStore } = require("@netlify/blobs");
 const { sendPushToAll } = require("./lib/pushAll");
 const { withSohelContext } = require("./lib/sohelContext");
+const { calculateRegime } = require("./lib/marketRegime");
+const { getMemoryContext } = require("./lib/memory");
+const { predictSetup, calculateRetestEntry } = require("./lib/predictive");
+const { calculateUrgency, buildTelegramMessage } = require("./lib/urgency");
+const { recommendSize } = require("./lib/sizing");
+const { getMasterAnalysis } = require("./lib/masterAnalysis");
 
 const BASE_WATCH = [
   "NVDA", "TSLA", "SPY", "QQQ", "AAPL", "AMD", "MSFT", "META", "GOOGL",
@@ -183,7 +189,7 @@ async function fetchUnderlyingPnlMap() {
   }
 }
 
-function detectIntradayStage(ctx) {
+function detectIntradayStage(ctx, regimeThresholds = {}) {
   const {
     adxVal,
     adxSlope,
@@ -205,8 +211,10 @@ function detectIntradayStage(ctx) {
   const rsiNum = Number(rsi14);
   const aboveVWAP = vwapDist > 0;
   const macdPos = macdHist > 0;
+  const minAdxLine =
+    regimeThresholds.minADX != null ? regimeThresholds.minADX : 20;
 
-  if (adxVal < 20) {
+  if (adxVal < minAdxLine) {
     return {
       stage: "chop",
       stageLabel: "CHOP",
@@ -316,6 +324,122 @@ function shouldSendStageAlert(stage, ticker, pnlMap) {
   return ["bull", "bear", "setup_bull", "setup_bear"].includes(stage);
 }
 
+function buildMemorySnippet(memory, ticker) {
+  if (!memory) return "";
+  const ins = (memory.insights || []).slice(0, 5).join(" | ");
+  const ts = memory.allTickerStats?.find((t) => t.ticker === ticker);
+  const tline = ts
+    ? `${ticker}: ${ts.winRate}% WR, ${ts.totalTrades} trades`
+    : `${ticker}: no stats yet`;
+  const bp = [...(memory.allPatternStats || [])].sort(
+    (a, b) => (b.winRate || 0) - (a.winRate || 0)
+  )[0];
+  let s =
+    "SOHEL'S TRADING MEMORY:\n" +
+    (ins || "Building performance history.") +
+    "\n" +
+    tline +
+    "\nBest setup type: " +
+    (bp ? `${bp.stage} (${bp.winRate}%)` : "insufficient data");
+  if ((memory.behavioralStats?.exitTooEarlyCount || 0) > 2) {
+    s += "\nNOTE: tendency to exit winners early — hold if setup intact.";
+  }
+  if ((memory.behavioralStats?.heldLoserCount || 0) > 2) {
+    s += "\nNOTE: tendency to hold losers — enforce -40% cut.";
+  }
+  return s;
+}
+
+async function fetchRegimeMarketData() {
+  const qd = await tradier("/v1/markets/quotes", {
+    symbols: "SPY,QQQ,VIX,$VIX",
+    greeks: "false",
+  });
+  const bySym = {};
+  for (const q of normList(qd.quotes?.quote)) {
+    if (q.symbol) bySym[q.symbol] = q;
+  }
+  const spy = bySym.SPY;
+  const qqq = bySym.QQQ;
+  const vx = bySym.VIX || bySym.$VIX;
+  const spyChange = parseFloat(
+    spy?.change_percentage ?? spy?.percent_change ?? 0
+  );
+  const qqqChange = parseFloat(
+    qqq?.change_percentage ?? qqq?.percent_change ?? 0
+  );
+  const vix = parseFloat(vx?.last ?? vx?.close ?? 18) || 18;
+  const end = new Date();
+  const start = new Date(end.getTime() - 2 * 86400000);
+  const ymd = (d) => d.toISOString().slice(0, 10);
+  const ts = await tradier("/v1/markets/timesales", {
+    symbol: "SPY",
+    interval: "5min",
+    start: ymd(start),
+    end: ymd(end),
+    session_filter: "open",
+  });
+  const raw = normList(ts.series?.data);
+  const candles = raw
+    .map((c) => ({
+      time: c.time || c.timestamp,
+      open: parseFloat(c.open),
+      high: parseFloat(c.high),
+      low: parseFloat(c.low),
+      close: parseFloat(c.close),
+      vol: parseFloat(c.volume || c.volum || 0),
+    }))
+    .filter((c) => !isNaN(c.close));
+  let spyAdx = 20;
+  let spyRsi = 50;
+  let spyVwapDist = 0;
+  if (candles.length >= 20) {
+    const closes = candles.map((c) => c.close);
+    const adxCandles = candles.map((c) => ({
+      high: c.high,
+      low: c.low,
+      close: c.close,
+    }));
+    spyAdx = calcADX(adxCandles, 14);
+    spyRsi = calcRSI(closes, 14);
+    const spyLast = parseFloat(spy?.last ?? closes[closes.length - 1] ?? 0);
+    spyVwapDist = vwapDistPct(
+      candles.map((c) => ({
+        time: c.time,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+        vol: c.vol,
+      })),
+      spyLast
+    );
+  }
+  return {
+    vix,
+    spyChange,
+    qqqChange,
+    spyAdx,
+    spyRsi,
+    spyVwapDist,
+    putCallRatio: null,
+    spyVolRatio: 1,
+  };
+}
+
+async function fetchAccountEquity() {
+  const acc = process.env.TRADIER_ACCOUNT_ID;
+  if (!acc) return 100000;
+  try {
+    const j = await tradier("/v1/accounts/" + acc + "/balances", {});
+    const b = j.balances || j;
+    return (
+      parseFloat(b.total_equity ?? b.equity ?? b.total_cash ?? 0) || 100000
+    );
+  } catch {
+    return 100000;
+  }
+}
+
 function extractTickersFromText(text) {
   const u = String(text).toUpperCase();
   const m = u.match(/\b[A-Z]{2,5}\b/g) || [];
@@ -356,7 +480,7 @@ async function serperQueries(apiKey) {
   return found;
 }
 
-async function claudeAnalyze(setup) {
+async function claudeAnalyze(setup, memorySnippet) {
   const key = process.env.ANTHROPIC_API_KEY;
   const model =
     process.env.ANTHROPIC_MODEL_SCANNER || "claude-haiku-4-5-20251001";
@@ -388,7 +512,8 @@ async function claudeAnalyze(setup) {
     " $" +
     setup.mid +
     " Δ" +
-    setup.delta;
+    setup.delta +
+    (memorySnippet ? "\n\n" + memorySnippet : "");
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -583,6 +708,47 @@ async function runScan() {
     /* continue if clock fails */
   }
   console.log("market status:", clockState);
+
+  let regime = calculateRegime({
+    vix: 18,
+    spyChange: 0,
+    qqqChange: 0,
+    spyAdx: 22,
+    spyRsi: 50,
+    spyVwapDist: 0,
+  });
+  let memory = {
+    insights: [],
+    allTickerStats: [],
+    allPatternStats: [],
+    behavioralStats: null,
+  };
+  let accountEquity = 100000;
+  let snapMap = {};
+  try {
+    regime = calculateRegime(await fetchRegimeMarketData());
+  } catch (e) {
+    console.error("regime", e);
+  }
+  try {
+    memory = await getMemoryContext();
+  } catch (e) {
+    console.error("memory", e);
+  }
+  try {
+    accountEquity = await fetchAccountEquity();
+  } catch (e) {
+    console.error("equity", e);
+  }
+  try {
+    snapMap =
+      (await scannerStore.get("ticker_indicator_snapshots", {
+        type: "json",
+      })) || {};
+  } catch {
+    snapMap = {};
+  }
+  const th = regime.thresholds;
 
   let pnlMap = {};
   try {
@@ -812,7 +978,18 @@ async function runScan() {
   const top5 = analyzed.slice(0, 5);
 
   for (const s of top5) {
-    confirmedSetups.push(s);
+    let master = null;
+    try {
+      master = await getMasterAnalysis(s.ticker);
+    } catch (e) {
+      console.error("masterAnalysis", s.ticker, e);
+    }
+    if (master?.skipDueToEarnings) {
+      console.log("skip alert (earnings week)", s.ticker);
+      continue;
+    }
+
+    confirmedSetups.push(Object.assign({}, s, { alertScore: finalScore }));
     let revType = s.setupType;
     if (s.reversal) {
       revType =
@@ -831,25 +1008,40 @@ async function runScan() {
       s.price
     );
     const macdDir = s.macdHist >= 0 ? "bullish" : "bearish";
+    const finalScore =
+      master?.confidence != null ? master.confidence : s.score;
+
+    const memParts = [];
+    if (memory?.insights?.length) {
+      memParts.push(memory.insights.slice(0, 6).join("\n"));
+    }
+    if (master?.claudeContext) {
+      memParts.push(master.claudeContext);
+    }
+    const memorySnippet = memParts.join("\n\n");
+
     console.log("calling Claude...", s.ticker);
-    const aiAnalysis = await claudeAnalyze({
-      ticker: s.ticker,
-      price: s.price.toFixed(2),
-      change: s.change.toFixed(2),
-      setupType: s.setupType,
-      adx: s.adx,
-      macd: s.macd,
-      rsi: s.rsi,
-      vwapDist: s.vwapDist,
-      strike: opt.strike,
-      expiry: opt.expiry,
-      mid: opt.mid.toFixed(2),
-      delta: opt.delta,
-      iv: opt.iv,
-      score: s.score,
-      stage: s.stage,
-      stageLabel: s.stageLabel,
-    });
+    const aiAnalysis = await claudeAnalyze(
+      {
+        ticker: s.ticker,
+        price: s.price.toFixed(2),
+        change: s.change.toFixed(2),
+        setupType: s.setupType,
+        adx: s.adx,
+        macd: s.macd,
+        rsi: s.rsi,
+        vwapDist: s.vwapDist,
+        strike: opt.strike,
+        expiry: opt.expiry,
+        mid: opt.mid.toFixed(2),
+        delta: opt.delta,
+        iv: opt.iv,
+        score: finalScore,
+        stage: s.stage,
+        stageLabel: s.stageLabel,
+      },
+      memorySnippet
+    );
     console.log("Claude response received", s.ticker);
 
     const indicators = {
@@ -863,10 +1055,13 @@ async function runScan() {
       macdSlope: s.macdSlope,
     };
 
+    const ivNum = parseFloat(String(opt.iv).replace(/%/g, "")) || 0;
+
     const pending = {
       ticker: s.ticker,
       setupType: s.setupType,
-      score: s.score,
+      score: finalScore,
+      scannerScore: s.score,
       price: s.price,
       change: s.change,
       aiAnalysis,
@@ -874,6 +1069,25 @@ async function runScan() {
       stageLabel: s.stageLabel,
       stageEmoji: s.stageEmoji,
       action: s.stageAction,
+      optionSymbol: opt.occ,
+      premiumAtAlert: opt.mid,
+      ivAtEntry: ivNum,
+      underlyingAtAlert: s.price,
+      direction: opt.optType,
+      masterAnalysis: master
+        ? {
+            confidence: master.confidence,
+            tradingBias: master.tradingBias,
+            summary: master.summary,
+            gex: master.gex,
+            marketProfile: master.marketProfile,
+            optionsFlow: master.optionsFlow,
+            sector: master.sector,
+            levels: master.levels,
+            recommendedOption: master.recommendedOption,
+            optimalStrike: master.optimalStrike,
+          }
+        : null,
       option: {
         strike: opt.strike,
         expiry: opt.expiry,
@@ -895,13 +1109,20 @@ async function runScan() {
     await alertsStore.setJSON(alertKey, {
       ticker: s.ticker,
       setupType: s.setupType,
-      score: s.score,
+      score: finalScore,
+      scannerScore: s.score,
       stage: s.stage,
       stageLabel: s.stageLabel,
       stageEmoji: s.stageEmoji,
       action: s.stageAction,
       indicators,
       option: pending.option,
+      optionSymbol: opt.occ,
+      premiumAtAlert: opt.mid,
+      ivAtEntry: ivNum,
+      underlyingAtAlert: s.price,
+      direction: opt.optType,
+      masterAnalysis: pending.masterAnalysis,
       aiAnalysis,
       timestamp: Date.now(),
       outcome: null,
@@ -920,7 +1141,7 @@ async function runScan() {
       "</b>\n\n" +
       escapeHtml(s.setupType) +
       " | Score: " +
-      s.score +
+      finalScore +
       "/100\n" +
       "HOLD TYPE: " +
       holdType +
@@ -961,7 +1182,7 @@ async function runScan() {
       escapeHtml(s.ticker) +
       "</h2>" +
       "<p>Score: " +
-      s.score +
+      finalScore +
       "/100 | Price: $" +
       s.price.toFixed(2) +
       " (" +
@@ -992,13 +1213,25 @@ async function runScan() {
       "</em></p>";
 
     await sendResend(
-      "🔥 " + s.setupType + " Alert: " + s.ticker + " | Score " + s.score + "/100",
+      "🔥 " +
+        s.setupType +
+        " Alert: " +
+        s.ticker +
+        " | Score " +
+        finalScore +
+        "/100",
       html
     );
 
     await sendPushToAll({
       title: "SOHELATOR: " + s.ticker + " — " + s.setupType,
-      body: "Score " + s.score + "/100 · " + aiAnalysis.slice(0, 120) + "…",
+      body:
+        "Score " +
+        finalScore +
+        "/100 · " +
+        (master?.summary ? master.summary.slice(0, 80) + "… · " : "") +
+        aiAnalysis.slice(0, 100) +
+        "…",
       data: { url: "/", ticker: s.ticker },
     });
 
@@ -1017,7 +1250,7 @@ async function runScan() {
     history.unshift({
       ticker: s.ticker,
       setupType: s.setupType,
-      score: s.score,
+      score: finalScore,
       timestamp: Date.now(),
       outcome: null,
     });
@@ -1031,7 +1264,8 @@ async function runScan() {
     setupsFound: confirmedSetups.map((c) => ({
       ticker: c.ticker,
       setupType: c.setupType,
-      score: c.score,
+      score: c.alertScore ?? c.score,
+      scannerScore: c.score,
     })),
     alertsSent: alertCount,
   });

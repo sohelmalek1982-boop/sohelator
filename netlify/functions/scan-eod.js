@@ -270,7 +270,15 @@ ${recentReviews
   )
   .join("\n")}
 
-Give: assessment, per-wrong-call fix, per-correct-call what worked, pattern analysis, signal tweaks with thresholds, grade A–D, watch tomorrow. If Friday: weekend hold checklist per open symbol.`;
+INSTITUTIONAL LAYERS TODAY:
+9:25 GEX (SPY): ${scan925?.gexSpy ? `${scan925.gexSpy.gexRegime} — ${String(scan925.gexSpy.interpretation || "").slice(0, 200)}` : "n/a"}
+Per-alert master summaries: ${todaysAlerts
+  .map((a) => (a.masterAnalysis?.summary ? `${a.ticker}: ${a.masterAnalysis.summary}` : ""))
+  .filter(Boolean)
+  .join(" | ") || "none"}
+
+Give: assessment, per-wrong-call fix, per-correct-call what worked, pattern analysis, signal tweaks with thresholds, grade A–D, watch tomorrow. If Friday: weekend hold checklist per open symbol.
+Also briefly: Was the GEX regime directionally useful? Did options-flow / sector bias from the morning match how names closed? Were key levels (if any in master summaries) respected?`;
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

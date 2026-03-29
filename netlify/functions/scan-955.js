@@ -2,6 +2,7 @@ const fetch = require("node-fetch");
 const { getStore } = require("@netlify/blobs");
 const { schedule } = require("@netlify/functions");
 const { withSohelContext } = require("./lib/sohelContext");
+const { getMasterAnalysis } = require("./lib/masterAnalysis");
 
 function tradierBase() {
   return (process.env.TRADIER_ENV || "production").toLowerCase() === "sandbox"
@@ -408,6 +409,19 @@ async function run955() {
   const confirmedTickers = analyses.filter(
     (a) => a.stage.stage === "bull" || a.stage.stage === "bear"
   );
+
+  const masterBySymbol = {};
+  await Promise.all(
+    confirmedTickers.slice(0, 5).map(async (row) => {
+      try {
+        const m = await getMasterAnalysis(row.symbol);
+        if (m) masterBySymbol[row.symbol] = m;
+      } catch (e) {
+        console.error("955 master", row.symbol, e);
+      }
+    })
+  );
+
   const watchingTickers = analyses.filter(
     (a) =>
       a.stage.stage === "setup_bull" || a.stage.stage === "setup_bear"
@@ -454,7 +468,17 @@ ${watchingTickers.map((t) => `• ${t.symbol} — ${t.stage.label}: ${t.stage.ac
 FAILED / SKIP:
 ${failedTickers.map((t) => `• ${t.symbol} — ${t.stage.label}`).join("\n")}
 
-For each CONFIRMED setup: exact option, entry trigger, stop, target, time exit. For WATCHING: what must happen in 15 min. Overall: good morning to trade or wait? If Friday, WEEKEND HOLD ASSESSMENT per position.`;
+MASTER STACK (Tradier — GEX / flow / profile / sector):
+${confirmedTickers
+  .map((t) => {
+    const m = masterBySymbol[t.symbol];
+    return m
+      ? `${t.symbol}: ${m.summary} | Profile: ${m.marketProfile?.pricePosition || "n/a"} | GEX: ${m.gex?.gexRegime || "n/a"}`
+      : `${t.symbol}: (no master)`;
+  })
+  .join("\n")}
+
+For each CONFIRMED setup: exact option, entry trigger, stop, target, time exit. For WATCHING: what must happen in 15 min. Overall: good morning to trade or wait? If Friday, WEEKEND HOLD ASSESSMENT per position. Use GEX flip / profile when refining targets.`;
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -488,6 +512,22 @@ For each CONFIRMED setup: exact option, entry trigger, stop, target, time exit. 
     watchingTickers,
     failedTickers,
     tickerAnalyses: analyses,
+    masterBySymbol: Object.fromEntries(
+      Object.entries(masterBySymbol).map(([k, v]) => [
+        k,
+        v
+          ? {
+              summary: v.summary,
+              confidence: v.confidence,
+              gexRegime: v.gex?.gexRegime,
+              profile: v.marketProfile?.pricePosition,
+              sectorMomentum: v.sector?.sectorMomentum,
+              flowBias: v.optionsFlow?.smartMoneyBias,
+              recommendedStrike: v.recommendedOption?.strike,
+            }
+          : null,
+      ])
+    ),
     claudeAnalysis: claudeOverall,
     spyChangePct,
     qqqChangePct,
@@ -501,6 +541,15 @@ For each CONFIRMED setup: exact option, entry trigger, stop, target, time exit. 
     for (const t of confirmedTickers) {
       const o = t.option;
       const macdDir = t.macd.direction;
+      const mm = masterBySymbol[t.symbol];
+      const intel =
+        mm != null
+          ? `\n🧠 <b>GEX</b> ${mm.gex?.gexRegime || "—"} | <b>Profile</b> ${mm.marketProfile?.pricePosition || "—"} | <b>Sector</b> ${mm.sector?.sectorMomentum || "—"} | <b>Flow</b> ${mm.optionsFlow?.smartMoneyBias || "—"}`
+          : "";
+      const strikeHint =
+        mm?.recommendedOption?.strike != null
+          ? `\n⭐ Master strike idea: $${mm.recommendedOption.strike}`
+          : "";
       const msg = `${t.stage.emoji} <b>${t.symbol} — ${t.stage.label}</b>
 Called at 9:25: ${t.called925 ? "YES ✓" : "New find"}
 
@@ -508,6 +557,7 @@ Called at 9:25: ${t.called925 ? "YES ✓" : "New find"}
 📐 OR: $${t.OR_low.toFixed(2)}-$${t.OR_high.toFixed(2)} | ${t.aboveOR ? "BROKE OUT ✅" : t.belowOR ? "BROKE DOWN 🔴" : "Inside"}
 📊 VWAP: ${t.aboveVWAP ? "Above ✅" : "Below 🔴"} | MACD: ${macdDir} | RSI: ${t.rsi.toFixed(1)}
 🔊 Volume: ${t.volSurge ? "SURGING 🔥" : "Normal"}
+${intel}${strikeHint}
 
 🎯 <b>PLAY: ${o ? o.strike : "—"} exp ${o ? o.expiry : "—"} @ $${o ? o.mid.toFixed(2) : "—"}</b>
 Delta: ${o ? o.delta : "—"} | IV: ${o ? o.iv : "—"}%
