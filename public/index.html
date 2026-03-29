@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>SOHELATOR</title>
-  <meta name="sohel-build" content="watch-desk-20260328" />
+  <meta name="sohel-build" content="alert-hypo-pnl-20260328" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Chakra+Petch:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
@@ -39,8 +39,7 @@
       --topbar-main-h: 52px;
       --pnl-strip-h: 52px;
       /* Fixed header: top row + P&L strip + vertical padding */
-      --watch-banner-offset: 0px;
-      --topbar-h: calc(var(--topbar-main-h) + var(--pnl-strip-h) + 20px + var(--watch-banner-offset));
+      --topbar-h: calc(var(--topbar-main-h) + var(--pnl-strip-h) + 20px);
       --nav-float-h: 72px;
       --font-ui: "Chakra Petch", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --font-bebas: "Bebas Neue", "Chakra Petch", sans-serif;
@@ -146,61 +145,6 @@
       color: var(--muted);
       margin-top: 4px;
     }
-    body.watch-only {
-      --watch-banner-offset: 42px;
-    }
-    .watch-mode-banner {
-      display: none;
-      width: 100%;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      flex-wrap: wrap;
-      padding: 6px 12px 8px;
-      margin-top: 4px;
-      border-top: 1px solid rgba(0, 229, 255, 0.1);
-      background: rgba(0, 0, 0, 0.35);
-    }
-    body.watch-only .watch-mode-banner {
-      display: flex;
-    }
-    .watch-mode-banner-inner {
-      flex: 1;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .watch-mode-label {
-      font-family: var(--font-data);
-      font-size: 7px;
-      font-weight: 800;
-      letter-spacing: 0.2em;
-      color: var(--accent);
-    }
-    .watch-mode-copy {
-      font-family: var(--font-body);
-      font-size: 0.68rem;
-      line-height: 1.35;
-      color: var(--muted);
-    }
-    .watch-mode-toggle {
-      flex-shrink: 0;
-      font-family: var(--font-data);
-      font-size: 0.58rem;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding: 7px 10px;
-      border-radius: 8px;
-      border: 1px solid rgba(0, 229, 255, 0.35);
-      background: rgba(0, 229, 255, 0.08);
-      color: var(--cyan);
-      cursor: pointer;
-    }
-    body.watch-only .watch-exec-only {
-      display: none !important;
-    }
     .topbar-right {
       display: flex;
       align-items: center;
@@ -227,7 +171,7 @@
     .btn-go-mob { min-height: 44px; padding: 0 14px; font-size: 13px; }
     .pnl-strip {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       height: var(--pnl-strip-h);
       margin-top: 8px;
       border-top: 1px solid var(--border);
@@ -250,6 +194,15 @@
       letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--muted);
+    }
+    .pnl-sub {
+      font-family: var(--font-data);
+      font-size: 7px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      margin-top: 2px;
+      line-height: 1.2;
     }
     .pnl-val {
       font-family: var(--font-bebas);
@@ -1195,7 +1148,7 @@
 
     /* Parked / “BIG UI” — larger tap targets (use when stopped, not while driving) */
     body.parked-mode {
-      --topbar-h: calc(140px + var(--watch-banner-offset));
+      --topbar-h: 140px;
       --nav-float-h: 80px;
     }
     body.parked-mode .ticker-input-mob {
@@ -1438,7 +1391,7 @@
           <span class="logo-dot-live" aria-hidden="true"></span>
           <span class="logo-text-mob">SOHELATOR</span>
         </div>
-        <div class="logo-sub-mob" id="logoSubMob">WATCH DESK · intelligence first</div>
+        <div class="logo-sub-mob">LIVE TRADING COMMAND</div>
       </div>
       <div class="topbar-right">
         <span class="pill-mkt closed" id="mktPill"><span class="dot closed" id="mktDot"></span><span id="mktText">—</span></span>
@@ -1452,14 +1405,8 @@
       <div class="pnl-cell"><div class="pnl-lab">EQUITY</div><div class="pnl-val" id="pnlEq">—</div></div>
       <div class="pnl-cell"><div class="pnl-lab">DAY P&amp;L</div><div class="pnl-val" id="pnlDay">—</div></div>
       <div class="pnl-cell"><div class="pnl-lab">OPEN</div><div class="pnl-val pnl-warn" id="pnlOpen">—</div></div>
-          <div class="pnl-cell"><div class="pnl-lab">VIX</div><div class="pnl-val" id="pnlVix">—</div></div>
-    </div>
-    <div class="watch-mode-banner" id="watchModeBanner" role="status" aria-live="polite">
-      <div class="watch-mode-banner-inner">
-        <span id="watchModeLabel" class="watch-mode-label">WATCH DESK</span>
-        <span class="watch-mode-copy" id="watchModeCopy">Intelligence feeds only — order buttons stay hidden.</span>
-      </div>
-      <button type="button" class="watch-mode-toggle" id="btnWatchModeToggle" aria-pressed="true">Enable trading UI</button>
+      <div class="pnl-cell"><div class="pnl-lab">ALERT HYP</div><div class="pnl-val" id="pnlHypoAlerts">—</div><div class="pnl-sub" id="pnlHypoAlertsSub"></div></div>
+      <div class="pnl-cell"><div class="pnl-lab">VIX</div><div class="pnl-val" id="pnlVix">—</div></div>
     </div>
   </header>
 
@@ -1652,7 +1599,6 @@
 
       <!-- 2 OPTIONS -->
       <section class="page" id="page-2">
-        <p id="optsTabWatchNote" class="muted" style="display:none;font-size:0.72rem;margin-bottom:10px;line-height:1.45;">Watch desk: strikes &amp; greeks for learning — tap BUY when trading UI is enabled.</p>
         <h2 class="section">Suggested</h2>
         <div id="suggestedWrap"></div>
         <h2 class="section">Chain</h2>
@@ -1664,13 +1610,12 @@
       <!-- 3 ALERTS (tracker) -->
       <section class="page" id="page-3">
         <h2 class="section">Open alerts</h2>
-        <p class="muted" id="alertsTabSub" style="margin-bottom:10px;font-size:0.75rem;">Live option quotes &amp; P&amp;L from Tradier · refreshes every 30s</p>
+        <p class="muted" style="margin-bottom:10px;font-size:0.75rem;">Live option quotes &amp; P&amp;L from Tradier · refreshes every 30s · hypothetical $ uses 1 contract per alert (prem at alert × P&amp;L %)</p>
         <div id="alertTrackerWrap" class="muted">Loading…</div>
       </section>
 
       <!-- 4 TRADES -->
       <section class="page" id="page-4">
-        <p id="tradesTabWatchNote" class="muted" style="display:none;font-size:0.72rem;margin-bottom:10px;line-height:1.45;">Watch desk: read-only mirror of your account — useful for context while you observe from the sidelines.</p>
         <p class="muted" style="font-size:0.72rem;margin-bottom:10px;line-height:1.45;">Equity, day P&amp;L, and positions live here — the top bar stays focused on whether there’s a play and how to run it.</p>
         <div class="summary-grid" id="acctSummary"></div>
         <div class="subtabs" style="margin-top:14px;">
@@ -1685,7 +1630,6 @@
 
       <!-- 5 SCAN — read-only intelligence feed -->
       <section class="page scan-tab-root" id="page-5">
-        <p id="scanWatchHint" class="muted" style="font-size:0.72rem;margin:0 0 10px;line-height:1.45;display:none;">Watch period: use SCAN for timing and context — execution stays at your broker for now.</p>
         <div class="scan-status-bar" id="scanStatusBar" aria-label="Today status">
           <span class="sb-seg"><span id="scanMktDot" class="scan-dot-off" aria-hidden="true"></span><span id="scanMktPill">—</span></span>
           <span class="sb-seg">LAST SCAN <span class="sb-val" id="scanLastScan">—</span></span>
@@ -1787,7 +1731,7 @@
       <input id="limitPrice" type="number" step="0.01" style="width:100%;margin-top:4px;padding:10px;border-radius:10px;border:0.5px solid var(--border2);background:rgba(0,0,0,0.35);color:var(--text);font-family:JetBrains Mono,ui-monospace,monospace;" />
     </div>
     <div class="font-mono" style="margin-top:12px;font-size:0.9rem;" id="estCost">Est. —</div>
-    <button type="button" class="confirm-btn watch-exec-only" id="confirmOrder">CONFIRM</button>
+    <button type="button" class="confirm-btn" id="confirmOrder">CONFIRM</button>
   </div>
 
   <div class="toast-wrap" id="toasts"></div>
@@ -1837,14 +1781,14 @@
       masterIntel: null,
       optionLegQuotes: {},
       alertTrackerList: [],
+      hypoTotal1ct: null,
+      hypoLegCount: 0,
       volumeAnalysis: null,
       trackerBannerDismissed: false,
       /** True only when user tapped GO — cleared inside loadMarketData (not on 30s poll). */
       justUserGo: false,
       /** Set from Tradier clock — INDICATORS tab uses for placeholder when closed. */
       marketOpen: true,
-      /** Overwritten on load from localStorage (default watch desk on). */
-      watchOnly: true,
       fiveMinCandles: [],
       ignition: null,
       ignitionHistory: [],
@@ -2178,47 +2122,53 @@
       return [x];
     }
 
-    function loadWatchOnlyPref() {
-      try {
-        const v = localStorage.getItem("sohel_watch_only");
-        if (v === null) return true;
-        return v === "1" || v === "true";
-      } catch (e) {
-        return true;
-      }
+    /** PnL $ per 1-lot option: premium at alert × P&amp;L % (same as Tradier mid vs entry). */
+    function hypoDollarsPerAlert(a) {
+      const prem0 = parseFloat(a.premiumAtAlert ?? a.option?.mid ?? 0) || 0;
+      const pnlPct =
+        a.realOptionPnlPct != null && isFinite(a.realOptionPnlPct)
+          ? a.realOptionPnlPct
+          : a.estimatedOptionPnlPct != null && isFinite(a.estimatedOptionPnlPct)
+            ? a.estimatedOptionPnlPct
+            : null;
+      if (pnlPct == null || prem0 <= 0) return null;
+      return prem0 * pnlPct;
     }
 
-    function applyWatchOnlyUi() {
-      document.body.classList.toggle("watch-only", state.watchOnly);
-      const btn = document.getElementById("btnWatchModeToggle");
-      const copy = document.getElementById("watchModeCopy");
-      const logo = document.getElementById("logoSubMob");
-      if (btn) {
-        btn.setAttribute("aria-pressed", state.watchOnly ? "true" : "false");
-        btn.textContent = state.watchOnly ? "Enable trading UI" : "Watch-only mode";
+    function aggregateHypoAlerts(alerts) {
+      let sum = 0;
+      let n = 0;
+      for (const a of alerts || []) {
+        const d = hypoDollarsPerAlert(a);
+        if (d == null || !isFinite(d)) continue;
+        sum += d;
+        n++;
       }
-      if (copy) {
-        copy.textContent = state.watchOnly
-          ? "Next few weeks: monitor scans & alerts — no orders from this app. Toggle when you’re ready to trade here."
-          : "Trading UI visible — you still confirm at your broker.";
+      return { sumDollars: sum, count: n };
+    }
+
+    function renderHypoAlertStrip() {
+      const el = document.getElementById("pnlHypoAlerts");
+      const sub = document.getElementById("pnlHypoAlertsSub");
+      if (!el) return;
+      let sumDollars = state.hypoTotal1ct;
+      let count = state.hypoLegCount;
+      if (sumDollars == null || !count) {
+        const ag = aggregateHypoAlerts(state.alertTrackerList);
+        sumDollars = ag.sumDollars;
+        count = ag.count;
       }
-      if (logo) {
-        logo.textContent = state.watchOnly
-          ? "WATCH DESK · intelligence first"
-          : "LIVE TRADING COMMAND";
+      if (!count || sumDollars == null || !isFinite(sumDollars)) {
+        el.textContent = "—";
+        el.style.color = "";
+        if (sub) sub.textContent = "";
+        return;
       }
-      const sub = document.getElementById("alertsTabSub");
-      if (sub) {
-        sub.textContent = state.watchOnly
-          ? "Live quotes & P&L — observing only until you enable trading UI (no log / W·L from here)."
-          : "Live option quotes & P&L from Tradier · refreshes every 30s";
-      }
-      const tw = document.getElementById("tradesTabWatchNote");
-      if (tw) tw.style.display = state.watchOnly ? "block" : "none";
-      const os = document.getElementById("optsTabWatchNote");
-      if (os) os.style.display = state.watchOnly ? "block" : "none";
-      const sh = document.getElementById("scanWatchHint");
-      if (sh) sh.style.display = state.watchOnly ? "block" : "none";
+      const sign = sumDollars >= 0 ? "+" : "";
+      el.textContent = sign + "$" + sumDollars.toFixed(0);
+      el.style.color =
+        sumDollars > 0 ? "var(--green)" : sumDollars < 0 ? "var(--red)" : "var(--muted)";
+      if (sub) sub.textContent = count + " leg" + (count === 1 ? "" : "s") + " · 1 ct";
     }
 
     function refreshMainTop() {
@@ -2575,7 +2525,7 @@
               Liq score <span class="font-mono">${liq}</span> · Spread <span class="font-mono">${sprPct.toFixed(1)}%</span>
               ${gwx ? `<br/><span style="color:var(--yellow);">${gwx}</span>` : ""}
             </div>
-            <button type="button" class="big-btn ${typ} watch-exec-only" data-open-order="${o.symbol}" data-mid="${liveMid}" data-type="${typ}">${typ === "call" ? "▲ BUY CALL" : "▼ BUY PUT"}</button>
+            <button type="button" class="big-btn ${typ}" data-open-order="${o.symbol}" data-mid="${liveMid}" data-type="${typ}">${typ === "call" ? "▲ BUY CALL" : "▼ BUY PUT"}</button>
           </div>`;
         })
         .join("");
@@ -2615,6 +2565,8 @@
         const r = await fetch("/api/alert-tracker");
         const d = await r.json();
         state.alertTrackerList = d.alerts || [];
+        state.hypoTotal1ct = d.hypoTotal1ct != null ? d.hypoTotal1ct : null;
+        state.hypoLegCount = d.hypoLegCount != null ? d.hypoLegCount : 0;
         const urgent = state.alertTrackerList.filter((a) => a.recommendedMeta?.urgent).length;
         const badge = document.getElementById("alertsUrgentBadge");
         if (urgent > 0) {
@@ -2624,6 +2576,7 @@
           badge.style.display = "none";
         }
         renderAlertTrackerPage();
+        renderHypoAlertStrip();
         const dismissed = sessionStorage.getItem("sohel_tracker_banner_dismissed") === "1";
         const actionAlerts = state.alertTrackerList.filter((a) => {
           const k = alertUrgencyTier(a).key;
@@ -2634,10 +2587,8 @@
         if (needBanner) {
           const first = actionAlerts.find((a) => a.recommendedMeta?.urgent) || actionAlerts[0];
           const head = first ? alertActionHeadline(first) + ": " + formatBuyLine(first) : "Alert review";
-          const tail = state.watchOnly
-            ? " · " + actionAlerts.length + " to review (watch desk)"
-            : " · " + actionAlerts.length + " need attention";
-          document.getElementById("trackerActionBannerText").textContent = head + tail;
+          document.getElementById("trackerActionBannerText").textContent =
+            head + " · " + actionAlerts.length + " need attention";
           tb.style.display = "flex";
         } else {
           tb.style.display = "none";
@@ -2645,6 +2596,9 @@
         refreshMainTop();
       } catch {
         document.getElementById("alertTrackerWrap").innerHTML = '<span class="muted">Could not load alerts.</span>';
+        state.hypoTotal1ct = null;
+        state.hypoLegCount = 0;
+        renderHypoAlertStrip();
       }
     }
 
@@ -2722,6 +2676,18 @@
           const forecastDisc = fd
             ? `<div style="font-family:'DM Sans',sans-serif;font-size:9px;color:#3a5a6e;margin-top:6px;line-height:1.45">Historical pattern stats only — not investment advice or a guarantee of results.</div>`
             : "";
+          const hypoD =
+            a.hypoDollars1ct != null && isFinite(a.hypoDollars1ct)
+              ? a.hypoDollars1ct
+              : hypoDollarsPerAlert(a);
+          const hypoPctForLine =
+            a.hypoBasisPct != null && isFinite(a.hypoBasisPct)
+              ? a.hypoBasisPct
+              : pnlPct;
+          const hypoLine =
+            hypoD != null && isFinite(hypoD)
+              ? `<div style="font-family:'Space Mono',monospace;font-size:8px;color:#8aacbe;padding:6px 14px 8px;background:#060e14;border-top:1px solid #0f1820">Hypothetical 1-lot: <span style="color:${hypoD >= 0 ? "#00ff87" : "#ff3b5c"}">${hypoD >= 0 ? "+" : ""}$${hypoD.toFixed(0)}</span> · option ${hypoPctForLine > 0 ? "+" : ""}${hypoPctForLine.toFixed(1)}% <span style="opacity:0.75">(prem at alert × %)</span></div>`
+              : "";
 
           if (tierKey === "WATCH") {
             return (
@@ -2735,10 +2701,11 @@
                 <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:0.5px;color:#8aacbe">${esc(formatBuyLine(a))}</div>
                 <div style="margin-top:12px;font-family:'Space Mono',monospace;font-size:9px;padding:8px 12px;border-radius:7px;font-weight:700;letter-spacing:0.3px;background:rgba(255,215,0,.06);color:#ffd700;border:1px solid rgba(255,215,0,.25);display:inline-block">GET READY</div>
                 ${staleLine}
+                ${hypoLine}
               </div>
               <div style="display:flex;gap:4px;padding:0 14px 14px;flex-wrap:wrap">
                 <button type="button" style="flex:1;min-width:72px;height:40px;padding:0 10px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px" data-at-load="${esc(a.ticker)}">LOAD</button>
-                <button type="button" class="log-trade-from-alert watch-exec-only" style="flex:1;min-width:72px;height:40px;padding:0 10px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px"
+                <button type="button" class="log-trade-from-alert" style="flex:1;min-width:72px;height:40px;padding:0 10px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px"
                   data-lt-ticker="${esc(a.ticker)}"
                   data-lt-strike="${esc(o.strike ?? "")}"
                   data-lt-expiry="${esc(o.expiry ?? "")}"
@@ -2747,7 +2714,7 @@
                   data-lt-score="${a.score != null ? a.score : ""}"
                   data-lt-stage="${esc(a.stage || "")}"
                 >LOG</button>
-                <button type="button" class="log-outcome-alert watch-exec-only" style="width:44px;height:40px;padding:0;border-radius:8px;background:rgba(0,255,135,.12);border:1px solid rgba(0,255,135,.35);color:#00ff87;font-family:'Space Mono',monospace;font-size:10px;font-weight:700"
+                <button type="button" class="log-outcome-alert" style="width:44px;height:40px;padding:0;border-radius:8px;background:rgba(0,255,135,.12);border:1px solid rgba(0,255,135,.35);color:#00ff87;font-family:'Space Mono',monospace;font-size:10px;font-weight:700"
                   data-lo-ticker="${esc(a.ticker)}"
                   data-lo-strike="${esc(o.strike ?? "")}"
                   data-lo-expiry="${esc(o.expiry ?? "")}"
@@ -2757,7 +2724,7 @@
                   data-lo-stage="${esc(a.stage || "")}"
                   data-lo-outcome="win"
                 >W</button>
-                <button type="button" class="log-outcome-alert watch-exec-only" style="width:44px;height:40px;padding:0;border-radius:8px;background:rgba(255,59,92,.12);border:1px solid rgba(255,59,92,.35);color:#ff3b5c;font-family:'Space Mono',monospace;font-size:10px;font-weight:700"
+                <button type="button" class="log-outcome-alert" style="width:44px;height:40px;padding:0;border-radius:8px;background:rgba(255,59,92,.12);border:1px solid rgba(255,59,92,.35);color:#ff3b5c;font-family:'Space Mono',monospace;font-size:10px;font-weight:700"
                   data-lo-ticker="${esc(a.ticker)}"
                   data-lo-strike="${esc(o.strike ?? "")}"
                   data-lo-expiry="${esc(o.expiry ?? "")}"
@@ -2817,6 +2784,7 @@
               </div>
             </div>
             ${staleLine}
+            ${hypoLine}
             ${
               fd
                 ? `<div style="padding:8px 12px;border-top:1px solid #0f1820;background:#0a1218">
@@ -2845,7 +2813,7 @@
               <div style="font-family:'Space Mono',monospace;font-size:9px;padding:6px 12px;border-radius:7px;font-weight:700;letter-spacing:.3px;background:${action.bg};color:${action.color};border:1px solid ${action.border}">${esc(action.text)}</div>
               <div style="display:flex;gap:4px;flex-wrap:wrap">
                 <button type="button" style="height:40px;padding:0 12px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px" data-at-load="${esc(a.ticker)}">LOAD</button>
-                <button type="button" class="log-trade-from-alert watch-exec-only" style="height:40px;padding:0 12px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px"
+                <button type="button" class="log-trade-from-alert" style="height:40px;padding:0 12px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px"
                   data-lt-ticker="${esc(a.ticker)}"
                   data-lt-strike="${esc(o.strike ?? "")}"
                   data-lt-expiry="${esc(o.expiry ?? "")}"
@@ -2854,7 +2822,7 @@
                   data-lt-score="${a.score != null ? a.score : ""}"
                   data-lt-stage="${esc(a.stage || "")}"
                 >LOG</button>
-                <button type="button" class="log-outcome-alert watch-exec-only" style="width:44px;height:40px;padding:0;border-radius:8px;background:rgba(0,255,135,.12);border:1px solid rgba(0,255,135,.35);color:#00ff87;font-family:'Space Mono',monospace;font-size:10px;font-weight:700"
+                <button type="button" class="log-outcome-alert" style="width:44px;height:40px;padding:0;border-radius:8px;background:rgba(0,255,135,.12);border:1px solid rgba(0,255,135,.35);color:#00ff87;font-family:'Space Mono',monospace;font-size:10px;font-weight:700"
                   data-lo-ticker="${esc(a.ticker)}"
                   data-lo-strike="${esc(o.strike ?? "")}"
                   data-lo-expiry="${esc(o.expiry ?? "")}"
@@ -2864,7 +2832,7 @@
                   data-lo-stage="${esc(a.stage || "")}"
                   data-lo-outcome="win"
                 >W</button>
-                <button type="button" class="log-outcome-alert watch-exec-only" style="width:44px;height:40px;padding:0;border-radius:8px;background:rgba(255,59,92,.12);border:1px solid rgba(255,59,92,.35);color:#ff3b5c;font-family:'Space Mono',monospace;font-size:10px;font-weight:700"
+                <button type="button" class="log-outcome-alert" style="width:44px;height:40px;padding:0;border-radius:8px;background:rgba(255,59,92,.12);border:1px solid rgba(255,59,92,.35);color:#ff3b5c;font-family:'Space Mono',monospace;font-size:10px;font-weight:700"
                   data-lo-ticker="${esc(a.ticker)}"
                   data-lo-strike="${esc(o.strike ?? "")}"
                   data-lo-expiry="${esc(o.expiry ?? "")}"
@@ -4591,13 +4559,9 @@
         </tr>`;
       }).join("");
       document.querySelectorAll("#chainTable tbody tr").forEach((tr) => {
-        tr.addEventListener("click", () => {
-          if (state.watchOnly) {
-            toast("Watch desk — chain orders off. Enable trading UI in the header when ready.", "info");
-            return;
-          }
-          openOrderModal(tr.dataset.occ, sym, tr.dataset.type, parseFloat(tr.dataset.mid));
-        });
+        tr.addEventListener("click", () =>
+          openOrderModal(tr.dataset.occ, sym, tr.dataset.type, parseFloat(tr.dataset.mid))
+        );
       });
     }
 
@@ -4905,10 +4869,6 @@
     }
 
     function openOrderModal(occ, underlying, optType, mid) {
-      if (state.watchOnly) {
-        toast("Watch desk mode — order sheet disabled. Use “Enable trading UI” in the header when you trade here.", "info");
-        return;
-      }
       state.orderModal = { occ, underlying, optType, mid: mid || 0 };
       state.orderQty = 1;
       state.orderType = "market";
@@ -4939,10 +4899,6 @@
     }
 
     async function submitOrder() {
-      if (state.watchOnly) {
-        toast("Watch desk mode is on.", "info");
-        return;
-      }
       const { occ, underlying } = state.orderModal;
       const px = parseFloat(document.getElementById("limitPrice").value) || state.orderModal.mid;
       const body = {
@@ -5031,7 +4987,7 @@
             <div class="ai-note">${(a.aiAnalysis || "").replace(/</g, "&lt;")}</div>
             <div class="muted" style="font-size:0.65rem;margin-top:6px;">${a.timestamp ? new Date(a.timestamp).toLocaleString() : ""}</div>
             <div style="display:flex;gap:8px;margin-top:10px;">
-              <button type="button" class="big-btn call watch-exec-only" style="margin:0;padding:10px;font-size:0.85rem;flex:1;" data-buy-occ="${o.occ || ""}" data-buy-mid="${o.mid || 0}" data-buy-type="${o.optType || "call"}" data-buy-und="${a.ticker}">BUY NOW</button>
+              <button type="button" class="big-btn call" style="margin:0;padding:10px;font-size:0.85rem;flex:1;" data-buy-occ="${o.occ || ""}" data-buy-mid="${o.mid || 0}" data-buy-type="${o.optType || "call"}" data-buy-und="${a.ticker}">BUY NOW</button>
               <button type="button" class="btn-go" style="flex:1;padding:10px;" data-load-t="${a.ticker}">LOAD TICKER</button>
             </div>
           </div>`;
@@ -5888,11 +5844,7 @@
         play,
         "Signal: " + sig + ".",
         price && price !== "—" ? "Last about " + price + "." : "",
-        state.watchOnly
-          ? "Watch desk — review only."
-          : exec && exec !== "—"
-            ? "Execute: " + exec + "."
-            : "",
+        exec && exec !== "—" ? "Execute: " + exec + "." : "",
       ].filter(Boolean);
       const u = new SpeechSynthesisUtterance(parts.join(" "));
       u.rate = 0.92;
@@ -6040,16 +5992,6 @@
       setPage(5);
     });
 
-    document.getElementById("btnWatchModeToggle").addEventListener("click", () => {
-      state.watchOnly = !state.watchOnly;
-      try {
-        localStorage.setItem("sohel_watch_only", state.watchOnly ? "1" : "0");
-      } catch (e) { /* noop */ }
-      applyWatchOnlyUi();
-      toast(state.watchOnly ? "Watch desk on — order controls hidden." : "Trading UI on — taps can open orders.", "info");
-      pollAlertTracker();
-    });
-
     function guideHtml() {
       const cards = [
         { t: "Bull trend calls", d: "ADX > 25, price above VWAP, MACD histogram positive, RSI 50–70, 7–14 DTE. Buy ATM or slight OTM calls; risk below last swing low." },
@@ -6075,9 +6017,6 @@
         m < 1 ? "Updated just now" : "Updated " + m + " min ago";
     }, 30000);
     setInterval(pollAlertTracker, 30000);
-
-    state.watchOnly = loadWatchOnlyPref();
-    applyWatchOnlyUi();
 
     loadClock();
     loadBalances();

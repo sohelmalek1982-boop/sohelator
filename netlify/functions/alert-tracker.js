@@ -238,6 +238,19 @@ exports.handler = async (event) => {
       const pnlForRec =
         optionPnlPct != null ? optionPnlPct : estimatedOptionPnlPct ?? underlyingPnlPct ?? 0;
 
+      const premAt =
+        parseFloat(alert.premiumAtAlert ?? alert.option?.mid ?? 0) || 0;
+      const effectivePct =
+        optionPnlPct != null && isFinite(optionPnlPct)
+          ? optionPnlPct
+          : estimatedOptionPnlPct != null && isFinite(estimatedOptionPnlPct)
+            ? estimatedOptionPnlPct
+            : null;
+      const hypoDollars1ct =
+        premAt > 0 && effectivePct != null
+          ? Math.round(premAt * effectivePct * 100) / 100
+          : null;
+
       const rec = getRecommendedAction(alert, pnlForRec);
 
       let forecastData = null;
@@ -261,6 +274,8 @@ exports.handler = async (event) => {
         estimatedOptionPnlPct,
         liveOptionQuote: live,
         realOptionPnlPct: optionPnlPct,
+        hypoDollars1ct,
+        hypoBasisPct: effectivePct,
         recommendedAction: rec.action,
         recommendedMeta: rec,
         forecastData,
@@ -271,12 +286,24 @@ exports.handler = async (event) => {
     })
   );
 
+  let hypoTotal1ct = 0;
+  let hypoCount = 0;
+  for (const e of enriched) {
+    if (e.hypoDollars1ct != null && isFinite(e.hypoDollars1ct)) {
+      hypoTotal1ct += e.hypoDollars1ct;
+      hypoCount++;
+    }
+  }
+  hypoTotal1ct = Math.round(hypoTotal1ct * 100) / 100;
+
   return {
     statusCode: 200,
     headers,
     body: JSON.stringify({
       count: enriched.length,
       alerts: enriched,
+      hypoTotal1ct: hypoCount ? hypoTotal1ct : null,
+      hypoLegCount: hypoCount,
       updatedAt: Date.now(),
     }),
   };
