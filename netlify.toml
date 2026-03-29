@@ -37,6 +37,9 @@
 [functions."ticker-intel"]
   timeout = 60
 
+[functions."ai"]
+  timeout = 45
+
 [[redirects]]
   from = "/api/ticker-intel"
   to = "/.netlify/functions/ticker-intel"
@@ -120,6 +123,11 @@
 [[redirects]]
   from = "/api/morning-brief"
   to = "/.netlify/functions/scan-925"
+  status = 200
+
+[[redirects]]
+  from = "/api/ai"
+  to = "/.netlify/functions/ai"
   status = 200
 
 [[redirects]]

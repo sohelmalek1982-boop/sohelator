@@ -7,10 +7,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>SOHELATOR</title>
-  <meta name="sohel-build" content="ui-command-layout-20260328" />
+  <meta name="sohel-build" content="inds-interpreted-20260328" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Chakra+Petch:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
   <link rel="manifest" href='data:application/json,{"name":"SOHELATOR","short_name":"SOHELATOR","display":"standalone","background_color":"%2307080d","theme_color":"%2307080d","start_url":"/"}' />
   <style>
     :root {
@@ -884,6 +884,114 @@
       margin-top: 8px;
       opacity: 0.9;
     }
+
+    /* —— Indicators tab (interpreted) —— */
+    .inds-tab-wrap { --ind-green: #00ff87; --ind-red: #ff3b5c; --ind-yellow: #ffd700; --ind-muted: #4a6070; --ind-cyan: #00e5ff; }
+    .inds-ph { text-align: center; padding: 28px 16px; border-radius: var(--radius-command); }
+    .inds-ph p { font-family: "DM Sans", sans-serif; font-size: 0.85rem; color: var(--ind-muted); line-height: 1.5; max-width: 320px; margin: 0 auto; }
+    .ind-mono-7 {
+      font-family: "Space Mono", ui-monospace, monospace;
+      font-size: 7px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ind-cyan);
+    }
+    .ind-dm { font-family: "DM Sans", sans-serif; font-size: 11px; line-height: 1.55; color: rgba(220, 235, 255, 0.88); }
+    .ind-val-big { font-family: "Space Mono", ui-monospace, monospace; font-size: 1.35rem; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+    .ind-bebas { font-family: "Bebas Neue", "Chakra Petch", sans-serif; letter-spacing: 0.04em; }
+    .ind-overall-card {
+      border-radius: var(--radius-command);
+      padding: 16px 16px 18px;
+      border: 1px solid rgba(0, 229, 255, 0.25);
+      background: rgba(8, 10, 18, 0.95);
+      margin-bottom: 14px;
+      box-shadow: 0 0 24px rgba(0, 229, 255, 0.08);
+    }
+    .ind-overall-card .ind-verdict { font-size: 1.85rem; line-height: 1.05; margin: 8px 0 12px; }
+    .ind-overall-card .ind-verdict.bull { color: var(--ind-green); text-shadow: 0 0 20px rgba(0, 255, 135, 0.35); }
+    .ind-overall-card .ind-verdict.bear { color: var(--ind-red); text-shadow: 0 0 18px rgba(255, 59, 92, 0.35); }
+    .ind-overall-card .ind-verdict.mixed { color: var(--ind-yellow); }
+    .ind-overall-card .ind-verdict.chop { color: var(--ind-muted); }
+    .ind-overall-card .ind-watch-line { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(0, 229, 255, 0.12); font-size: 10px; color: var(--ind-cyan); }
+    .ind-card {
+      border-radius: var(--radius-command);
+      padding: 14px 14px 16px;
+      margin-bottom: 12px;
+      border: 1px solid rgba(0, 229, 255, 0.15);
+      background: rgba(10, 12, 20, 0.9);
+    }
+    .ind-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+    .ind-pill {
+      font-family: "Space Mono", monospace;
+      font-size: 0.52rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid currentColor;
+      white-space: nowrap;
+    }
+    .ind-pill.bull { color: var(--ind-green); background: rgba(0, 255, 135, 0.1); }
+    .ind-pill.bear { color: var(--ind-red); background: rgba(255, 59, 92, 0.1); }
+    .ind-pill.neutral { color: var(--ind-muted); border-color: var(--ind-muted); }
+    .ind-pill.warn { color: var(--ind-yellow); background: rgba(255, 215, 0, 0.08); }
+    .ind-pill.cyan { color: var(--ind-cyan); background: rgba(0, 229, 255, 0.08); }
+    .ind-dir { font-family: "Space Mono", monospace; font-size: 0.72rem; margin: 6px 0 10px; color: var(--ind-cyan); }
+    .ind-bar-wrap { margin: 10px 0 12px; }
+    .ind-bar-labels { display: flex; justify-content: space-between; font-family: "Space Mono", monospace; font-size: 0.55rem; color: var(--ind-muted); margin-bottom: 4px; }
+    .ind-bar-track2 { height: 8px; background: rgba(0, 0, 0, 0.45); border-radius: 6px; overflow: hidden; border: 1px solid rgba(0, 229, 255, 0.1); }
+    .ind-bar-fill2 { height: 100%; border-radius: 5px; transition: width 0.35s ease; }
+    .ind-bar-fill2.green { background: linear-gradient(90deg, var(--ind-green), #00aa66); box-shadow: 0 0 10px rgba(0, 255, 135, 0.3); }
+    .ind-bar-fill2.red { background: linear-gradient(90deg, var(--ind-red), #990033); }
+    .ind-bar-fill2.cyan { background: linear-gradient(90deg, var(--ind-cyan), #8860ff); }
+    .ind-bar-fill2.yellow { background: linear-gradient(90deg, var(--ind-yellow), #ff8800); }
+    .ind-action { font-family: "DM Sans", sans-serif; font-size: 11px; font-weight: 600; color: var(--ind-green); margin-top: 10px; }
+    .ind-action.bear { color: var(--ind-red); }
+    .ind-action.warn { color: var(--ind-yellow); }
+    .ind-watch { font-family: "DM Sans", sans-serif; font-size: 10px; color: var(--ind-muted); margin-top: 8px; font-style: italic; }
+    .ind-premium-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .ind-prem-cell {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(0, 229, 255, 0.12);
+      border-radius: var(--radius-md);
+      padding: 12px 10px;
+      text-align: center;
+    }
+    .ind-prem-cell .pv { font-family: "Space Mono", monospace; font-size: 0.95rem; font-weight: 700; color: var(--ind-cyan); margin-top: 6px; }
+    .ind-bottomline {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(0, 229, 255, 0.15);
+      font-family: "DM Sans", sans-serif;
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--text);
+    }
+    .ind-action-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .ind-ag-cell {
+      background: rgba(0, 0, 0, 0.38);
+      border: 1px solid rgba(0, 229, 255, 0.14);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      text-align: center;
+    }
+    .ind-ag-cell .ag-val { font-family: "Bebas Neue", sans-serif; font-size: 1.5rem; margin: 6px 0; letter-spacing: 0.02em; }
+    .ind-ag-cell .ag-val.ok { color: var(--ind-green); }
+    .ind-ag-cell .ag-val.no { color: var(--ind-red); }
+    .ind-ag-cell .ag-val.mid { color: var(--ind-yellow); }
+    .ind-ag-cell .ag-note { font-family: "DM Sans", sans-serif; font-size: 10px; color: var(--ind-muted); line-height: 1.45; text-align: left; }
   </style>
 </head>
 <body class="term-app">
@@ -999,31 +1107,27 @@
         </div>
       </section>
 
-      <!-- 1 INDS -->
+      <!-- 1 INDS — interpreted (IV gauge + chain still updated on SIGNAL / OPTS) -->
       <section class="page" id="page-1">
-        <h2 class="section">Indicators (5m)</h2>
-        <p class="muted" style="font-size:0.75rem;margin:-4px 0 10px;line-height:1.45;">Each reading includes what it implies for trend, entries, and risk — not just the raw number.</p>
-        <div class="card" id="indsCard"></div>
-        <h2 class="section">IV</h2>
-        <div class="card">
-          <div class="gauge-wrap">
-            <div class="gauge-arc"><div class="gauge-needle" id="ivNeedle"></div></div>
-            <div class="font-mono" style="text-align:center;margin-top:4px;" id="ivGaugeLabel">ATM IV —</div>
-            <p class="ind-ctx" style="text-align:center;margin-top:10px;padding:0 4px;" id="ivContextLine">—</p>
+        <div class="inds-tab-wrap">
+          <div class="card inds-ph" id="indsPlaceholder">
+            <p>Indicator interpretations appear here when the market is open and a ticker is loaded. Use SIGNAL + GO first.</p>
           </div>
-          <div class="grid-3">
-            <div class="stat-cell"><div class="label">ATM IV%</div><div class="val" id="iv1">—</div></div>
-            <div class="stat-cell"><div class="label">Delta</div><div class="val" id="iv2">—</div></div>
-            <div class="stat-cell"><div class="label">Premium</div><div class="val" id="iv3">—</div></div>
+          <div id="indsMain" style="display: none;">
+            <div class="ind-overall-card" id="indOverallCard">
+              <div class="ind-mono-7">OVERALL READING</div>
+              <div class="ind-verdict chop ind-bebas" id="indOverallVerdict">—</div>
+              <p class="ind-dm" id="indOverallSummary">Loading…</p>
+              <div class="ind-watch-line" id="indOverallWatch"></div>
+            </div>
+            <div class="ind-mono-7" style="margin: 16px 0 8px;">INDICATORS</div>
+            <div id="indCardsWrap"></div>
+            <div class="ind-mono-7" style="margin: 18px 0 8px;">PREMIUM QUALITY</div>
+            <div class="card ind-card" id="indPremiumCard" style="margin-bottom: 14px;"></div>
+            <div class="ind-mono-7" style="margin: 18px 0 8px;">ACTION SUMMARY</div>
+            <div class="card ind-card" id="indActionGridCard" style="margin-bottom: 20px;"></div>
           </div>
-          <div class="stat-cell" style="margin-top:8px;"><div class="label">Expiry (signal)</div><div class="val" id="iv4">—</div></div>
         </div>
-        <h2 class="section">Risk environment</h2>
-        <div class="card" id="riskCard"></div>
-        <h2 class="section" style="margin-top:18px;">Advanced momentum</h2>
-        <div class="card" id="advMomentumCard"><p class="muted">Load a ticker on SIGNAL — intel syncs here.</p></div>
-        <h2 class="section" style="margin-top:18px;">Sector</h2>
-        <div class="card" id="sectorIntelCard"><p class="muted">—</p></div>
       </section>
 
       <!-- 2 OPTIONS -->
@@ -1194,6 +1298,8 @@
       trackerBannerDismissed: false,
       /** True only when user tapped GO — cleared inside loadMarketData (not on 30s poll). */
       justUserGo: false,
+      /** Set from Tradier clock — INDICATORS tab uses for placeholder when closed. */
+      marketOpen: true,
     };
 
     const STAGE_DEFS = [
@@ -1486,6 +1592,7 @@
       const m = state.masterIntel;
       const mom = document.getElementById("advMomentumCard");
       const sec = document.getElementById("sectorIntelCard");
+      if (!mom || !sec) return;
       if (!m || !m.momentum) {
         mom.innerHTML = "<p class='muted'>No momentum bundle — wait for intel.</p>";
       } else {
@@ -2060,108 +2167,789 @@
       el.textContent = msg;
     }
 
-    function adxContextBlock(adxVal) {
-      const a = +adxVal;
-      const pct = Math.min(100, (a / 50) * 100);
-      if (a < 20)
-        return {
-          badge: "CHOPPY",
-          bcls: "yellow",
-          ctx: "Trend strength is weak — breakouts often fail; favor smaller size or wait for ADX to expand with price above/below VWAP.",
-          bar: pct,
-          tone: "yellow",
-        };
-      if (a < 25)
-        return {
-          badge: "BUILDING",
-          bcls: "cyan",
-          ctx: "Trend is waking up — early directional trades are valid but need confirmation (close beyond VWAP / structure).",
-          bar: pct,
-          tone: "accent",
-        };
-      if (a < 40)
-        return {
-          badge: "RISING",
-          bcls: "green",
-          ctx: "Classic trending tape — momentum strategies work better; pullbacks to VWAP or prior swing can be bought/sold with trend.",
-          bar: pct,
-          tone: "green",
-        };
-      return {
-        badge: "STRONG",
-        bcls: "green",
-        ctx: "Extreme trend force — moves can extend and snap back fast; trail aggressively and avoid fading without a clear exhaustion signal.",
-        bar: pct,
-        tone: "green",
-      };
+    function esc(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
     }
 
-    function macdContextBlock(macdH) {
-      const h = +macdH;
-      const pct = Math.min(100, Math.abs(h) * 40);
-      if (h > 0.05)
-        return { badge: "BULL IMPULSE", bcls: "green", ctx: "Buyers control short-term momentum — supports call dips / put covers while histogram expands.", bar: pct, tone: "green" };
-      if (h < -0.05)
-        return { badge: "BEAR IMPULSE", bcls: "red", ctx: "Sellers control the short cycle — rallies are for selling or hedging until the histogram crosses back.", bar: pct, tone: "red" };
-      return { badge: "FLAT", bcls: "muted", ctx: "MACD is neutral — no edge from momentum alone; wait for expansion or use levels (VWAP, profile).", bar: 15, tone: "accent" };
+    function atr14FromCandles(candles) {
+      if (!candles || candles.length < 15) return { atr: 0, pct: 0 };
+      const tr = [];
+      for (let i = 1; i < candles.length; i++) {
+        const h = candles[i].h, l = candles[i].l, pc = candles[i - 1].c;
+        tr.push(Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc)));
+      }
+      let a = tr.slice(0, 14).reduce((x, y) => x + y, 0) / 14;
+      for (let i = 14; i < tr.length; i++) a = (a * 13 + tr[i]) / 14;
+      const last = candles[candles.length - 1].c;
+      return { atr: a, pct: last ? (a / last) * 100 : 0 };
     }
 
-    function rsiContextBlock(rsiVal) {
-      const r = +rsiVal;
-      const pct = Math.min(100, r);
-      if (r > 70)
-        return { badge: "STRETCHED UP", bcls: "red", ctx: "Overbought — not an automatic short, but longs are crowded; tighten stops or take partials on extensions.", bar: pct, tone: "red" };
-      if (r < 30)
-        return { badge: "STRETCHED DOWN", bcls: "green", ctx: "Oversold — bounce risk rises; ideal for mean-reversion only if higher timeframe trend allows.", bar: pct, tone: "green" };
-      if (r >= 50)
-        return { badge: "BULL ZONE", bcls: "cyan", ctx: "RSI favors bulls in the window — trend longs get statistical tailwind until RSI rolls over.", bar: pct, tone: "accent" };
-      return { badge: "BEAR ZONE", bcls: "yellow", ctx: "RSI favors bears in the window — rallies into resistance are more sellable until RSI turns up.", bar: pct, tone: "yellow" };
+    function macdHistTrailCloses(closes, maxPts = 7) {
+      const pts = [];
+      for (let k = 0; k < maxPts; k++) {
+        const end = closes.length - k;
+        if (end < 35) break;
+        pts.push(macdHist(closes.slice(0, end)));
+      }
+      return pts.reverse();
     }
 
-    function bbContextBlock(bbB) {
-      const b = +bbB;
-      const pct = Math.min(100, b * 100);
-      if (b > 0.85)
-        return { badge: "UPPER STRETCH", bcls: "yellow", ctx: "Price is hugging the upper band — trend strength OR blow-off risk; don’t short solely because it feels high.", bar: pct, tone: "yellow" };
-      if (b < 0.15)
-        return { badge: "LOWER STRETCH", bcls: "cyan", ctx: "Price is at the lower band — washout or breakdown continuation; need volume + structure to tell which.", bar: pct, tone: "accent" };
-      return { badge: "MID-RANGE", bcls: "muted", ctx: "Inside the band core — no volatility extreme; follow trend (ADX) rather than Bollinger alone.", bar: pct, tone: "green" };
+    function countMacdShrinkPositive(pts) {
+      if (pts.length < 2) return 0;
+      let c = 0;
+      for (let i = pts.length - 1; i > 0; i--) {
+        if (pts[i] > 0 && pts[i] < pts[i - 1]) c++;
+        else break;
+      }
+      return c;
     }
 
-    function vwapContextBlock(vwapDist) {
-      const d = +vwapDist;
-      const pct = Math.min(100, Math.abs(d) * 10);
-      if (d > 0.25)
-        return { badge: "ABOVE VWAP", bcls: "green", ctx: "Institutional day bias is net long — intraday dips toward VWAP are often bought in risk-on conditions.", bar: pct, tone: "green" };
-      if (d < -0.25)
-        return { badge: "BELOW VWAP", bcls: "red", ctx: "Seller control intraday — rips toward VWAP are often sold until a strong reclaim with volume.", bar: pct, tone: "red" };
-      return { badge: "AT VWAP", bcls: "cyan", ctx: "Balanced auction — breakout or fail from here sets the day; avoid oversized bets until it resolves.", bar: 35, tone: "accent" };
+    function computeStochRsiKD(closes) {
+      const rsiPeriod = 14;
+      const stochPeriod = 14;
+      const smoothK = 3;
+      const smoothD = 3;
+      const rsiArr = [];
+      for (let i = rsiPeriod; i < closes.length; i++) {
+        rsiArr.push(rsi(closes.slice(0, i + 1), rsiPeriod));
+      }
+      if (rsiArr.length < stochPeriod + smoothK + smoothD + 2) return { k: 50, d: 50, kPrev: 50, dPrev: 50 };
+      const stochRaw = [];
+      for (let end = stochPeriod; end <= rsiArr.length; end++) {
+        const chunk = rsiArr.slice(end - stochPeriod, end);
+        const last = rsiArr[end - 1];
+        const lo = Math.min(...chunk);
+        const hi = Math.max(...chunk);
+        stochRaw.push(hi === lo ? 0.5 : (last - lo) / (hi - lo));
+      }
+      function sma(a, n) {
+        const o = [];
+        for (let i = n - 1; i < a.length; i++) o.push(a.slice(i - n + 1, i + 1).reduce((x, y) => x + y, 0) / n);
+        return o;
+      }
+      const kLine = sma(stochRaw, smoothK);
+      const dLine = sma(kLine, smoothD);
+      const k = kLine[kLine.length - 1];
+      const d = dLine[dLine.length - 1];
+      const kPrev = kLine.length > 1 ? kLine[kLine.length - 2] : k;
+      const dPrev = dLine.length > 1 ? dLine[dLine.length - 2] : d;
+      return { k: k * 100, d: d * 100, kPrev: kPrev * 100, dPrev: dPrev * 100 };
     }
 
-    function renderInds(adxVal, macdH, rsiVal, bbB, vwapDist) {
-      const blocks = [
-        { title: "ADX (14) — trend strength", val: adxVal.toFixed(1) + " / 50", ...adxContextBlock(adxVal) },
-        { title: "MACD histogram — momentum", val: macdH.toFixed(4), ...macdContextBlock(macdH) },
-        { title: "RSI (14) — speed of move", val: rsiVal.toFixed(1), ...rsiContextBlock(rsiVal) },
-        { title: "Bollinger %B — band position", val: (bbB * 100).toFixed(0) + "%", ...bbContextBlock(bbB) },
-        { title: "VWAP distance — session bias", val: (vwapDist >= 0 ? "+" : "") + vwapDist.toFixed(2) + "%", ...vwapContextBlock(vwapDist) },
-      ];
-      document.getElementById("indsCard").innerHTML = blocks
-        .map(
-          (b) => `<div class="ind-panel">
-        <div class="ind-head">
-          <span class="ind-title">${b.title}</span>
-          <span class="ind-badge ${b.bcls}">${b.badge}</span>
+    let _overallIndCache = { key: "", at: 0, data: null };
+    function overallIndCacheKey(sym, pack) {
+      return [sym, Math.round(pack.adx), Math.round(pack.rsi), pack.macdH.toFixed(3), pack.bbB.toFixed(2), Math.round(pack.vwapDist * 10), Math.round(pack.stochK)].join("|");
+    }
+
+    async function fetchOverallReadingAi(ticker, pack) {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticker,
+          indicators: {
+            adx: +pack.adx.toFixed(1),
+            adxSlope: +pack.adxSlope.toFixed(2),
+            macdH: +pack.macdH.toFixed(4),
+            macdSlope: +pack.macdSlope.toFixed(4),
+            rsi: +pack.rsi.toFixed(1),
+            vwapDist: +pack.vwapDist.toFixed(2),
+            bbPctB: +(pack.bbB * 100).toFixed(1),
+            stochK: +pack.stochK.toFixed(1),
+            stochD: +pack.stochD.toFixed(1),
+            atr: +pack.atr.toFixed(4),
+            atrPct: +pack.atrPct.toFixed(2),
+            stage: pack.stage,
+            aboveVWAP: pack.aboveVWAP ? "yes" : "no",
+          },
+        }),
+      });
+      return res.json();
+    }
+
+    function indCardHtml(o) {
+      return `<div class="ind-card">
+        <div class="ind-card-head">
+          <div>
+            <div class="ind-mono-7">${esc(o.name)}</div>
+            <div class="ind-val-big">${esc(o.val)}</div>
+          </div>
+          <span class="ind-pill ${o.pillCls}">${esc(o.pill)}</span>
         </div>
-        <div class="ind-val-row"><span class="ind-val">${b.val}</span></div>
-        <div class="bar-track ind-bar"><div class="bar-fill ${b.tone}" style="width:${b.bar}%"></div></div>
-        <p class="ind-ctx">${b.ctx}</p>
-      </div>`
-        )
-        .join("");
+        <div class="ind-dir">${esc(o.dirLine)}</div>
+        <div class="ind-bar-wrap">
+          <div class="ind-bar-labels"><span>${esc(o.barLo)}</span><span>${esc(o.barHi)}</span></div>
+          <div class="ind-bar-track2"><div class="ind-bar-fill2 ${o.barTone}" style="width:${o.barPct}%"></div></div>
+        </div>
+        <p class="ind-dm"><strong>What it measures:</strong> ${esc(o.measure)}</p>
+        <p class="ind-dm"><strong>Right now:</strong> ${esc(o.meaning)}</p>
+        <p class="ind-dm"><strong>Position:</strong> ${esc(o.holdExit)}</p>
+        <div class="ind-action ${o.actionCls}">${esc(o.action)}</div>
+        <div class="ind-watch"><strong>Watch:</strong> ${esc(o.watch)}</div>
+      </div>`;
+    }
+
+    async function renderInterpretedIndicatorsPage(ctx) {
+      const sym = (ctx.sym || "").toUpperCase();
+      const c5 = ctx.c5 || [];
+      const closes = c5.map((x) => x.c);
+      const ph = document.getElementById("indsPlaceholder");
+      const main = document.getElementById("indsMain");
+      const phP = ph ? ph.querySelector("p") : null;
+      if (!ph || !main) return;
+
+      if (!sym || c5.length < 35) {
+        ph.style.display = "block";
+        main.style.display = "none";
+        if (phP) phP.textContent = "Indicator interpretations appear here when the market is open and a ticker is loaded. Use SIGNAL + GO first.";
+        return;
+      }
+      if (!state.marketOpen) {
+        ph.style.display = "block";
+        main.style.display = "none";
+        if (phP) phP.textContent = "Market is closed — interpretations run when the session is open. Load a ticker with GO on SIGNAL.";
+        return;
+      }
+      ph.style.display = "none";
+      main.style.display = "block";
+      if (phP) phP.textContent = "Indicator interpretations appear here when the market is open and a ticker is loaded. Use SIGNAL + GO first.";
+
+      const {
+        adxVal, macdH, rsiVal, bbB, vwapDist, vwap, price, sig,
+      } = ctx;
+
+      const adxOld = c5.length >= 40 ? adx(c5.slice(0, -6)) : adxVal;
+      const adxSlope = adxVal - adxOld;
+      const macdTrail = macdHistTrailCloses(closes, 8);
+      const macdOld = macdTrail.length ? macdTrail[0] : macdH;
+      const macdSlope = macdH - macdOld;
+      const shrinkN = countMacdShrinkPositive(macdTrail);
+      const crossUpMacd = macdTrail.length >= 2 && macdTrail[macdTrail.length - 2] <= 0 && macdH > 0;
+      const crossDnMacd = macdTrail.length >= 2 && macdTrail[macdTrail.length - 2] >= 0 && macdH < 0;
+
+      const lastC = c5[c5.length - 1]?.c ?? price;
+      const prevC = c5.length >= 2 ? c5[c5.length - 2].c : lastC;
+      const aboveVWAP = lastC > vwap;
+      const justUpVwap = aboveVWAP && prevC <= vwap;
+      const justDnVwap = !aboveVWAP && prevC >= vwap;
+
+      const st = computeStochRsiKD(closes);
+      const stK = st.k;
+      const stD = st.d;
+      const kXbelowD = st.kPrev >= st.dPrev && st.k < st.d;
+      const kXaboveD = st.kPrev <= st.dPrev && st.k > st.d;
+
+      const { atr: atrAbs, pct: atrPct } = atr14FromCandles(c5);
+      const stage = state.activeStage || "chop";
+
+      const bullLeg = macdH > 0 ? "Bull" : "Bear";
+
+      let adxPill = "NEUTRAL";
+      let adxPillCls = "neutral";
+      let adxMeaning = "";
+      let adxHold = "";
+      let adxAction = "";
+      let adxWatch = "";
+      const a = adxVal;
+      if (a < 20) {
+        adxPill = "NO TREND";
+        adxPillCls = "warn";
+        adxMeaning = "No trend exists. Any signal here is noise. Historical win rate in ADX under 20 markets: 45–52%. Stand aside.";
+        adxHold = "Does not support new directional premium — favors cash or very small size.";
+        adxAction = "Stand aside until ADX expands.";
+        adxWatch = "ADX breaking above 20 with price picking a side vs VWAP.";
+      } else if (a < 25) {
+        adxPill = "WEAK TREND";
+        adxPillCls = "warn";
+        adxMeaning = "Weak trend forming. Not strong enough to trade yet. Wait for ADX to break 25 before entering.";
+        adxHold = "Wait — edge is thin for 1–3d options.";
+        adxAction = "Do not add size; wait for ADX ≥ 25.";
+        adxWatch = "ADX crossing 25 on a closing 5m bar.";
+      } else if (a < 30) {
+        adxPill = "TREND OK";
+        adxPillCls = bullLeg === "Bull" ? "bull" : "bear";
+        adxMeaning = "Trend confirmed. Strong enough to trade. " + bullLeg + " signal is more valid.";
+        adxHold = "Supports holding a directional leg if other checks agree.";
+        adxAction = "Trade only with full checklist (VWAP, MACD, RSI).";
+        adxWatch = "ADX rolling back under 25 — trend weakening.";
+      } else if (a <= 40) {
+        adxPill = "STRONG";
+        adxPillCls = "bull";
+        adxMeaning = "Strong trend. High conviction setup. Stay in the trade.";
+        adxHold = "Favors holding winners and trailing.";
+        adxAction = "Respect stops but let trend work.";
+        adxWatch = "Sudden ADX collapse or VWAP lost.";
+      } else {
+        adxPill = "VERY STRONG";
+        adxPillCls = "bull";
+        adxMeaning = "Very strong trend. Rare. Consider larger size (still within your risk rules).";
+        adxHold = "Strong tailwind for trend-following options.";
+        adxAction = "Add only on pullbacks to VWAP / structure.";
+        adxWatch = "Blow-off + RSI extreme — take partials into extension.";
+      }
+      if (adxSlope > 0.3) {
+        adxMeaning += " Rising — trend strengthening. Good sign.";
+      } else if (adxSlope < -0.3) {
+        adxMeaning += " Falling — trend weakening. Watch for breakdown.";
+      }
+
+      const adxDir = adxSlope > 0.3 ? "↑ Rising" : adxSlope < -0.3 ? "↓ Falling" : "→ Flat";
+      const adxDirLine = adxDir + " — from " + adxOld.toFixed(1) + " → " + adxVal.toFixed(1) + " in 6 bars (approx).";
+
+      let macdPill = "FLAT";
+      let macdPillCls = "neutral";
+      let macdMeaning = "";
+      let macdHold = "";
+      let macdAction = "";
+      let macdWatch = "";
+      if (crossUpMacd) {
+        macdPill = "FRESH BULL";
+        macdPillCls = "bull";
+        macdMeaning = "MACD just turned bullish. Fresh entry signal. One of your stronger momentum setups.";
+        macdHold = "Supports new call risk if trend + VWAP agree.";
+        macdAction = "Consider entry on structure, not chase.";
+        macdWatch = "Histogram flipping back negative.";
+      } else if (crossDnMacd) {
+        macdPill = "FRESH BEAR";
+        macdPillCls = "bear";
+        macdMeaning = "MACD just crossed bearish — puts get validity if price is below VWAP.";
+        macdHold = "Exit or hedge long premium.";
+        macdAction = "Do not add calls here.";
+        macdWatch = "Histogram reclaiming positive.";
+      } else if (macdH > 0 && shrinkN >= 1) {
+        macdPill = "BULL FADE";
+        macdPillCls = "warn";
+        macdMeaning = "Bulls losing steam. MACD positive but histogram is shrinking — " + shrinkN + " bar(s) in a row. Reversal risk rising. Tighten stop.";
+        macdHold = "Hold only with a tight plan; take partials into strength.";
+        macdAction = "Tighten stop; consider trimming calls.";
+        macdWatch = "Cross below zero or lost VWAP.";
+      } else if (macdH > 0) {
+        macdPill = "BULL EXPAND";
+        macdPillCls = "bull";
+        macdMeaning = "Bull momentum accelerating. Stay in calls. Historical continuation when MACD expands several bars is often 68–74% in trend tapes (not a guarantee).";
+        macdHold = "Supports holding call swings.";
+        macdAction = "Trail under rising MACD / structure.";
+        macdWatch = "Histogram rolling over while price stalls.";
+      } else if (macdH < 0 && !crossDnMacd) {
+        const prevH = macdTrail.length >= 2 ? macdTrail[macdTrail.length - 2] : macdH;
+        const shrinkingBear = macdH < 0 && macdH > prevH;
+        if (shrinkingBear) {
+          macdPill = "BEAR FADE";
+          macdPillCls = "warn";
+          macdMeaning = "Bears losing steam. May be setting up for bull reversal.";
+          macdHold = "Cover puts into support; don’t press shorts.";
+          macdAction = "Reduce put size; watch for VWAP reclaim.";
+          macdWatch = "Histogram crossing positive.";
+        } else {
+          macdPill = "BEAR EXPAND";
+          macdPillCls = "bear";
+          macdMeaning = "Bear momentum accelerating. Puts are valid.";
+          macdHold = "Favors put structures while below VWAP.";
+          macdAction = "Avoid new calls until MACD improves.";
+          macdWatch = "Histogram shrinking or VWAP reclaim.";
+        }
+      } else {
+        macdMeaning = "MACD histogram near zero — momentum transition zone.";
+        macdHold = "No strong edge from MACD alone.";
+        macdAction = "Wait for expansion or use levels.";
+        macdWatch = "First clear histogram push away from zero.";
+      }
+      const macdDir = macdSlope > 0.0008 ? "↑ Rising" : macdSlope < -0.0008 ? "↓ Falling" : "→ Flat";
+      const macdDirLine = macdDir + " — hist from " + macdOld.toFixed(4) + " → " + macdH.toFixed(4) + " over recent bars.";
+
+      let rsiPill = "NEUTRAL";
+      let rsiPillCls = "neutral";
+      let rsiMeaning = "";
+      let rsiHold = "";
+      let rsiAction = "";
+      let rsiWatch = "";
+      const r = rsiVal;
+      if (r < 30) {
+        rsiPill = "OVERSOLD";
+        rsiPillCls = "cyan";
+        rsiMeaning = "Oversold. Beaten down. Puts are risky here — could snap back. Look for put spreads instead of outright.";
+        rsiHold = "Short-vol via naked puts is dangerous.";
+        rsiAction = "Favor spreads or wait for reclaim.";
+        rsiWatch = "RSI turning up with price reclaiming VWAP.";
+      } else if (r < 45) {
+        rsiPill = "BEAR ZONE";
+        rsiPillCls = "bear";
+        rsiMeaning = "Bearish zone. Below 50 = bears in control of momentum. Puts valid.";
+        rsiHold = "Supports put thesis if trend agrees.";
+        rsiAction = "Calls need a clear reversal pattern.";
+        rsiWatch = "RSI back above 50.";
+      } else if (r <= 55) {
+        rsiPill = "NEUTRAL";
+        rsiPillCls = "neutral";
+        rsiMeaning = "No man’s land. No directional edge from RSI. Look at other indicators.";
+        rsiHold = "Do not size off RSI alone.";
+        rsiAction = "Use ADX, VWAP, MACD for the decision.";
+        rsiWatch = "Break above 55 or below 45.";
+      } else if (r <= 68) {
+        rsiPill = "BULL ZONE";
+        rsiPillCls = "bull";
+        rsiMeaning = "Bullish zone. Momentum with bulls, room to run before overbought. Good for calls.";
+        rsiHold = "Supports holding calls in a trend.";
+        rsiAction = "Add only on pullbacks.";
+        rsiWatch = "RSI crossing 70.";
+      } else if (r <= 73) {
+        rsiPill = "HOT";
+        rsiPillCls = "warn";
+        rsiMeaning = "Approaching overbought. Reversal risk rising. Watch closely.";
+        rsiHold = "Hold with tighter risk; consider partial profits.";
+        rsiAction = "No new full-size long premium without catalyst.";
+        rsiWatch = "RSI rolling over from here.";
+      } else {
+        rsiPill = "OVERBOUGHT";
+        rsiPillCls = "bear";
+        rsiMeaning = "Overbought. High reversal probability. Tighten stop. Consider taking partial profit.";
+        rsiHold = "Reduce greed — protect call winners.";
+        rsiAction = "Scale out into strength or trail hard.";
+        rsiWatch = "MACD roll + lost VWAP.";
+      }
+      const rsiPrev = closes.length > 20 ? rsi(closes.slice(0, -3)) : r;
+      const rsiDirLine = (r > rsiPrev + 1 ? "↑ Rising" : r < rsiPrev - 1 ? "↓ Falling" : "→ Flat") + " — RSI moved from " + rsiPrev.toFixed(1) + " → " + r.toFixed(1) + " (3-bar lookback).";
+
+      let vwPill = "AT VWAP";
+      let vwPillCls = "neutral";
+      let vwMeaning = "";
+      let vwHold = "";
+      let vwAction = "";
+      let vwWatch = "";
+      if (justUpVwap) {
+        vwPill = "RECLAIM";
+        vwPillCls = "bull";
+        vwMeaning = "Just reclaimed VWAP — fresh bullish signal. Strong entry context for calls if trend agrees.";
+        vwHold = "Bull thesis reactivated.";
+        vwAction = "New call risk more reasonable here.";
+        vwWatch = "Close back below VWAP — invalidates reclaim.";
+      } else if (justDnVwap) {
+        vwPill = "LOST VWAP";
+        vwPillCls = "bear";
+        vwMeaning = "Just lost VWAP — exit calls now. Bull thesis broken for the session.";
+        vwHold = "Do not hold full call size blindly.";
+        vwAction = "Cut or hedge.";
+        vwWatch = "Immediate reclaim with volume.";
+      } else if (aboveVWAP) {
+        vwPill = "ABOVE";
+        vwPillCls = "bull";
+        vwMeaning = "Price above VWAP — bulls won today’s auction so far. Institutions skew long vs session mean. Hold calls.";
+        vwHold = "Supports call swings intraday.";
+        vwAction = "Buy dips toward VWAP in trend.";
+        vwWatch = "Losing VWAP on a closing 15m bar.";
+      } else {
+        vwPill = "BELOW";
+        vwPillCls = "bear";
+        vwMeaning = "Price below VWAP — bears won the session so far. Calls are at risk. Consider exiting.";
+        vwHold = "Puts favored until reclaim.";
+        vwAction = "Avoid adding calls.";
+        vwWatch = "Strong reclaim + MACD turn.";
+      }
+      const vwBarPct = Math.min(100, Math.max(0, 50 + vwapDist * 15));
+      const vwDirLine = (vwapDist >= 0 ? "+" : "") + vwapDist.toFixed(2) + "% from VWAP — " + (aboveVWAP ? "above session mean." : "below session mean.");
+
+      let bbPill = "MID";
+      let bbPillCls = "neutral";
+      let bbMeaning = "";
+      let bbHold = "";
+      let bbAction = "";
+      let bbWatch = "";
+      const b = bbB;
+      if (b < 0.2) {
+        bbPill = "LOWER EXT";
+        bbPillCls = "cyan";
+        bbMeaning = "Near lower Bollinger Band. Oversold extreme. High snap-back risk.";
+        bbHold = "Puts into flush are risky; spreads safer.";
+        bbAction = "Wait for stabilization or VWAP reclaim.";
+        bbWatch = "%B turning up with volume.";
+      } else if (b < 0.4) {
+        bbPill = "LOWER HALF";
+        bbPillCls = "bear";
+        bbMeaning = "Lower half. Bearish range.";
+        bbHold = "Favors puts if trend agrees.";
+        bbAction = "Calls need reversal evidence.";
+        bbWatch = "%B back above 0.5.";
+      } else if (b <= 0.6) {
+        bbPill = "MID";
+        bbPillCls = "neutral";
+        bbMeaning = "Middle of range. No edge from Bollinger alone.";
+        bbHold = "Use ADX + VWAP.";
+        bbAction = "No size decision from %B here.";
+        bbWatch = "Push toward bands.";
+      } else if (b <= 0.8) {
+        bbPill = "UPPER HALF";
+        bbPillCls = "bull";
+        bbMeaning = "Upper half. Bullish range. Room before extended.";
+        bbHold = "Supports calls in uptrend.";
+        bbAction = "Add on dips, not spikes.";
+        bbWatch = "%B above 0.85 + RSI hot.";
+      } else {
+        bbPill = "UPPER EXT";
+        bbPillCls = "warn";
+        bbMeaning = "Near upper band. Price extended. Pullback risk. Watch RSI too.";
+        bbHold = "Trim long premium into extension.";
+        bbAction = "Tighten stops on calls.";
+        bbWatch = "RSI rollover or MACD shrink.";
+      }
+      const bbDirLine = "%B at " + (b * 100).toFixed(0) + "% of band width — " + (b > 0.5 ? "upper side." : "lower side.");
+
+      let stPill = "STOCH RSI";
+      let stPillCls = "neutral";
+      let stMeaning = "";
+      let stHold = "";
+      let stAction = "";
+      let stWatch = "";
+      if (stK > stD && stK < 80 && stD < 80) {
+        stPill = "BULL X";
+        stPillCls = "bull";
+        stMeaning = "Fast momentum above slow — bullish crossover. Momentum building.";
+        stHold = "Supports call continuation.";
+        stAction = "Align with MACD + VWAP before sizing.";
+        stWatch = "K crossing back below D.";
+      } else if (stK > stD && stK >= 80) {
+        stPill = "OB BULL";
+        stPillCls = "warn";
+        stMeaning = "Both in overbought. K above D but danger zone — watch for K to cross below D.";
+        stHold = "Hold calls with tight risk only.";
+        stAction = "No new chase.";
+        stWatch = "Bearish crossover from overbought.";
+      } else if (kXbelowD && stK > 80 && stD > 80) {
+        stPill = "REV WARN";
+        stPillCls = "bear";
+        stMeaning = "Bearish crossover from overbought — early reversal warning.";
+        stHold = "Protect call profits.";
+        stAction = "Tighten trail / take partial.";
+        stWatch = "Price vs VWAP.";
+      } else if (stK < stD && stK < 20 && stD < 20) {
+        stPill = "OS BEAR";
+        stPillCls = "bear";
+        stMeaning = "Both oversold, K below D — bearish momentum.";
+        stHold = "Bounce trades need confirmation.";
+        stAction = "Avoid new puts into vacuum.";
+        stWatch = "Bullish crossover from oversold.";
+      } else if (kXaboveD && stK < 25 && stD < 25) {
+        stPill = "OS BULL X";
+        stPillCls = "bull";
+        stMeaning = "Bullish crossover from oversold — potential reversal up.";
+        stHold = "Small long risk only with structure.";
+        stAction = "Wait for VWAP reclaim to add.";
+        stWatch = "Failed reclaim.";
+      } else {
+        stMeaning = "Stoch RSI mixed — use as confirmation, not primary.";
+        stHold = "Combine with RSI + MACD.";
+        stAction = "No standalone trade from this alone.";
+        stWatch = "Crossovers at 20 / 80.";
+      }
+      const stDirLine = "K " + stK.toFixed(0) + " vs D " + stD.toFixed(0) + " — " + (stK > stD ? "K above D." : "K below D.");
+
+      const ivNow = state.ivAtm?.iv;
+      const ivCheap = ivNow != null && ivNow < 40;
+      const ivNorm = ivNow != null && ivNow >= 40 && ivNow <= 60;
+      const ivExp = ivNow != null && ivNow > 60;
+      const sug0 = state.suggested && state.suggested[0];
+      const strike = sug0 ? parseFloat(sug0.strike) : price;
+      const typ = sug0 && sug0.option_type === "put" ? "put" : "call";
+      const needPct =
+        price > 0 && strike > 0
+          ? (typ === "call" ? Math.max(0, ((strike - price) / price) * 100) : Math.max(0, ((price - strike) / price) * 100))
+          : 0;
+      const atrLine1 =
+        atrAbs > 0
+          ? "ATR of " + atrAbs.toFixed(3) + " means " + sym + " moves about " + atrPct.toFixed(2) + "% per day on average (14-bar on 5m proxy)."
+          : "ATR not available — need more candles.";
+      const atrLine2 =
+        sug0 && price > 0
+          ? "Nearest suggested " + typ.toUpperCase() + " strike $" +
+            strike.toFixed(0) +
+            " — rough context: you need roughly " +
+            needPct.toFixed(2) +
+            "% underlying move from here (directionally) for that strike to matter — model with your actual delta/Greeks on OPTS."
+          : "Load OPTS for a suggested strike to contextualize required move.";
+      let ivWord = "unknown IV";
+      if (ivCheap) ivWord = "cheap";
+      else if (ivNorm) ivWord = "normal";
+      else if (ivExp) ivWord = "expensive";
+      const atrLine3 =
+        ivNow != null && isFinite(ivNow)
+          ? "With IV near " +
+            ivNow.toFixed(0) +
+            "%, buying outright is " +
+            (ivCheap ? "relatively cheap" : ivExp ? "expensive — spreads cut cost" : "in a normal band") +
+            " right now."
+          : "IV: load chain on SIGNAL/OPTS to judge cheap vs expensive.";
+
+      let atrPill = "VOL";
+      let atrPillCls = ivExp ? "warn" : ivCheap ? "bull" : "neutral";
+      let atrMeaning = atrLine1 + " " + atrLine2 + " " + atrLine3;
+      let atrHold = "Size to ATR — wider ATR = wider stops or smaller size.";
+      let atrAction = ivExp ? "Favor debit spreads or smaller outright size." : "Outright can work if setup is A+.";
+      let atrWatch = "ATR expansion on bad news — gap risk.";
+      const atrDirLine = "ATR " + atrAbs.toFixed(3) + " · " + atrPct.toFixed(2) + "% of spot.";
+
+      const cards = [
+        indCardHtml({
+          name: "ADX (14) — TREND STRENGTH",
+          val: adxVal.toFixed(1) + " / 50",
+          pill: adxPill,
+          pillCls: adxPillCls,
+          dirLine: adxDirLine,
+          barLo: "0 chop",
+          barHi: "50 max",
+          barPct: Math.min(100, (adxVal / 50) * 100),
+          barTone: a >= 25 ? "green" : "yellow",
+          measure: "ADX measures trend strength (not direction). Higher = cleaner directional tape for swing options.",
+          meaning: adxMeaning,
+          holdExit: adxHold,
+          action: adxAction,
+          actionCls: a < 25 ? "warn" : "",
+          watch: adxWatch,
+        }),
+        indCardHtml({
+          name: "MACD HISTOGRAM",
+          val: (macdH >= 0 ? "+" : "") + macdH.toFixed(4),
+          pill: macdPill,
+          pillCls: macdPillCls,
+          dirLine: macdDirLine,
+          barLo: "Bear",
+          barHi: "Bull",
+          barPct: Math.min(100, Math.max(0, 50 + macdH * 200)),
+          barTone: macdH >= 0 ? "green" : "red",
+          measure: "MACD histogram is momentum: positive = bulls leading the short cycle; negative = bears leading.",
+          meaning: macdMeaning,
+          holdExit: macdHold,
+          action: macdAction,
+          actionCls: macdH < 0 && sig.detail === "calls" ? "bear" : macdH > 0 && sig.detail === "puts" ? "bear" : "",
+          watch: macdWatch,
+        }),
+        indCardHtml({
+          name: "RSI (14)",
+          val: rsiVal.toFixed(1),
+          pill: rsiPill,
+          pillCls: rsiPillCls,
+          dirLine: rsiDirLine,
+          barLo: "0",
+          barHi: "100",
+          barPct: Math.min(100, Math.max(0, r)),
+          barTone: r > 70 ? "yellow" : r < 30 ? "cyan" : "green",
+          measure: "RSI measures how fast price has moved — high = stretched up; low = stretched down.",
+          meaning: rsiMeaning,
+          holdExit: rsiHold,
+          action: rsiAction,
+          actionCls: r > 73 || r < 30 ? "warn" : "",
+          watch: rsiWatch,
+        }),
+        indCardHtml({
+          name: "VWAP DISTANCE",
+          val: (vwapDist >= 0 ? "+" : "") + vwapDist.toFixed(2) + "%",
+          pill: vwPill,
+          pillCls: vwPillCls,
+          dirLine: vwDirLine,
+          barLo: "Below",
+          barHi: "Above",
+          barPct: vwBarPct,
+          barTone: aboveVWAP ? "green" : "red",
+          measure: "VWAP is the volume-weighted average price for the session — intraday bull/bear control line.",
+          meaning: vwMeaning,
+          holdExit: vwHold,
+          action: vwAction,
+          actionCls: justDnVwap ? "bear" : "",
+          watch: vwWatch,
+        }),
+        indCardHtml({
+          name: "BOLLINGER %B",
+          val: (bbB * 100).toFixed(0) + "%",
+          pill: bbPill,
+          pillCls: bbPillCls,
+          dirLine: bbDirLine,
+          barLo: "Lower band",
+          barHi: "Upper band",
+          barPct: Math.min(100, Math.max(0, bbB * 100)),
+          barTone: b > 0.8 ? "yellow" : b < 0.2 ? "cyan" : "green",
+          measure: "%B says where price sits inside the Bollinger envelope (20, 2σ).",
+          meaning: bbMeaning,
+          holdExit: bbHold,
+          action: bbAction,
+          actionCls: b > 0.85 ? "warn" : "",
+          watch: bbWatch,
+        }),
+        indCardHtml({
+          name: "STOCH RSI",
+          val: "K " + stK.toFixed(0) + " · D " + stD.toFixed(0),
+          pill: stPill,
+          pillCls: stPillCls,
+          dirLine: stDirLine,
+          barLo: "0",
+          barHi: "100",
+          barPct: Math.min(100, Math.max(0, stK)),
+          barTone: stK > stD ? "green" : "red",
+          measure: "Stoch RSI is RSI run through a stochastic — highlights momentum bursts and crossover reversals.",
+          meaning: stMeaning,
+          holdExit: stHold,
+          action: stAction,
+          actionCls: "",
+          watch: stWatch,
+        }),
+        indCardHtml({
+          name: "ATR + IV CONTEXT",
+          val: atrAbs > 0 ? atrAbs.toFixed(3) + " (" + atrPct.toFixed(2) + "%)" : "—",
+          pill: atrPill,
+          pillCls: atrPillCls,
+          dirLine: atrDirLine,
+          barLo: "Low vol",
+          barHi: "High vol",
+          barPct: Math.min(100, atrPct * 8),
+          barTone: atrPct > 2.5 ? "yellow" : "cyan",
+          measure: "ATR measures average true range — how far the stock typically moves per bar; paired with IV for premium cost.",
+          meaning: atrMeaning,
+          holdExit: atrHold,
+          action: atrAction,
+          actionCls: ivExp ? "warn" : "",
+          watch: atrWatch,
+        }),
+      ];
+
+      document.getElementById("indCardsWrap").innerHTML = cards.join("");
+
+      const qLeg = sug0 ? state.optionLegQuotes[sug0.symbol] || sug0 : null;
+      let thetaPer = null;
+      if (qLeg && qLeg.greeks && qLeg.greeks.theta != null) thetaPer = parseFloat(qLeg.greeks.theta) * 100;
+      else if (qLeg && qLeg.theta != null) thetaPer = parseFloat(qLeg.theta) * 100;
+      const thetaStr =
+        thetaPer != null && isFinite(thetaPer)
+          ? "Losing about $" + Math.abs(thetaPer).toFixed(2) + " per contract per day to time decay (theta × 100, sign ignored for magnitude)."
+          : "Theta: open OPTS after load — we pull live Greeks from the chain.";
+
+      const emove = price > 0 ? price * (atrPct / 100) * Math.sqrt(5) : 0;
+      const emStr =
+        atrPct > 0 && price > 0
+          ? "Rough ATR-based expected move this week (~√5 sessions): about $" + emove.toFixed(2) + " (" + ((emove / price) * 100).toFixed(2) + "%) — model, not a market quote."
+          : "Need ATR + price for expected move.";
+
+      const ivLabel = ivNow != null && isFinite(ivNow) ? ivNow.toFixed(1) + "% · " + (ivCheap ? "cheap" : ivNorm ? "normal" : "expensive") : "—";
+
+      let strat = "Load IV from chain.";
+      if (ivCheap) strat = "IV cheap = favor outright calls/puts if setup is valid.";
+      else if (ivExp) strat = "IV elevated = use debit spreads to cut premium cost.";
+      else if (ivNorm) strat = "IV normal = outright or defined-risk spreads both OK.";
+
+      let bottomLine =
+        "Bottom line: " +
+        (sig.detail === "calls"
+          ? "Bullish playbook — buy options only if VWAP + MACD agree; "
+          : sig.detail === "puts"
+            ? "Bearish playbook — puts need below-VWAP + negative MACD; "
+            : "No clean edge — shrink size until ADX and VWAP clarify; ") +
+        (ivExp ? "vol is expensive so prefer spreads. " : ivCheap ? "vol is cheap so outright can be efficient. " : "vol is in a normal band. ") +
+        "Always match size to ATR.";
+
+      document.getElementById("indPremiumCard").innerHTML = `
+        <div class="ind-premium-grid">
+          <div class="ind-prem-cell"><div class="ind-mono-7">ATM IV NOW</div><div class="pv">${esc(ivLabel)}</div><p class="ind-dm" style="margin-top:6px;">Cheap under 40% · normal 40–60% · expensive over 60%</p></div>
+          <div class="ind-prem-cell"><div class="ind-mono-7">THETA DECAY TODAY</div><div class="pv" style="font-size:0.7rem;line-height:1.35;">${esc(thetaStr)}</div></div>
+          <div class="ind-prem-cell"><div class="ind-mono-7">EXPECTED MOVE</div><div class="pv" style="font-size:0.72rem;line-height:1.3;">${esc(emStr)}</div></div>
+          <div class="ind-prem-cell"><div class="ind-mono-7">STRATEGY SIGNAL</div><div class="pv" style="font-size:0.75rem;line-height:1.35;color:var(--ind-green);">${esc(strat)}</div></div>
+        </div>
+        <div class="ind-bottomline">${esc(bottomLine)}</div>`;
+
+      let entryV = "WAIT";
+      let entryN = "ADX below 25 or mixed VWAP/MACD — wait for alignment.";
+      if (sig.detail === "calls" && adxVal >= 25 && macdH > 0 && aboveVWAP) {
+        entryV = "VALID";
+        entryN = "Call template: trend + MACD + above VWAP — edge for 1–3d debit.";
+      } else if (sig.detail === "puts" && adxVal >= 25 && macdH < 0 && !aboveVWAP) {
+        entryV = "VALID";
+        entryN = "Put template: trend + MACD + below VWAP.";
+      } else if (sig.detail === "chop" || adxVal < 20) {
+        entryV = "NO EDGE";
+        entryN = "Chop / weak ADX — directional premium is a coin flip.";
+      }
+
+      let holdV = "WATCH";
+      let holdN = "Mixed signals — trail stops, don’t add.";
+      if (sig.detail === "calls" && aboveVWAP && macdH > 0 && r < 73) {
+        holdV = "YES";
+        holdN = "Bull structure intact — OK to hold calls with a plan.";
+      } else if (sig.detail === "puts" && !aboveVWAP && macdH < 0) {
+        holdV = "YES";
+        holdN = "Bear structure intact — OK to hold puts.";
+      } else if (justDnVwap && sig.detail === "calls") {
+        holdV = "EXIT";
+        holdN = "Lost VWAP — cut or hedge long premium.";
+      }
+
+      let exitV = "VWAP + MACD";
+      let exitN = "Exit calls if price closes below VWAP on 15m or MACD crosses negative. Exit puts on reclaim + MACD positive.";
+      if (sig.detail === "puts") exitN = "Exit puts on VWAP reclaim with MACD turning positive.";
+      if (sig.detail === "chop") exitN = "Stand down — no new exits needed if flat.";
+
+      let riskV = "MEDIUM";
+      let riskN = "Normal tape risk.";
+      if (ivExp && atrPct > 2.5) {
+        riskV = "HIGH";
+        riskN = "Expensive IV + wide ATR — gaps hurt long premium.";
+      } else if (ivCheap && adxVal >= 25) {
+        riskV = "LOW";
+        riskN = "Cheaper vol + trend — defined risk still required.";
+      }
+
+      document.getElementById("indActionGridCard").innerHTML = `
+        <div class="ind-action-grid">
+          <div class="ind-ag-cell"><div class="ind-mono-7">ENTRY SIGNAL</div><div class="ag-val ${entryV === "VALID" ? "ok" : entryV === "NO EDGE" ? "no" : "mid"}">${esc(entryV)}</div><div class="ag-note">${esc(entryN)}</div></div>
+          <div class="ind-ag-cell"><div class="ind-mono-7">HOLD SIGNAL</div><div class="ag-val ${holdV === "YES" ? "ok" : holdV === "EXIT" ? "no" : "mid"}">${esc(holdV)}</div><div class="ag-note">${esc(holdN)}</div></div>
+          <div class="ind-ag-cell"><div class="ind-mono-7">EXIT TRIGGER</div><div class="ag-val mid">${esc(exitV)}</div><div class="ag-note">${esc(exitN)}</div></div>
+          <div class="ind-ag-cell"><div class="ind-mono-7">RISK LEVEL</div><div class="ag-val ${riskV === "HIGH" ? "no" : riskV === "LOW" ? "ok" : "mid"}">${esc(riskV)}</div><div class="ag-note">${esc(riskN)}</div></div>
+        </div>`;
+
+      const pack = {
+        adx: adxVal,
+        adxSlope,
+        macdH,
+        macdSlope,
+        rsi: rsiVal,
+        vwapDist,
+        bbB,
+        stochK: stK,
+        stochD: stD,
+        atr: atrAbs,
+        atrPct,
+        stage,
+        aboveVWAP,
+      };
+      const ck = overallIndCacheKey(sym, pack);
+      let ai = _overallIndCache.key === ck && Date.now() - _overallIndCache.at < 5 * 60 * 1000 ? _overallIndCache.data : null;
+      if (!ai) {
+        try {
+          ai = await fetchOverallReadingAi(sym, pack);
+          _overallIndCache = { key: ck, at: Date.now(), data: ai };
+        } catch {
+          ai = { verdict: "MIXED", summary: "AI request failed — cards above are live.", watch: "Retry in a minute." };
+        }
+      }
+      let verdict = (ai.verdict || "MIXED").toUpperCase();
+      if (!["BULLS IN CONTROL", "BEARS IN CONTROL", "MIXED", "CHOP"].includes(verdict)) {
+        if (verdict.includes("BULL")) verdict = "BULLS IN CONTROL";
+        else if (verdict.includes("BEAR")) verdict = "BEARS IN CONTROL";
+        else if (verdict.includes("CHOP")) verdict = "CHOP";
+        else verdict = "MIXED";
+      }
+      const vEl = document.getElementById("indOverallVerdict");
+      if (vEl) {
+        vEl.textContent = verdict;
+        vEl.className = "ind-verdict ind-bebas " + (verdict === "BULLS IN CONTROL" ? "bull" : verdict === "BEARS IN CONTROL" ? "bear" : verdict === "CHOP" ? "chop" : "mixed");
+      }
+      const sumEl = document.getElementById("indOverallSummary");
+      if (sumEl) sumEl.textContent = ai.summary || "—";
+      const wEl = document.getElementById("indOverallWatch");
+      if (wEl) wEl.textContent = ai.watch ? "Watch: " + ai.watch : "";
     }
 
     function renderRisk(adxVal, ivRankish, tfN, rsiVal, chop) {
+      const rc = document.getElementById("riskCard");
+      if (!rc) return;
       const rsiZone = rsiVal > 70 ? 90 : rsiVal < 30 ? 90 : 40;
       const rows = [
         {
@@ -2195,7 +2983,7 @@
           ctx: chop > 50 ? "Whipsaw index elevated — tight stops get picked off; widen plan or sit out." : "Cleaner two-sided trade — standard stops more viable.",
         },
       ];
-      document.getElementById("riskCard").innerHTML = rows
+      rc.innerHTML = rows
         .map(
           (r) => `<div class="ind-panel">
         <div class="ind-head"><span class="ind-title">${r.name}</span></div>
@@ -2433,7 +3221,6 @@
       document.getElementById("actStay").textContent = ac.stay;
       renderPlayRadar(sym, sig, ac);
 
-      renderInds(adxVal, macdH, rsiVal, bbB, vwapDist);
       renderSignalSnapshotBars(adxVal, macdH, rsiVal, bbB, vwapDist);
 
       await Promise.all([loadOptionsForSignal(sym, price, sig), fetchTickerIntel(sym)]);
@@ -2452,6 +3239,19 @@
           if (localStorage.getItem("sohel_autoSpeak") === "1") speakTradeBrief();
         } catch (e) { /* noop */ }
       }
+
+      await renderInterpretedIndicatorsPage({
+        sym,
+        c5,
+        adxVal,
+        macdH,
+        rsiVal,
+        bbB,
+        vwapDist,
+        vwap,
+        price,
+        sig,
+      });
     }
 
     function dteDays(exp) {
@@ -2472,14 +3272,17 @@
         pick = expList.find((e) => dteDays(e) >= 3) || expList[0];
       }
       state.chainExpiry = pick;
-      document.getElementById("iv4").textContent = pick || "—";
+      const iv4el = document.getElementById("iv4");
+      if (iv4el) iv4el.textContent = pick || "—";
 
       if (!pick) {
         state.suggested = [];
         state.ivAtm = null;
-        document.getElementById("stIv").textContent = "—";
+        const stIvEl = document.getElementById("stIv");
+        if (stIvEl) stIvEl.textContent = "—";
         updateHeroIvHint();
-        document.getElementById("ivNeedle").style.transform = "rotate(-90deg)";
+        const needle0 = document.getElementById("ivNeedle");
+        if (needle0) needle0.style.transform = "rotate(-90deg)";
         updateIvContextLine(null);
         document.getElementById("suggestedWrap").innerHTML = `<div class="card muted">No expirations returned.</div>`;
         document.querySelector("#chainTable tbody").innerHTML = "";
@@ -2527,16 +3330,21 @@
       const delt = ref?.greeks?.delta != null ? parseFloat(ref.greeks.delta) : parseFloat(ref?.delta || 0);
       state.ivAtm = ivAtm >= 1 ? { iv: ivAtm, delta: delt } : null;
 
-      document.getElementById("stIv").textContent = ivAtm >= 1 ? ivAtm.toFixed(1) + "%" : "—";
+      const stIvEl2 = document.getElementById("stIv");
+      if (stIvEl2) stIvEl2.textContent = ivAtm >= 1 ? ivAtm.toFixed(1) + "%" : "—";
       updateHeroIvHint();
-      document.getElementById("iv1").textContent = ivAtm >= 1 ? ivAtm.toFixed(1) + "%" : "—";
-      document.getElementById("iv2").textContent = isFinite(delt) ? delt.toFixed(2) : "—";
+      const iv1el = document.getElementById("iv1");
+      if (iv1el) iv1el.textContent = ivAtm >= 1 ? ivAtm.toFixed(1) + "%" : "—";
+      const iv2el = document.getElementById("iv2");
+      if (iv2el) iv2el.textContent = isFinite(delt) ? delt.toFixed(2) : "—";
       const qual = ivAtm >= 1 ? (ivAtm < 35 ? "CHEAP" : ivAtm < 55 ? "FAIR" : "EXP") : "—";
-      document.getElementById("iv3").textContent = qual;
-      document.getElementById("ivGaugeLabel").textContent = "ATM IV " + (ivAtm >= 1 ? ivAtm.toFixed(0) + "%" : "—");
+      const iv3el = document.getElementById("iv3");
+      if (iv3el) iv3el.textContent = qual;
+      const ivGl = document.getElementById("ivGaugeLabel");
+      if (ivGl) ivGl.textContent = "ATM IV " + (ivAtm >= 1 ? ivAtm.toFixed(0) + "%" : "—");
       const needle = document.getElementById("ivNeedle");
       const ang = ivAtm >= 1 ? -90 + Math.min(180, (ivAtm / 100) * 180) : -90;
-      needle.style.transform = "rotate(" + ang + "deg)";
+      if (needle) needle.style.transform = "rotate(" + ang + "deg)";
       updateIvContextLine(state.ivAtm);
 
       const sug = [];
@@ -2578,6 +3386,7 @@
       if (dot) dot.className = "dot " + st;
       if (tx) tx.textContent = desc;
       if (pill) pill.className = "pill-mkt " + st;
+      state.marketOpen = st === "open" || st === "ext";
     }
 
     async function loadBalances() {
