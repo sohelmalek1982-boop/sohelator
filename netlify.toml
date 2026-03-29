@@ -20,6 +20,9 @@
 [functions."scan-weekend"]
   timeout = 60
 
+[functions."scan-now"]
+  timeout = 60
+
 [[redirects]]
   from = "/api/tradier"
   to = "/.netlify/functions/tradier"
