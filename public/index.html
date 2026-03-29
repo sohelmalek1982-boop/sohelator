@@ -807,6 +807,67 @@
       position: sticky; bottom: 0; z-index: 6; margin-top: 16px; padding: 12px 0 8px;
       background: linear-gradient(180deg, transparent, rgba(8,11,15,0.97) 30%);
     }
+    #page-5.scan-tab-root { transition: opacity 0.35s ease; }
+    #page-5.scan-tab-root.scan-refresh-pulse { animation: scanFadePulse 0.6s ease; }
+    @keyframes scanFadePulse {
+      0% { opacity: 0.92; }
+      100% { opacity: 1; }
+    }
+    .scan-status-bar {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+      padding: 10px 12px; border-radius: var(--radius-md);
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border2);
+      margin-bottom: 14px;
+      font-family: var(--font-data);
+      font-size: 0.65rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .scan-status-bar .sb-seg {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 8px; border-radius: 8px;
+      background: rgba(0, 229, 255, 0.06);
+      border: 1px solid rgba(0, 229, 255, 0.12);
+      color: var(--text);
+      font-weight: 600;
+    }
+    .scan-status-bar .sb-val { color: var(--cyan); font-weight: 700; }
+    .scan-dot-live {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+      box-shadow: 0 0 10px var(--green);
+      animation: liveDotPulse 1.8s ease-in-out infinite;
+    }
+    .scan-dot-off { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); opacity: 0.5; }
+    .scan-chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 12px; }
+    .scan-chip {
+      font-family: var(--font-data); font-size: 0.62rem; padding: 5px 10px; border-radius: 980px;
+      border: 1px solid var(--border2); background: rgba(0, 0, 0, 0.35); color: var(--cyan);
+    }
+    .scan-chip.gex { border-color: rgba(168, 85, 247, 0.35); color: #c4a5f5; }
+    .scan-chip.regime { border-color: rgba(0, 255, 135, 0.25); color: var(--green); }
+    .scan-mb-body { font-family: var(--font-body); font-size: 14px; line-height: 1.7; color: var(--text); white-space: pre-wrap; }
+    .scan-watch-chip { display: inline-block; margin: 3px 4px 3px 0; padding: 4px 10px; border-radius: 8px; font-family: var(--font-data); font-size: 0.68rem; }
+    .scan-watch-chip.bull { background: rgba(0, 255, 135, 0.1); border: 1px solid rgba(0, 255, 135, 0.35); color: var(--green); }
+    .scan-watch-chip.bear { background: rgba(255, 59, 92, 0.1); border: 1px solid rgba(255, 59, 92, 0.35); color: var(--red); }
+    .scan-watch-chip.avoid { text-decoration: line-through; opacity: 0.7; background: rgba(74, 96, 112, 0.2); border: 1px solid var(--border); color: var(--muted); }
+    .scan-eod-grade {
+      font-family: var(--font-bebas); font-size: 3rem; line-height: 1; letter-spacing: 0.06em;
+      color: var(--accent); text-shadow: 0 0 24px rgba(0, 229, 255, 0.25);
+    }
+    .scan-suggestion-box {
+      margin-top: 14px; padding: 12px 14px; border-radius: var(--radius-md);
+      border: 1px solid rgba(0, 229, 255, 0.45);
+      background: rgba(0, 229, 255, 0.06);
+      font-size: 0.82rem; line-height: 1.55;
+    }
+    .scan-alert-row {
+      padding: 10px 12px; border-radius: var(--radius-md); margin-bottom: 8px;
+      background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border2);
+      font-size: 0.78rem;
+    }
+    #scanFooterUpdated { font-family: var(--font-data); font-size: 8px; color: var(--muted); letter-spacing: 0.12em; text-align: center; margin-top: 18px; padding-bottom: 8px; }
 
     .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
     .stat-cell {
@@ -1557,53 +1618,54 @@
         <div id="subWl" style="display:none;"></div>
       </section>
 
-      <!-- 5 SCAN -->
-      <section class="page" id="page-5">
-        <h2 class="section">Ignition history (loaded ticker)</h2>
-        <div class="card" id="ignitionHistoryScan" style="background:var(--bg3);border-color:var(--border2);font-size:0.78rem;line-height:1.55;">
-          <span class="muted">Load a ticker on SIGNAL — last 5 ignition states appear here.</span>
+      <!-- 5 SCAN — read-only intelligence feed -->
+      <section class="page scan-tab-root" id="page-5">
+        <div class="scan-status-bar" id="scanStatusBar" aria-label="Today status">
+          <span class="sb-seg"><span id="scanMktDot" class="scan-dot-off" aria-hidden="true"></span><span id="scanMktPill">—</span></span>
+          <span class="sb-seg">LAST SCAN <span class="sb-val" id="scanLastScan">—</span></span>
+          <span class="sb-seg">NEXT <span class="sb-val" id="scanNextScan">—</span></span>
+          <span class="sb-seg">SIGNALS TODAY <span class="sb-val" id="scanSignalsToday">—</span></span>
+          <span class="sb-seg">WIN RATE <span class="sb-val" id="scanWinRate">—</span></span>
         </div>
-        <h2 class="section">Morning brief</h2>
+
+        <h2 class="section">9:25 morning brief</h2>
         <div class="card brief-card-glow" id="morningBriefCard" style="background:var(--bg3);">
-          <div class="font-mono" style="font-size:0.7rem;color:var(--muted);margin-bottom:8px;" id="mbDate">—</div>
-          <div id="mbContext" class="muted" style="font-size:0.8rem;margin-bottom:10px;">Loading scan data…</div>
-          <div id="mbGexFlow" class="muted" style="font-size:0.72rem;margin-bottom:8px;line-height:1.45;"></div>
-          <div id="mbBody" style="font-size:0.85rem;line-height:1.55;max-height:220px;overflow-y:auto;"></div>
-          <div id="mbWatch" style="margin-top:12px;font-size:0.75rem;"></div>
-          <button type="button" class="btn-go" id="btnLoadBestPlay" style="margin-top:10px;display:none;">LOAD BEST PLAY</button>
+          <div class="font-mono" style="font-size:0.7rem;color:var(--muted);margin-bottom:4px;" id="mbTitle">9:25 MORNING BRIEF</div>
+          <div class="font-mono" style="font-size:0.65rem;color:var(--accent);margin-bottom:10px;" id="mbSubtitle">—</div>
+          <div id="mbYesterdayBanner" style="display:none;font-size:0.72rem;color:var(--muted);margin-bottom:8px;" class="muted"></div>
+          <div id="mbChipsRow" class="scan-chip-row"></div>
+          <div id="mbBody" class="scan-mb-body"></div>
+          <div id="mbWatch" style="margin-top:14px;"></div>
         </div>
+
         <h2 class="section">9:55 opening range</h2>
         <div class="card" id="openingRangeCard" style="background:var(--bg3);border-color:var(--border2);">
-          <div id="orBody" class="muted" style="font-size:0.8rem;">—</div>
+          <div id="orSummary" class="muted" style="font-size:0.8rem;margin-bottom:10px;">—</div>
+          <div id="orBody"></div>
         </div>
-        <h2 class="section">Scanner status</h2>
-        <div class="card" id="scannerStatusCard">
-          <div class="grid-3">
-            <div class="stat-cell"><div class="label">Last scan</div><div class="val" id="scLast">—</div></div>
-            <div class="stat-cell"><div class="label">Tickers</div><div class="val" id="scTickers">—</div></div>
-            <div class="stat-cell"><div class="label">Setups</div><div class="val" id="scSetups">—</div></div>
-          </div>
-          <p class="muted" style="margin-top:12px;font-size:0.75rem;" id="scNext">Next scan: every 5 min (Mon–Fri, 9:30–4pm ET)</p>
+
+        <h2 class="section">What to watch</h2>
+        <div class="card" id="whatToWatchCard" style="background:var(--bg3);border-color:var(--border2);">
+          <div class="font-mono" style="font-size:0.7rem;color:var(--muted);margin-bottom:8px;">WHAT TO WATCH RIGHT NOW</div>
+          <ul id="whatToWatchList" style="margin:0;padding-left:18px;font-family:var(--font-body);font-size:0.88rem;line-height:1.65;color:var(--text);"></ul>
+          <p id="whatToWatchFallback" class="muted" style="font-size:0.82rem;line-height:1.6;margin-top:8px;display:none;"></p>
         </div>
-        <h2 class="section">Intraday signals</h2>
-        <div id="liveAlertsWrap" class="muted">No pending alerts. Polling every 30s…</div>
-        <h2 class="section">Today&apos;s performance</h2>
-        <div class="card" id="eodCard" style="display:none;background:var(--bg3);border-color:var(--border2);">
+
+        <h2 class="section">Today&apos;s alerts</h2>
+        <div id="scanAlertsFeed" class="muted" style="font-size:0.8rem;">—</div>
+
+        <h2 class="section">Today&apos;s performance review</h2>
+        <div class="card" id="eodCard" style="background:var(--bg3);border-color:var(--border2);">
           <div id="eodBody" class="muted" style="font-size:0.8rem;">—</div>
         </div>
-        <h2 class="section">System performance</h2>
-        <div class="card" id="runningStatsCard" style="background:var(--bg3);border-color:var(--border2);">
-          <div id="runStatsBody" class="muted" style="font-size:0.8rem;">—</div>
+
+        <h2 class="section">Learning log</h2>
+        <div class="card" id="scanLearningLogCard" style="background:var(--bg3);border-color:var(--border2);">
+          <div class="font-mono" style="font-size:0.65rem;color:var(--muted);margin-bottom:8px;">LAST 7 SESSIONS</div>
+          <div id="scanLearningLogWrap" class="muted" style="font-size:0.78rem;">Loading…</div>
         </div>
-        <h2 class="section">Learning log (EOD)</h2>
-        <div class="card" id="learningTimelineCard" style="background:var(--bg3);border-color:var(--border2);">
-          <div id="learningTimelineWrap" class="muted" style="font-size:0.8rem;">Loading…</div>
-        </div>
-        <h2 class="section">Scan history</h2>
-        <div id="scanHistoryWrap" class="muted">—</div>
-        <div class="scan-sticky-bar">
-          <button type="button" class="big-btn call scan-run-now" id="btnScanNow">RUN SCAN NOW</button>
-        </div>
+
+        <p id="scanFooterUpdated" style="font-family:var(--font-data);font-size:8px;color:var(--muted);letter-spacing:0.12em;text-align:center;margin-top:18px;padding-bottom:12px;">—</p>
       </section>
 
       <!-- 6 GUIDE -->
@@ -1612,8 +1674,8 @@
         <div id="guideCards"></div>
         <h2 class="section" style="margin-top:20px;">AI &amp; learning</h2>
         <div class="card" style="margin-bottom:12px;">
-          <button type="button" class="big-btn call" id="btnWhatsScanning" style="margin-top:0;padding:12px;font-size:0.9rem;">What&apos;s the scanner finding?</button>
-          <p class="muted" style="margin-top:10px;font-size:0.75rem;">Runs a live scan (same as SCAN NOW). Check the SCAN tab for results.</p>
+          <button type="button" class="big-btn call" id="btnWhatsScanning" style="margin-top:0;padding:12px;font-size:0.9rem;">Open intelligence feed</button>
+          <p class="muted" style="margin-top:10px;font-size:0.75rem;">Read-only: morning brief, opening range, alerts, and EOD on the SCAN tab (auto-updates).</p>
         </div>
         <h2 class="section">Learning log</h2>
         <div id="learningLogWrap" class="muted" style="font-size:0.8rem;">Loading…</div>
@@ -1699,6 +1761,9 @@
       lastScanMeta: null,
       bannerTicker: null,
       scanData: null,
+      scanAlertCountToday: null,
+      scanContentHash: "",
+      scanUpdatedAt: null,
       activeStage: "chop",
       masterIntel: null,
       optionLegQuotes: {},
@@ -4722,38 +4787,24 @@
 
     function updateScannerStatus() {
       const m = state.lastScanMeta;
-      document.getElementById("scLast").textContent = m?.timestamp
-        ? new Date(m.timestamp).toLocaleString()
-        : "—";
-      const n = m?.tickersScanned?.length ?? m?.tickersScanned;
-      document.getElementById("scTickers").textContent =
-        typeof n === "number" ? String(n) : Array.isArray(n) ? String(n.length) : "—";
-      const sf = m?.setupsFound;
-      document.getElementById("scSetups").textContent = Array.isArray(sf)
-        ? String(sf.length)
-        : "—";
+      const el = document.getElementById("scanLastScan");
+      if (el && m?.timestamp) {
+        el.textContent =
+          new Date(m.timestamp).toLocaleTimeString("en-US", {
+            timeZone: "America/New_York",
+            hour: "numeric",
+            minute: "2-digit",
+          }) + " ✓";
+      }
     }
 
     function renderHistory(rows) {
-      const el = document.getElementById("scanHistoryWrap");
-      if (!rows || !rows.length) {
-        el.innerHTML = '<span class="muted">No history yet.</span>';
-        return;
-      }
-      el.innerHTML = rows
-        .map(
-          (r) =>
-            `<div class="card" style="padding:10px;margin-bottom:8px;font-size:0.8rem;">
-            <strong>${r.ticker}</strong> · ${r.setupType} · score ${r.score}
-            <div class="muted" style="margin-top:4px;">${r.outcome != null ? "Outcome: " + (typeof r.outcome === "object" ? r.outcome.pnlPct + "%" : r.outcome) : "—"}</div>
-            <div class="muted" style="font-size:0.7rem;">${r.timestamp ? new Date(r.timestamp).toLocaleString() : ""}</div>
-          </div>`
-        )
-        .join("");
+      void rows;
     }
 
     function renderLiveAlerts() {
       const el = document.getElementById("liveAlertsWrap");
+      if (!el) return;
       if (!state.liveFeed.length) {
         el.innerHTML = '<span class="muted">No alerts in this session yet.</span>';
         return;
@@ -4817,8 +4868,9 @@
     }
 
     async function loadLearningPanels() {
-      const tw = document.getElementById("learningTimelineWrap");
-      if (!tw) return;
+      const sl = document.getElementById("scanLearningLogWrap");
+      const si = document.getElementById("systemInsightsWrap");
+      if (!sl && !si) return;
       try {
         const [logR, patR, impR] = await Promise.all([
           fetch("/api/memory-data?type=learning-log"),
@@ -4828,7 +4880,7 @@
         const log = await logR.json();
         const pat = await patR.json();
         const imp = await impR.json();
-        const reviews = (log.reviews || []).slice(0, 14);
+        const reviews = (log.reviews || []).slice(0, 7);
         const escL = (s) =>
           String(s ?? "")
             .replace(/&/g, "&amp;")
@@ -4880,67 +4932,55 @@
               .sort((a, b) => b.winRate - a.winRate)[0]
           : null;
         const sug3 = (imp && imp.suggestions ? imp.suggestions : []).slice(0, 3);
-        tw.innerHTML =
-          '<div style="font-size:0.72rem;color:var(--accent);margin-bottom:10px;">Last 14 EOD reviews</div>' +
-          reviews
-            .map((r) => {
-              const gr =
-                r.gradeLetter ||
-                (String(r.claudeAnalysis || "").match(
-                  /Grade[:\s]+([A-F][+-]?)/i
-                ) || [])[1] ||
-                "—";
-              const topSug =
-                r.improvementSuggestions && r.improvementSuggestions[0];
-              const sug = topSug ? topSug.reason || topSug.component : "—";
-              return (
-                '<div class="card" style="margin-bottom:8px;padding:10px;background:var(--bg2);font-size:0.78rem;line-height:1.5;border-color:var(--border2);">' +
-                "<strong>" +
-                escL(r.date) +
-                "</strong> · WR " +
-                (r.winRate != null ? r.winRate + "%" : "—") +
-                " · " +
-                (r.snapshotCount != null ? r.snapshotCount : r.totalCalls ?? "—") +
-                " signals · Grade " +
-                escL(gr) +
-                '<br/><span class="muted">' +
-                escL(sug).slice(0, 220) +
-                (String(sug).length > 220 ? "…" : "") +
-                "</span></div>"
-              );
-            })
-            .join("") +
-          '<div style="margin-top:14px;font-size:0.72rem;color:var(--accent);">All-time stats (pattern memory)</div>' +
-          '<div class="muted" style="margin-top:8px;font-size:0.78rem;line-height:1.55;">' +
-          "Overall (bucketed): " +
-          (overall != null ? overall + "%" : "—") +
-          "<br/>" +
-          "Best ignition bucket: " +
-          (topIg ? escL(topIg.name) + " " + topIg.winRate + "%" : "—") +
-          "<br/>" +
-          "Weakest ignition bucket: " +
-          (worstIg ? escL(worstIg.name) + " " + worstIg.winRate + "%" : "—") +
-          "<br/>" +
-          "Best time window: " +
-          (timeWin ? escL(timeWin.name) + " " + timeWin.winRate + "%" : "—") +
-          "<br/>" +
-          "Best ticker (history): " +
-          (tickBest ? escL(tickBest.name) + " " + tickBest.winRate + "%" : "—") +
-          "<br/><br/><strong>Top improvement ideas</strong><br/>" +
-          (sug3.length
-            ? sug3
-                .map(
-                  (s) =>
-                    "• " +
-                    escL(s.component) +
-                    " — " +
-                    escL(s.reason).slice(0, 160) +
-                    (String(s.reason).length > 160 ? "…" : "")
-                )
-                .join("<br/>")
-            : "No suggestions stored yet — run EOD with snapshots.") +
-          "</div>";
-        const si = document.getElementById("systemInsightsWrap");
+        if (sl) {
+          if (!reviews.length) {
+            sl.innerHTML =
+              '<span class="muted">No EOD history in blob yet.</span>';
+          } else {
+          sl.innerHTML =
+            reviews
+              .map((r) => {
+                const gr =
+                  r.gradeLetter ||
+                  (String(r.claudeAnalysis || "").match(
+                    /Grade[:\s]+([A-F][+-]?)/i
+                  ) || [])[1] ||
+                  "—";
+                const insight =
+                  String(r.claudeAnalysis || "")
+                    .split(/\n/)
+                    .map((x) => x.trim())
+                    .find((x) => x.length > 24) || "—";
+                return (
+                  '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);font-size:0.78rem;line-height:1.5;">' +
+                  "<strong>" +
+                  escL(r.date) +
+                  "</strong> · Grade " +
+                  escL(gr) +
+                  " · WR " +
+                  (r.winRate != null ? r.winRate + "%" : "—") +
+                  " · " +
+                  (r.snapshotCount != null ? r.snapshotCount : r.totalCalls ?? "—") +
+                  " sig<br/><span class=\"muted\">" +
+                  escL(insight).slice(0, 200) +
+                  (String(insight).length > 200 ? "…" : "") +
+                  "</span></div>"
+                );
+              })
+              .join("") +
+            '<div style="margin-top:14px;font-size:0.72rem;color:var(--accent);">Pattern memory</div>' +
+            '<div class="muted" style="margin-top:8px;font-size:0.75rem;line-height:1.55;">' +
+            "Overall (bucketed): " +
+            (overall != null ? overall + "%" : "—") +
+            " · Best ignition: " +
+            (topIg ? escL(topIg.name) + " " + topIg.winRate + "%" : "—") +
+            "<br/>Top ideas: " +
+            (sug3.length
+              ? sug3.map((s) => escL(s.component)).join(" · ")
+              : "—") +
+            "</div>";
+          }
+        }
         if (si && imp && imp.suggestions && imp.suggestions.length) {
           si.innerHTML = imp.suggestions
             .map(
@@ -4959,8 +4999,195 @@
             '<span class="muted">No improvement suggestions yet — EOD will populate after snapshots exist.</span>';
         }
       } catch {
-        tw.innerHTML =
-          '<span class="muted">Could not load learning / pattern data.</span>';
+        if (sl)
+          sl.innerHTML =
+            '<span class="muted">Could not load learning / pattern data.</span>';
+      }
+    }
+
+    function scanNyParts() {
+      const p = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        weekday: "short",
+        hour: "numeric",
+        minute: "numeric",
+        hour12: true,
+      }).formatToParts(new Date());
+      const wd = p.find((x) => x.type === "weekday")?.value || "";
+      const hour = +(+p.find((x) => x.type === "hour").value);
+      const isDay = (p.find((x) => x.type === "dayPeriod") || {}).value === "AM" ? "AM" : "PM";
+      const min = +p.find((x) => x.type === "minute").value;
+      return { wd, hour, min, isDay };
+    }
+
+    function scanIsWeekendNY() {
+      const { wd } = scanNyParts();
+      return wd === "Sat" || wd === "Sun";
+    }
+
+    function scanIsMarketOpenNY() {
+      if (scanIsWeekendNY()) return false;
+      const p = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "numeric",
+        hour12: false,
+      }).formatToParts(new Date());
+      const h = +p.find((x) => x.type === "hour").value;
+      const m = +p.find((x) => x.type === "minute").value;
+      const t = h * 60 + m;
+      return t >= 9 * 60 + 30 && t < 16 * 60;
+    }
+
+    function scanNyLongDate() {
+      return new Date().toLocaleDateString("en-US", {
+        timeZone: "America/New_York",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+
+    function scanIsSameNyDay(ts) {
+      if (!ts) return false;
+      const a = new Date(ts).toLocaleDateString("en-US", { timeZone: "America/New_York" });
+      const b = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
+      return a === b;
+    }
+
+    function scanNextScanLabel() {
+      const wd = new Date().toLocaleDateString("en-US", {
+        timeZone: "America/New_York",
+        weekday: "short",
+      });
+      if (wd === "Sat" || wd === "Sun") return "Mon 9:25am";
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "numeric",
+        hour12: false,
+      }).formatToParts(new Date());
+      const h = +parts.find((x) => x.type === "hour").value;
+      const min = +parts.find((x) => x.type === "minute").value;
+      const t = h * 60 + min;
+      if (t < 9 * 60 + 25) return "9:25am";
+      if (t < 9 * 60 + 55) return "9:55am";
+      if (t < 16 * 60 + 5) return "4:05pm";
+      return "Tomorrow 9:25am";
+    }
+
+    function scanExtractWatchBullets(s925, s955, regimeFallback) {
+      const raw = [s925?.claudeAnalysis, s955?.claudeAnalysis].filter(Boolean).join("\n\n");
+      const lines = raw.split(/\r?\n/);
+      const bullets = [];
+      const re = /^\s*(?:[-•*]|\d+\.)\s+(.+)$/;
+      for (const line of lines) {
+        const m = line.match(re);
+        if (m && m[1].trim().length > 8) bullets.push(m[1].trim());
+        if (bullets.length >= 8) break;
+      }
+      if (bullets.length >= 3) return bullets.slice(0, 5);
+      const fallback = regimeFallback || "Regime context is loading — check SIGNAL for live reads.";
+      return [fallback, bullets[0], bullets[1]].filter(Boolean).slice(0, 5);
+    }
+
+    function scanParseEst(text, sym) {
+      if (!text || !sym) return { entry: "", stop: "", target: "" };
+      const idx = text.indexOf(sym);
+      if (idx < 0) return { entry: "", stop: "", target: "" };
+      const block = text.slice(idx, idx + 1200);
+      const g = (pat) => {
+        const m = block.match(pat);
+        return m ? m[1].trim().slice(0, 120) : "";
+      };
+      return {
+        entry: g(/entry[:\s]+([^\n]+)/i),
+        stop: g(/stop[:\s]+([^\n]+)/i),
+        target: g(/target[:\s]+([^\n]+)/i),
+      };
+    }
+
+    async function pollScanAlertsFeed() {
+      const host = document.getElementById("scanAlertsFeed");
+      if (!host) return;
+      try {
+        const r = await fetch("/api/alert-tracker");
+        const d = await r.json();
+        const alerts = (d.alerts || []).filter((a) => scanIsSameNyDay(a.timestamp));
+        state.scanAlertCountToday = alerts.length;
+        alerts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        if (!alerts.length) {
+          host.innerHTML =
+            '<span class="muted">No signals fired yet today.<br/>Scanner watches the market on schedule.</span>';
+          return;
+        }
+        const open = scanIsMarketOpenNY();
+        host.innerHTML = alerts
+          .map((a) => {
+            const o = a.option || {};
+            const typ = (o.optType || a.direction || "call").toString().toLowerCase().includes("put") ? "PUT" : "CALL";
+            const line =
+              "BUY " +
+              (a.ticker || "").toUpperCase() +
+              " $" +
+              (o.strike != null ? o.strike : "—") +
+              typ +
+              "";
+            const t = a.timestamp
+              ? new Date(a.timestamp).toLocaleTimeString("en-US", {
+                  timeZone: "America/New_York",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })
+              : "—";
+            const tier = a.urgencyTier || "—";
+            const pnl =
+              a.realOptionPnlPct != null
+                ? a.realOptionPnlPct
+                : a.estimatedOptionPnlPct != null
+                  ? a.estimatedOptionPnlPct
+                  : null;
+            const pnlStr =
+              open && pnl != null && isFinite(pnl)
+                ? (pnl >= 0 ? "+" : "") + pnl.toFixed(1) + "% opt"
+                : !open
+                  ? " — "
+                  : "";
+            const act = a.recommendedAction || a.recommendedMeta?.action || "—";
+            return (
+              '<div class="scan-alert-row">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">' +
+              '<span class="font-mono" style="font-size:0.7rem;color:var(--muted);">' +
+              esc(t) +
+              "</span>" +
+              '<span style="font-size:0.65rem;padding:2px 8px;border-radius:6px;border:1px solid var(--border2);">' +
+              esc(tier) +
+              "</span>" +
+              '<span style="font-weight:700;">' +
+              esc((a.ticker || "").toUpperCase()) +
+              "</span>" +
+              '<span class="muted">' +
+              esc(typ) +
+              "</span>" +
+              "</div>" +
+              '<div style="margin-top:6px;font-weight:600;">' +
+              esc(line) +
+              "</div>" +
+              '<div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">' +
+              '<span class="muted" style="font-size:0.72rem;">' +
+              esc(pnlStr) +
+              "</span>" +
+              '<span style="font-size:0.65rem;padding:4px 10px;border-radius:8px;background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.25);">' +
+              esc(act) +
+              "</span>" +
+              "</div>" +
+              "</div>"
+            );
+          })
+          .join("");
+      } catch {
+        state.scanAlertCountToday = 0;
+        host.innerHTML = '<span class="muted">Alerts feed unavailable.</span>';
       }
     }
 
@@ -4969,8 +5196,26 @@
         const r = await fetch("/api/scan-data");
         const d = await r.json();
         state.scanData = d;
+        const sig = JSON.stringify({
+          t: d.scan925?.timestamp,
+          e: d.eodLatest?.timestamp,
+          n: d.scan955?.timestamp,
+        });
+        if (state.scanContentHash && state.scanContentHash !== sig) {
+          const root = document.getElementById("page-5");
+          if (root) {
+            root.classList.remove("scan-refresh-pulse");
+            void root.offsetWidth;
+            root.classList.add("scan-refresh-pulse");
+          }
+        }
+        state.scanContentHash = sig;
+        await pollScanAlertsFeed();
         renderScanDashboard(d);
         await loadLearningPanels();
+        state.scanUpdatedAt = Date.now();
+        const fu = document.getElementById("scanFooterUpdated");
+        if (fu) fu.textContent = "Updated just now";
       } catch {
         /* offline */
       }
@@ -4981,139 +5226,283 @@
       const s955 = d.scan955;
       const eod = d.eodLatest;
       const run = d.runningStats;
-      const mbDate = document.getElementById("mbDate");
-      const mbCtx = document.getElementById("mbContext");
-      const mbGexFlow = document.getElementById("mbGexFlow");
+      const m = state.lastScanMeta;
+      const todayStr = scanNyLongDate();
+
+      const dot = document.getElementById("scanMktDot");
+      const pill = document.getElementById("scanMktPill");
+      if (dot && pill) {
+        if (scanIsMarketOpenNY()) {
+          dot.className = "scan-dot-live";
+          pill.textContent = "MARKET OPEN";
+        } else {
+          dot.className = "scan-dot-off";
+          pill.textContent = "MARKET CLOSED";
+        }
+      }
+
+      const lastScanEl = document.getElementById("scanLastScan");
+      if (lastScanEl) {
+        lastScanEl.textContent = m?.timestamp
+          ? new Date(m.timestamp).toLocaleTimeString("en-US", {
+              timeZone: "America/New_York",
+              hour: "numeric",
+              minute: "2-digit",
+            }) + " ✓"
+          : "—";
+      }
+      const nextEl = document.getElementById("scanNextScan");
+      if (nextEl) nextEl.textContent = scanNextScanLabel();
+
+      const sigEl = document.getElementById("scanSignalsToday");
+      if (sigEl) {
+        sigEl.textContent =
+          state.scanAlertCountToday != null ? String(state.scanAlertCountToday) : "—";
+      }
+
+      const wrEl = document.getElementById("scanWinRate");
+      if (wrEl) {
+        const eodToday = eod && eod.date === todayStr;
+        wrEl.textContent =
+          eod && eod.winRate != null && eodToday
+            ? eod.winRate + "%"
+            : run?.winRateHistory?.length
+              ? run.winRateHistory[run.winRateHistory.length - 1].winRate + "% (30d run)"
+              : "—";
+      }
+
+      const mbTitle = document.getElementById("mbTitle");
+      const mbSub = document.getElementById("mbSubtitle");
+      const mbBanner = document.getElementById("mbYesterdayBanner");
+      const mbChips = document.getElementById("mbChipsRow");
       const mbBody = document.getElementById("mbBody");
       const mbWatch = document.getElementById("mbWatch");
-      const btnBest = document.getElementById("btnLoadBestPlay");
+
       if (s925) {
-        mbDate.textContent = (s925.date || "") + " · 9:25 pre-market";
-        const mc = s925.marketContext || {};
-        mbCtx.innerHTML =
-          "VIX " +
-          (mc.vix != null ? mc.vix.toFixed(2) : "—") +
-          " · SPY " +
-          (mc.spyPct != null ? (mc.spyPct >= 0 ? "+" : "") + mc.spyPct.toFixed(2) : "—") +
-          "% · QQQ " +
-          (mc.qqqPct != null ? (mc.qqqPct >= 0 ? "+" : "") + mc.qqqPct.toFixed(2) : "—") +
-          "% · " +
-          (mc.sentiment || "—");
-        mbBody.textContent = s925.claudeAnalysis || "";
-        const g = s925.gexSpy;
-        const snap = (s925.masterSnapshots || []).find(
-          (x) => x.ok && x.data && x.data.optionsFlow
-        );
-        const flowB = snap?.data?.optionsFlow?.smartMoneyBias;
-        if (g || flowB) {
-          mbGexFlow.innerHTML =
-            (g
-              ? "<strong>GEX (SPY)</strong> " +
-                (g.gexRegime || "") +
-                " · " +
-                String(g.interpretation || "").slice(0, 120) +
-                (String(g.interpretation || "").length > 120 ? "…" : "")
-              : "") +
-            (flowB
-              ? (g ? "<br>" : "") +
-                "<strong>Flow bias</strong> " +
-                flowB +
-                (snap?.data?.ticker ? " · " + snap.data.ticker : "")
-              : "");
-        } else {
-          mbGexFlow.textContent = "";
+        if (mbTitle) mbTitle.textContent = "9:25 MORNING BRIEF";
+        const sent = s925.timestamp
+          ? new Date(s925.timestamp).toLocaleString("en-US", {
+              timeZone: "America/New_York",
+              hour: "numeric",
+              minute: "2-digit",
+            })
+          : "—";
+        if (mbSub) mbSub.textContent = (s925.date || todayStr) + " · Sent " + sent;
+        const isStale = s925.date && s925.date !== todayStr;
+        if (mbBanner) {
+          if (scanIsWeekendNY() || isStale) {
+            mbBanner.style.display = "block";
+            mbBanner.textContent = scanIsWeekendNY()
+              ? "LAST TRADING DAY — weekend mode"
+              : "YESTERDAY — brief arriving at 9:25am";
+          } else {
+            mbBanner.style.display = "none";
+            mbBanner.textContent = "";
+          }
         }
+        const mc = s925.marketContext || {};
+        const g = s925.gexSpy;
+        if (mbChips) {
+          mbChips.innerHTML = [
+            `<span class="scan-chip">SPY ${mc.spyPct != null ? (mc.spyPct >= 0 ? "+" : "") + mc.spyPct.toFixed(2) + "%" : "—"}</span>`,
+            `<span class="scan-chip">QQQ ${mc.qqqPct != null ? (mc.qqqPct >= 0 ? "+" : "") + mc.qqqPct.toFixed(2) + "%" : "—"}</span>`,
+            `<span class="scan-chip">VIX ${mc.vix != null ? mc.vix.toFixed(2) : "—"}</span>`,
+            `<span class="scan-chip regime">${mc.regime ? "Regime " + String(mc.regime).replace(/_/g, " ") : "Regime —"}</span>`,
+            `<span class="scan-chip gex">${g ? "GEX " + (g.gexRegime || "") : "GEX —"}</span>`,
+          ].join("");
+        }
+        if (mbBody) mbBody.textContent = s925.claudeAnalysis || "";
         const bulls = s925.watchlistBull || [];
         const bears = s925.watchlistBear || [];
         const avoid = s925.watchlistAvoid || [];
-        mbWatch.innerHTML = [
-          bulls.length
-            ? '<div><strong style="color:var(--green)">Bull</strong> · ' +
-              bulls.map((x) => x.symbol).join(", ") +
-              "</div>"
-            : "",
-          bears.length
-            ? '<div><strong style="color:var(--red)">Bear</strong> · ' +
-              bears.map((x) => x.symbol).join(", ") +
-              "</div>"
-            : "",
-          avoid.length
-            ? '<div style="text-decoration:line-through;opacity:0.75"><strong>Avoid</strong> · ' +
-              avoid.map((x) => x.symbol).join(", ") +
-              "</div>"
-            : "",
-        ].join("");
-        if (bulls[0]) {
-          btnBest.style.display = "inline-block";
-          btnBest.dataset.sym = bulls[0].symbol;
-        } else {
-          btnBest.style.display = "none";
+        if (mbWatch) {
+          mbWatch.innerHTML =
+            '<div class="font-mono" style="font-size:0.65rem;color:var(--muted);margin-bottom:6px;">WATCHLIST</div>' +
+            (bulls.length
+              ? bulls.map((x) => '<span class="scan-watch-chip bull">' + esc(x.symbol) + "</span>").join("")
+              : "") +
+            (bears.length
+              ? bears.map((x) => '<span class="scan-watch-chip bear">' + esc(x.symbol) + "</span>").join("")
+              : "") +
+            (avoid.length
+              ? avoid.map((x) => '<span class="scan-watch-chip avoid">' + esc(x.symbol) + "</span>").join("")
+              : "") +
+            (!bulls.length && !bears.length && !avoid.length
+              ? '<span class="muted">No watchlist chips.</span>'
+              : "");
         }
       } else {
-        mbDate.textContent = "Next brief · 9:25am ET";
-        mbCtx.textContent =
-          "No pre-market data in blob store yet — deploy scans or wait for schedule.";
-        mbBody.textContent = "";
-        mbGexFlow.textContent = "";
-        mbWatch.textContent = "";
-        btnBest.style.display = "none";
+        if (mbTitle) mbTitle.textContent = "9:25 MORNING BRIEF";
+        if (mbSub) mbSub.textContent = "Morning brief arrives at 9:25am ET";
+        if (mbBanner) {
+          mbBanner.style.display = "block";
+          mbBanner.textContent = "Next morning brief: 9:25am (Mon–Fri)";
+        }
+        if (mbChips) mbChips.innerHTML = "";
+        if (mbBody)
+          mbBody.textContent =
+            "No pre-market blob yet — deploy scheduled scans or wait for 9:25am.";
+        if (mbWatch) mbWatch.innerHTML = "";
       }
+
+      const orSum = document.getElementById("orSummary");
       const orBody = document.getElementById("orBody");
       if (s955 && s955.confirmedTickers && s955.confirmedTickers.length) {
         const conf = s955.confirmedTickers.length;
         const watch = (s955.watchingTickers || []).length;
         const fail = (s955.failedTickers || []).length;
-        orBody.innerHTML =
-          `<div class="muted" style="margin-bottom:8px;">Confirmed ${conf} · Watching ${watch} · Failed/skip ${fail}</div>` +
-          s955.confirmedTickers
-            .map(
-              (t) =>
-                `<div class="card" style="margin-bottom:8px;padding:10px;background:var(--bg2);border-color:var(--border2);"><strong>${t.symbol}</strong> · ${(t.stage && t.stage.label) || ""}<div class="font-mono" style="font-size:0.7rem;margin-top:6px;">${t.option ? t.option.strike + " " + t.option.expiry + " · $" + (typeof t.option.mid === "number" ? t.option.mid.toFixed(2) : t.option.mid) : "—"}</div><button type="button" class="btn-go load-or-t" data-sym="${t.symbol}" style="margin-top:8px;">LOAD TICKER</button></div>`
-            )
-            .join("") +
-          `<p class="muted" style="margin-top:10px;max-height:160px;overflow-y:auto;">${(s955.claudeAnalysis || "").replace(/</g, "&lt;").slice(0, 900)}</p>`;
-        orBody.querySelectorAll(".load-or-t").forEach((b) => {
-          b.addEventListener("click", () => {
-            document.getElementById("tickerInput").value = b.dataset.sym;
-            goTicker();
-            setPage(0);
-          });
-        });
+        if (orSum)
+          orSum.textContent = conf + " confirmed · " + watch + " watching · " + fail + " failed/skip";
+        const ca = s955.claudeAnalysis || "";
+        const masterMap = s955.masterBySymbol || {};
+        if (orBody) {
+          orBody.innerHTML =
+            s955.confirmedTickers
+              .map((t) => {
+                const mm = masterMap[t.symbol];
+                const est = scanParseEst(ca, t.symbol);
+                const volR = t.volSurge ? "2.0+" : "1.0";
+                const ignBadge = mm
+                  ? "CONF " + (mm.confidence != null ? mm.confidence : "—")
+                  : t.volSurge
+                    ? "VOL SURGE"
+                    : "—";
+                return (
+                  '<div class="card" style="margin-bottom:10px;padding:12px;background:var(--bg2);border-color:var(--border2);">' +
+                  '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">' +
+                  '<span style="font-size:0.65rem;padding:2px 8px;border-radius:6px;border:1px solid var(--border2);">' +
+                  esc((t.stage && t.stage.label) || "") +
+                  "</span>" +
+                  "<strong>" +
+                  esc(t.symbol) +
+                  "</strong>" +
+                  '<span class="muted">' +
+                  esc(ignBadge) +
+                  "</span>" +
+                  "</div>" +
+                  '<div class="muted" style="margin-top:8px;font-size:0.78rem;line-height:1.5;">' +
+                  "Price $" +
+                  (t.currentPrice != null ? t.currentPrice.toFixed(2) : "—") +
+                  " · " +
+                  (t.changePct != null ? (t.changePct >= 0 ? "+" : "") + t.changePct.toFixed(2) : "—") +
+                  "% · Vol " +
+                  volR +
+                  "x" +
+                  "</div>" +
+                  '<div class="muted" style="margin-top:6px;font-size:0.8rem;">' +
+                  esc(mm && mm.summary ? mm.summary.slice(0, 220) : (t.stage && t.stage.action) || "") +
+                  "</div>" +
+                  '<div class="font-mono" style="margin-top:8px;font-size:0.68rem;">' +
+                  "Entry: " +
+                  esc(est.entry || "—") +
+                  " · Stop: " +
+                  esc(est.stop || "—") +
+                  " · Target: " +
+                  esc(est.target || "—") +
+                  "</div>" +
+                  "</div>"
+                );
+              })
+              .join("") +
+            '<div class="scan-mb-body" style="margin-top:12px;">' +
+            String(ca)
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/\n/g, "<br/>") +
+            "</div>";
+        }
       } else {
-        orBody.textContent =
-          "Opening range scan runs at 9:55am ET — no data yet.";
+        if (orSum) orSum.textContent = "";
+        if (orBody)
+          orBody.innerHTML =
+            '<span class="muted">Opening range scan at 9:55am ET — no data yet.</span>';
       }
+
+      const ul = document.getElementById("whatToWatchList");
+      const fb = document.getElementById("whatToWatchFallback");
+      const regimeFb = s925?.marketContext?.regime
+        ? String(s925.marketContext.regime).replace(/_/g, " ") + " — size and risk follow regime."
+        : "";
+      const bullets = scanExtractWatchBullets(s925, s955, regimeFb);
+      if (ul) {
+        ul.innerHTML = bullets
+          .filter(Boolean)
+          .map((b) => "<li>" + esc(b) + "</li>")
+          .join("");
+      }
+      if (fb) {
+        fb.style.display = bullets.length ? "none" : "block";
+        fb.textContent = regimeFb || "Watch the market open — full detail on SIGNAL.";
+      }
+
       const eodCard = document.getElementById("eodCard");
       const eodBody = document.getElementById("eodBody");
-      if (eod && eod.claudeAnalysis) {
+      const p = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "numeric",
+        hour12: false,
+      }).formatToParts(new Date());
+      const eh = +p.find((x) => x.type === "hour").value;
+      const em = +p.find((x) => x.type === "minute").value;
+      const afterClose = eh > 16 || (eh === 16 && em >= 5);
+
+      const topSug =
+        eod && eod.improvementSuggestions && eod.improvementSuggestions[0]
+          ? eod.improvementSuggestions[0]
+          : null;
+      if (eodCard && eodBody) {
         eodCard.style.display = "block";
-        eodBody.innerHTML =
-          '<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-weight:800;font-size:1.1rem;letter-spacing:-0.03em;color:var(--accent);">Win rate ' +
-          (eod.winRate != null ? eod.winRate + "%" : "—") +
-          " · Calls " +
-          (eod.correctCalls ?? "—") +
-          "/" +
-          (eod.totalCalls ?? "—") +
-          '</div><p style="margin-top:10px;font-size:0.82rem;line-height:1.55;white-space:pre-wrap;">' +
-          String(eod.claudeAnalysis || "")
-            .replace(/</g, "&lt;")
-            .slice(0, 2000) +
-          "</p>";
-      } else {
-        eodCard.style.display = "none";
-      }
-      const rs = document.getElementById("runStatsBody");
-      if (run && run.winRateHistory && run.winRateHistory.length) {
-        const last = run.winRateHistory.slice(-10);
-        rs.innerHTML =
-          last.map((x) => "<div>" + x.date + ": " + (x.winRate ?? "—") + "%</div>").join("") +
-          '<div style="margin-top:10px;">Total calls: ' +
-          (run.totalCalls ?? "—") +
-          " · Correct: " +
-          (run.totalCorrect ?? "—") +
-          "</div>";
-      } else {
-        rs.textContent = "Not enough history yet.";
+        const grade =
+          eod?.gradeLetter ||
+          (String(eod?.claudeAnalysis || "").match(/Grade[:\s]+([A-F][+-]?)/i) || [])[1] ||
+          null;
+        const run30 =
+          run?.winRateHistory && run.winRateHistory.length
+            ? Math.round(
+                run.winRateHistory.slice(-30).reduce((s, x) => s + (x.winRate || 0), 0) /
+                  Math.min(30, run.winRateHistory.length)
+              )
+            : null;
+        const thirtyDay =
+          eod?.avgWinRate30Day != null ? eod.avgWinRate30Day : run30;
+
+        if (!afterClose) {
+          eodBody.innerHTML =
+            '<div class="font-mono" style="font-size:0.7rem;color:var(--muted);margin-bottom:8px;">TODAY\'S PERFORMANCE REVIEW</div>' +
+            '<span class="muted">Performance review arrives at 4:05pm ET.</span>';
+        } else if (eod && eod.claudeAnalysis) {
+          eodBody.innerHTML =
+            '<div class="font-mono" style="font-size:0.7rem;color:var(--muted);margin-bottom:8px;">TODAY\'S PERFORMANCE REVIEW</div>' +
+            (grade
+              ? '<div class="scan-eod-grade">' + esc(grade) + "</div>"
+              : "") +
+            '<div style="margin-top:10px;font-size:0.88rem;line-height:1.65;">Win rate ' +
+            (eod.winRate != null ? eod.winRate + "%" : "—") +
+            " (" +
+            (eod.correctCalls ?? "—") +
+            " of " +
+            (eod.totalCalls ?? "—") +
+            " signals correct)</div>" +
+            '<div class="muted" style="margin-top:6px;font-size:0.8rem;">30-day running: ' +
+            (thirtyDay != null ? thirtyDay + "%" : "—") +
+            "</div>" +
+            '<p class="scan-mb-body" style="margin-top:14px;">' +
+            String(eod.claudeAnalysis || "")
+              .replace(/</g, "&lt;")
+              .replace(/\n/g, "<br/>") +
+            "</p>" +
+            (topSug
+              ? '<div class="scan-suggestion-box"><span style="color:var(--accent);font-weight:700;">SYSTEM SUGGESTION:</span> ' +
+                esc(topSug.reason || topSug.suggested || topSug.component || "") +
+                "</div>"
+              : "");
+        } else {
+          eodBody.innerHTML =
+            '<div class="font-mono" style="font-size:0.7rem;color:var(--muted);margin-bottom:8px;">TODAY\'S PERFORMANCE REVIEW</div>' +
+            '<span class="muted">No EOD analysis in blob yet.</span>';
+        }
       }
     }
 
@@ -5134,23 +5523,6 @@
         }
       } catch {
         /* offline */
-      }
-    }
-
-    async function scanNow() {
-      try {
-        toast("Starting scan…", "info");
-        const r = await fetch("/api/scan-now", { method: "POST", headers: { "Content-Type": "application/json" } });
-        const d = await r.json();
-        if (d.error) {
-          toast(d.error, "error");
-          return;
-        }
-        toast("Scan complete · setups " + (d.setupsFound ?? 0), "success");
-        await pollAlerts();
-        await pollScanData();
-      } catch (e) {
-        toast("Scan failed", "error");
       }
     }
 
@@ -5385,14 +5757,6 @@
       document.getElementById("trackerActionBanner").style.display = "none";
       refreshMainTop();
     });
-    document.getElementById("btnScanNow").addEventListener("click", scanNow);
-    document.getElementById("btnLoadBestPlay").addEventListener("click", (e) => {
-      const sym = e.currentTarget.dataset.sym;
-      if (!sym) return;
-      document.getElementById("tickerInput").value = sym;
-      goTicker();
-      setPage(0);
-    });
     document.getElementById("btnReviewEod").addEventListener("click", () => {
       const t =
         "Review today's trading performance and tell me what we need to improve (options only, swing 1–3d, no earnings, stops/targets per SOHEL rules).";
@@ -5405,7 +5769,6 @@
     });
     document.getElementById("btnWhatsScanning").addEventListener("click", () => {
       setPage(5);
-      scanNow();
     });
 
     function guideHtml() {
@@ -5424,7 +5787,14 @@
     setInterval(() => { loadClock(); loadWatchlist(); loadMarketData(); }, 30000);
     setInterval(() => { loadBalances(); loadPositions(); loadOrders(); }, 60000);
     setInterval(pollAlerts, 30000);
-    setInterval(pollScanData, 30000);
+    setInterval(pollScanData, 60000);
+    setInterval(() => {
+      const fu = document.getElementById("scanFooterUpdated");
+      if (!fu || !state.scanUpdatedAt) return;
+      const m = Math.floor((Date.now() - state.scanUpdatedAt) / 60000);
+      fu.textContent =
+        m < 1 ? "Updated just now" : "Updated " + m + " min ago";
+    }, 30000);
     setInterval(pollAlertTracker, 30000);
 
     loadClock();
