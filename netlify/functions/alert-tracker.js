@@ -46,13 +46,27 @@ function quoteAgeSeconds(q) {
   return Math.max(0, Date.now() / 1000 - sec);
 }
 
+function isSwingAlert(alert) {
+  return (
+    alert?.swingHoldOk === true ||
+    alert?.holdProfile === "swing_1_3d" ||
+    String(alert?.holdTypeLabel || "").includes("SWING")
+  );
+}
+
+/** PnL-aware actions: swing setups get wider stop and “hold swing” until thesis breaks. */
 function getRecommendedAction(alert, estimatedPnl) {
-  if (estimatedPnl <= -40) {
+  const swing = isSwingAlert(alert);
+  const stopPct = swing ? -45 : -40;
+
+  if (estimatedPnl <= stopPct) {
     return {
       action: "EXIT — STOP HIT",
       color: "red",
       urgent: true,
-      reason: "Down 40%+ — your stop level hit",
+      reason: swing
+        ? `Down ${Math.abs(stopPct)}%+ — swing stop / thesis broken`
+        : "Down 40%+ — your stop level hit",
     };
   }
   if (estimatedPnl >= 150) {
@@ -97,13 +111,23 @@ function getRecommendedAction(alert, estimatedPnl) {
   }
   if (estimatedPnl >= 0 && estimatedPnl < 40) {
     return {
-      action: "HOLD — SETUP INTACT",
+      action: swing ? "HOLD SWING" : "HOLD — SETUP INTACT",
       color: "yellow",
       urgent: false,
-      reason: "Small gain — let it develop",
+      reason: swing
+        ? "Swing lane — OK to carry overnight if thesis intact"
+        : "Small gain — let it develop",
     };
   }
-  if (estimatedPnl < 0 && estimatedPnl > -40) {
+  if (estimatedPnl < 0 && estimatedPnl > stopPct) {
+    if (swing) {
+      return {
+        action: "HOLD SWING",
+        color: "orange",
+        urgent: false,
+        reason: "Drawdown in swing window — check structure vs chop",
+      };
+    }
     return {
       action: "HOLD OR CUT",
       color: "orange",
@@ -238,17 +262,9 @@ exports.handler = async (event) => {
       const pnlForRec =
         optionPnlPct != null ? optionPnlPct : estimatedOptionPnlPct ?? underlyingPnlPct ?? 0;
 
-      const premAt =
-        parseFloat(alert.premiumAtAlert ?? alert.option?.mid ?? 0) || 0;
-      const effectivePct =
-        optionPnlPct != null && isFinite(optionPnlPct)
-          ? optionPnlPct
-          : estimatedOptionPnlPct != null && isFinite(estimatedOptionPnlPct)
-            ? estimatedOptionPnlPct
-            : null;
-      const hypoDollars1ct =
-        premAt > 0 && effectivePct != null
-          ? Math.round(premAt * effectivePct * 100) / 100
+      const hoursInTrade =
+        alert.timestamp != null
+          ? (Date.now() - alert.timestamp) / 3600000
           : null;
 
       const rec = getRecommendedAction(alert, pnlForRec);
@@ -274,8 +290,15 @@ exports.handler = async (event) => {
         estimatedOptionPnlPct,
         liveOptionQuote: live,
         realOptionPnlPct: optionPnlPct,
-        hypoDollars1ct,
-        hypoBasisPct: effectivePct,
+        hoursInTrade,
+        swingPhase:
+          hoursInTrade != null && isFinite(hoursInTrade)
+            ? hoursInTrade < 24
+              ? "session_1"
+              : hoursInTrade < 72
+                ? "swing"
+                : "day3_plus"
+            : null,
         recommendedAction: rec.action,
         recommendedMeta: rec,
         forecastData,
@@ -286,24 +309,12 @@ exports.handler = async (event) => {
     })
   );
 
-  let hypoTotal1ct = 0;
-  let hypoCount = 0;
-  for (const e of enriched) {
-    if (e.hypoDollars1ct != null && isFinite(e.hypoDollars1ct)) {
-      hypoTotal1ct += e.hypoDollars1ct;
-      hypoCount++;
-    }
-  }
-  hypoTotal1ct = Math.round(hypoTotal1ct * 100) / 100;
-
   return {
     statusCode: 200,
     headers,
     body: JSON.stringify({
       count: enriched.length,
       alerts: enriched,
-      hypoTotal1ct: hypoCount ? hypoTotal1ct : null,
-      hypoLegCount: hypoCount,
       updatedAt: Date.now(),
     }),
   };

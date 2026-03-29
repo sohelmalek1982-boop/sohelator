@@ -1,6 +1,6 @@
 const { getStore } = require("@netlify/blobs");
 
-const DECISION_SCHEMA_VERSION = 1;
+const DECISION_SCHEMA_VERSION = 2;
 
 function getMemoryStore() {
   return getStore({
@@ -348,6 +348,14 @@ function buildAlertSnapshotPayload(alert, master) {
         ign?.score ??
         master?.ignition?.ignitionScore ??
         null,
+      holdProfile: alert.holdProfile ?? null,
+      swingHoldOk: alert.swingHoldOk ?? null,
+      holdTypeLabel: alert.holdTypeLabel ?? null,
+      aiTrackingSummary: alert.aiTrackingSummary ?? null,
+      timeHorizonNote:
+        alert.holdProfile === "swing_1_3d"
+          ? "1–3d swing; next session hold OK if thesis intact"
+          : null,
     },
 
     indicators: {

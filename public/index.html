@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>SOHELATOR</title>
-  <meta name="sohel-build" content="alert-hypo-pnl-20260328" />
+  <meta name="sohel-build" content="alert-tracking-20260328" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Chakra+Petch:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
@@ -217,6 +217,7 @@
     .pnl-val.vix-low { color: var(--green); }
     .pnl-val.vix-mid { color: var(--yellow); }
     .pnl-val.vix-hi { color: var(--red); }
+    .pnl-val.pnl-val--strip { font-size: 15px; letter-spacing: 0.02em; line-height: 1.15; }
     .topbar-pills { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .pill-mkt {
       display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: var(--radius-pill);
@@ -381,7 +382,9 @@
       display: flex; width: 700%; height: 100%; transition: transform 0.28s ease-out; will-change: transform;
     }
     .page {
+      flex: 0 0 14.285714%;
       width: 14.285714%;
+      min-width: 14.285714%;
       height: 100%;
       overflow-y: auto;
       overflow-x: hidden;
@@ -861,6 +864,18 @@
     .scan-watch-chip.bull { background: rgba(0, 255, 135, 0.1); border: 1px solid rgba(0, 255, 135, 0.35); color: var(--green); }
     .scan-watch-chip.bear { background: rgba(255, 59, 92, 0.1); border: 1px solid rgba(255, 59, 92, 0.35); color: var(--red); }
     .scan-watch-chip.avoid { text-decoration: line-through; opacity: 0.7; background: rgba(74, 96, 112, 0.2); border: 1px solid var(--border); color: var(--muted); }
+    .wl-dyn-meta { font-size: 0.72rem; line-height: 1.45; color: var(--muted); margin-bottom: 12px; }
+    .wl-dyn-tag {
+      display: inline-block; font-family: var(--font-data); font-size: 0.62rem; padding: 3px 8px; border-radius: 6px;
+      border: 1px solid var(--border2); background: rgba(0, 0, 0, 0.35); color: var(--cyan);
+    }
+    .wl-dyn-tag--bull { border-color: rgba(0, 255, 135, 0.35); color: var(--green); }
+    .wl-dyn-tag--bear { border-color: rgba(255, 59, 92, 0.35); color: var(--red); }
+    .wl-dyn-tag--avoid { border-color: var(--border); color: var(--muted); text-decoration: line-through; opacity: 0.85; }
+    .wl-dyn-tag--conf { border-color: rgba(0, 229, 255, 0.45); color: var(--cyan); }
+    .wl-dyn-tag--watch { border-color: rgba(255, 215, 0, 0.35); color: var(--yellow); }
+    .wl-dyn-tag--alert { border-color: rgba(255, 140, 66, 0.45); color: #ff8c42; }
+    .wl-dyn-tag--focus { border-color: rgba(136, 96, 255, 0.45); color: #c4a5f5; }
     .scan-eod-grade {
       font-family: var(--font-bebas); font-size: 3rem; line-height: 1; letter-spacing: 0.06em;
       color: var(--accent); text-shadow: 0 0 24px rgba(0, 229, 255, 0.25);
@@ -1401,11 +1416,11 @@
         <button type="button" class="btn-go btn-go-mob" id="goBtn">GO</button>
       </div>
     </div>
-    <div class="pnl-strip" id="pnlStrip" aria-label="Account snapshot">
-      <div class="pnl-cell"><div class="pnl-lab">EQUITY</div><div class="pnl-val" id="pnlEq">—</div></div>
-      <div class="pnl-cell"><div class="pnl-lab">DAY P&amp;L</div><div class="pnl-val" id="pnlDay">—</div></div>
-      <div class="pnl-cell"><div class="pnl-lab">OPEN</div><div class="pnl-val pnl-warn" id="pnlOpen">—</div></div>
-      <div class="pnl-cell"><div class="pnl-lab">ALERT HYP</div><div class="pnl-val" id="pnlHypoAlerts">—</div><div class="pnl-sub" id="pnlHypoAlertsSub"></div></div>
+    <div class="pnl-strip" id="pnlStrip" aria-label="Market snapshot">
+      <div class="pnl-cell"><div class="pnl-lab">REGIME</div><div class="pnl-val pnl-val--strip" id="stripRegime">—</div><div class="pnl-sub" id="stripRegimeSub"></div></div>
+      <div class="pnl-cell"><div class="pnl-lab">SPY</div><div class="pnl-val" id="stripSpy">—</div><div class="pnl-sub" id="stripSpySub"></div></div>
+      <div class="pnl-cell"><div class="pnl-lab">QQQ</div><div class="pnl-val" id="stripQqq">—</div><div class="pnl-sub" id="stripQqqSub"></div></div>
+      <div class="pnl-cell"><div class="pnl-lab">ALERTS</div><div class="pnl-val" id="pnlTrackAlerts">—</div><div class="pnl-sub" id="pnlTrackAlertsSub"></div></div>
       <div class="pnl-cell"><div class="pnl-lab">VIX</div><div class="pnl-val" id="pnlVix">—</div></div>
     </div>
   </header>
@@ -1574,7 +1589,7 @@
         </div>
       </section>
 
-      <!-- 1 INDS — interpreted (IV gauge + chain still updated on SIGNAL / OPTS) -->
+      <!-- 1 INDS — interpreted (IV gauge + chain data still loaded on SIGNAL for IV) -->
       <section class="page" id="page-1">
         <div class="inds-tab-wrap">
           <div class="card inds-ph" id="indsPlaceholder">
@@ -1597,26 +1612,24 @@
         </div>
       </section>
 
-      <!-- 2 OPTIONS -->
+      <!-- 2 WATCHLIST — merged from scans + tape + alerts -->
       <section class="page" id="page-2">
-        <h2 class="section">Suggested</h2>
-        <div id="suggestedWrap"></div>
-        <h2 class="section">Chain</h2>
-        <div class="card" style="padding:0;overflow-x:auto;">
-          <table class="chain" id="chainTable"><thead><tr><th>Strike</th><th>Type</th><th>Mid</th><th>Δ</th><th>IV</th></tr></thead><tbody></tbody></table>
-        </div>
+        <h2 class="section">Watchlist</h2>
+        <p class="muted" style="font-size:0.72rem;margin-bottom:6px;line-height:1.45;">Dynamic list from scans and conditions (not your broker list — that stays under TRADES → Watchlist).</p>
+        <p class="muted wl-dyn-meta" id="wlDynMeta">Pulls from 9:25 / 9:55 scans, tape context, and open alerts — full narrative stays on SCAN.</p>
+        <div id="wlDynList" class="muted">Loading…</div>
       </section>
 
       <!-- 3 ALERTS (tracker) -->
       <section class="page" id="page-3">
         <h2 class="section">Open alerts</h2>
-        <p class="muted" style="margin-bottom:10px;font-size:0.75rem;">Live option quotes &amp; P&amp;L from Tradier · refreshes every 30s · hypothetical $ uses 1 contract per alert (prem at alert × P&amp;L %)</p>
+        <p class="muted" style="margin-bottom:10px;font-size:0.75rem;">Live option quotes &amp; P&amp;L from Tradier · refreshes every 30s · track AI thesis vs live action; swing setups may call for next-session hold (1–3d)</p>
         <div id="alertTrackerWrap" class="muted">Loading…</div>
       </section>
 
       <!-- 4 TRADES -->
       <section class="page" id="page-4">
-        <p class="muted" style="font-size:0.72rem;margin-bottom:10px;line-height:1.45;">Equity, day P&amp;L, and positions live here — the top bar stays focused on whether there’s a play and how to run it.</p>
+        <p class="muted" style="font-size:0.72rem;margin-bottom:10px;line-height:1.45;">Account snapshot: equity, cash, day &amp; total P&amp;L in the grid below — positions, orders, and broker watchlist in the subtabs.</p>
         <div class="summary-grid" id="acctSummary"></div>
         <div class="subtabs" style="margin-top:14px;">
           <button type="button" class="active" data-sub="pos">Positions</button>
@@ -1704,7 +1717,7 @@
   <nav class="bottomnav" id="bottomnav">
     <button type="button" class="nav-item active" data-i="0"><span class="emoji">⚡</span>SIGNAL</button>
     <button type="button" class="nav-item" data-i="1"><span class="emoji">📊</span>INDS</button>
-    <button type="button" class="nav-item" data-i="2"><span class="emoji">🎯</span>OPTS</button>
+    <button type="button" class="nav-item" data-i="2"><span class="emoji">📋</span>WATCH</button>
     <button type="button" class="nav-item" data-i="3"><span class="emoji">🔔</span>ALERTS<span class="badge badge-urgent" id="alertsUrgentBadge" style="display:none;">0</span></button>
     <button type="button" class="nav-item" data-i="4"><span class="emoji">💼</span>TRADES<span class="badge" id="posBadge" style="display:none;">0</span></button>
     <button type="button" class="nav-item" data-i="5"><span class="emoji">🔍</span>SCAN</button>
@@ -1781,8 +1794,6 @@
       masterIntel: null,
       optionLegQuotes: {},
       alertTrackerList: [],
-      hypoTotal1ct: null,
-      hypoLegCount: 0,
       volumeAnalysis: null,
       trackerBannerDismissed: false,
       /** True only when user tapped GO — cleared inside loadMarketData (not on 30s poll). */
@@ -2122,53 +2133,20 @@
       return [x];
     }
 
-    /** PnL $ per 1-lot option: premium at alert × P&amp;L % (same as Tradier mid vs entry). */
-    function hypoDollarsPerAlert(a) {
-      const prem0 = parseFloat(a.premiumAtAlert ?? a.option?.mid ?? 0) || 0;
-      const pnlPct =
-        a.realOptionPnlPct != null && isFinite(a.realOptionPnlPct)
-          ? a.realOptionPnlPct
-          : a.estimatedOptionPnlPct != null && isFinite(a.estimatedOptionPnlPct)
-            ? a.estimatedOptionPnlPct
-            : null;
-      if (pnlPct == null || prem0 <= 0) return null;
-      return prem0 * pnlPct;
-    }
-
-    function aggregateHypoAlerts(alerts) {
-      let sum = 0;
-      let n = 0;
-      for (const a of alerts || []) {
-        const d = hypoDollarsPerAlert(a);
-        if (d == null || !isFinite(d)) continue;
-        sum += d;
-        n++;
-      }
-      return { sumDollars: sum, count: n };
-    }
-
-    function renderHypoAlertStrip() {
-      const el = document.getElementById("pnlHypoAlerts");
-      const sub = document.getElementById("pnlHypoAlertsSub");
+    function renderAlertTrackStrip() {
+      const el = document.getElementById("pnlTrackAlerts");
+      const sub = document.getElementById("pnlTrackAlertsSub");
       if (!el) return;
-      let sumDollars = state.hypoTotal1ct;
-      let count = state.hypoLegCount;
-      if (sumDollars == null || !count) {
-        const ag = aggregateHypoAlerts(state.alertTrackerList);
-        sumDollars = ag.sumDollars;
-        count = ag.count;
-      }
-      if (!count || sumDollars == null || !isFinite(sumDollars)) {
+      const n = (state.alertTrackerList || []).length;
+      if (!n) {
         el.textContent = "—";
         el.style.color = "";
         if (sub) sub.textContent = "";
         return;
       }
-      const sign = sumDollars >= 0 ? "+" : "";
-      el.textContent = sign + "$" + sumDollars.toFixed(0);
-      el.style.color =
-        sumDollars > 0 ? "var(--green)" : sumDollars < 0 ? "var(--red)" : "var(--muted)";
-      if (sub) sub.textContent = count + " leg" + (count === 1 ? "" : "s") + " · 1 ct";
+      el.textContent = String(n);
+      el.style.color = "var(--cyan)";
+      if (sub) sub.textContent = "open · AI + swing";
     }
 
     function refreshMainTop() {
@@ -2462,6 +2440,7 @@
 
     function renderSuggestedOptionCards(sym, pick, sig) {
       const wrap = document.getElementById("suggestedWrap");
+      if (!wrap) return;
       const intel = state.masterIntel;
       if (sig.detail !== "calls" && sig.detail !== "puts") {
         wrap.innerHTML = `<div class="card" style="text-align:center;padding:24px;"><div class="font-bebas" style="font-size:1.5rem;color:var(--yellow);">No signal</div><p class="muted" style="margin-top:8px;">WAIT/WATCH — no directional option sleeve.</p></div>`;
@@ -2565,8 +2544,6 @@
         const r = await fetch("/api/alert-tracker");
         const d = await r.json();
         state.alertTrackerList = d.alerts || [];
-        state.hypoTotal1ct = d.hypoTotal1ct != null ? d.hypoTotal1ct : null;
-        state.hypoLegCount = d.hypoLegCount != null ? d.hypoLegCount : 0;
         const urgent = state.alertTrackerList.filter((a) => a.recommendedMeta?.urgent).length;
         const badge = document.getElementById("alertsUrgentBadge");
         if (urgent > 0) {
@@ -2576,7 +2553,8 @@
           badge.style.display = "none";
         }
         renderAlertTrackerPage();
-        renderHypoAlertStrip();
+        renderAlertTrackStrip();
+        renderDynamicWatchlist();
         const dismissed = sessionStorage.getItem("sohel_tracker_banner_dismissed") === "1";
         const actionAlerts = state.alertTrackerList.filter((a) => {
           const k = alertUrgencyTier(a).key;
@@ -2596,9 +2574,7 @@
         refreshMainTop();
       } catch {
         document.getElementById("alertTrackerWrap").innerHTML = '<span class="muted">Could not load alerts.</span>';
-        state.hypoTotal1ct = null;
-        state.hypoLegCount = 0;
-        renderHypoAlertStrip();
+        renderAlertTrackStrip();
       }
     }
 
@@ -2676,17 +2652,46 @@
           const forecastDisc = fd
             ? `<div style="font-family:'DM Sans',sans-serif;font-size:9px;color:#3a5a6e;margin-top:6px;line-height:1.45">Historical pattern stats only — not investment advice or a guarantee of results.</div>`
             : "";
-          const hypoD =
-            a.hypoDollars1ct != null && isFinite(a.hypoDollars1ct)
-              ? a.hypoDollars1ct
-              : hypoDollarsPerAlert(a);
-          const hypoPctForLine =
-            a.hypoBasisPct != null && isFinite(a.hypoBasisPct)
-              ? a.hypoBasisPct
-              : pnlPct;
-          const hypoLine =
-            hypoD != null && isFinite(hypoD)
-              ? `<div style="font-family:'Space Mono',monospace;font-size:8px;color:#8aacbe;padding:6px 14px 8px;background:#060e14;border-top:1px solid #0f1820">Hypothetical 1-lot: <span style="color:${hypoD >= 0 ? "#00ff87" : "#ff3b5c"}">${hypoD >= 0 ? "+" : ""}$${hypoD.toFixed(0)}</span> · option ${hypoPctForLine > 0 ? "+" : ""}${hypoPctForLine.toFixed(1)}% <span style="opacity:0.75">(prem at alert × %)</span></div>`
+          const phasePretty =
+            a.swingPhase === "session_1"
+              ? "Day 1"
+              : a.swingPhase === "swing"
+                ? "Swing (1–3d)"
+                : a.swingPhase === "day3_plus"
+                  ? "Day 3+"
+                  : "";
+          const hoursStr =
+            a.hoursInTrade != null && isFinite(a.hoursInTrade)
+              ? a.hoursInTrade < 48
+                ? `~${Math.round(a.hoursInTrade)}h in trade`
+                : `~${(a.hoursInTrade / 24).toFixed(1)}d in trade`
+              : "";
+          const metaBits = [];
+          if (a.holdTypeLabel) metaBits.push(String(a.holdTypeLabel));
+          if (a.swingHoldOk) metaBits.push("next-session hold OK if thesis holds");
+          if (hoursStr) metaBits.push(hoursStr);
+          if (phasePretty) metaBits.push(phasePretty);
+          const aiSummary = a.aiTrackingSummary && String(a.aiTrackingSummary).trim();
+          const recAct = a.recommendedAction && String(a.recommendedAction).trim();
+          const aiTrackParts = [];
+          if (aiSummary) {
+            aiTrackParts.push(
+              `<div style="color:#eaf4ff;line-height:1.45;font-family:'DM Sans',sans-serif">${esc(aiSummary)}</div>`
+            );
+          }
+          if (metaBits.length) {
+            aiTrackParts.push(
+              `<div style="margin-top:4px;color:#6a8a9e">${esc(metaBits.join(" · "))}</div>`
+            );
+          }
+          if (recAct) {
+            aiTrackParts.push(
+              `<div style="margin-top:4px;color:#00e5ff">Now: ${esc(recAct)}</div>`
+            );
+          }
+          const aiTrackLine =
+            aiTrackParts.length > 0
+              ? `<div style="font-family:'Space Mono',monospace;font-size:8px;color:#8aacbe;padding:6px 14px 8px;background:#060e14;border-top:1px solid #0f1820"><div style="opacity:0.85;margin-bottom:4px;letter-spacing:0.3px">AI &amp; swing</div>${aiTrackParts.join("")}</div>`
               : "";
 
           if (tierKey === "WATCH") {
@@ -2701,7 +2706,7 @@
                 <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:0.5px;color:#8aacbe">${esc(formatBuyLine(a))}</div>
                 <div style="margin-top:12px;font-family:'Space Mono',monospace;font-size:9px;padding:8px 12px;border-radius:7px;font-weight:700;letter-spacing:0.3px;background:rgba(255,215,0,.06);color:#ffd700;border:1px solid rgba(255,215,0,.25);display:inline-block">GET READY</div>
                 ${staleLine}
-                ${hypoLine}
+                ${aiTrackLine}
               </div>
               <div style="display:flex;gap:4px;padding:0 14px 14px;flex-wrap:wrap">
                 <button type="button" style="flex:1;min-width:72px;height:40px;padding:0 10px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px" data-at-load="${esc(a.ticker)}">LOAD</button>
@@ -2784,7 +2789,7 @@
               </div>
             </div>
             ${staleLine}
-            ${hypoLine}
+            ${aiTrackLine}
             ${
               fd
                 ? `<div style="padding:8px 12px;border-top:1px solid #0f1820;background:#0a1218">
@@ -2955,11 +2960,11 @@
       if (sig.detail === "calls") {
         badgeText = "CALL PLAY LIVE";
         badgeCls = "bull";
-        play = `${S}: A directional call play is ON — trend + VWAP + momentum align. Open SIGNAL for stage detail; OPTIONS for strikes to buy.`;
+        play = `${S}: A directional call play is ON — trend + VWAP + momentum align. Open SIGNAL for stage detail; WATCH for scan + tape names.`;
       } else if (sig.detail === "puts") {
         badgeText = "PUT PLAY LIVE";
         badgeCls = "bear";
-        play = `${S}: A directional put play is ON — bearish structure aligned. Check SIGNAL and OPTIONS for execution strikes.`;
+        play = `${S}: A directional put play is ON — bearish structure aligned. Check SIGNAL and WATCH for context and names.`;
       } else if (sig.detail === "chop") {
         badgeText = "NO PLAY";
         badgeCls = "chop";
@@ -3770,8 +3775,8 @@
             strike.toFixed(0) +
             " — rough context: you need roughly " +
             needPct.toFixed(2) +
-            "% underlying move from here (directionally) for that strike to matter — model with your actual delta/Greeks on OPTS."
-          : "Load OPTS for a suggested strike to contextualize required move.";
+            "% underlying move from here (directionally) for that strike to matter — model with your actual delta/Greeks from the IV strip on SIGNAL."
+          : "Load SIGNAL for IV/Greeks context on required move.";
       let ivWord = "unknown IV";
       if (ivCheap) ivWord = "cheap";
       else if (ivNorm) ivWord = "normal";
@@ -3783,7 +3788,7 @@
             "%, buying outright is " +
             (ivCheap ? "relatively cheap" : ivExp ? "expensive — spreads cut cost" : "in a normal band") +
             " right now."
-          : "IV: load chain on SIGNAL/OPTS to judge cheap vs expensive.";
+          : "IV: load SIGNAL for ATM IV and premium quality.";
 
       let atrPill = "VOL";
       let atrPillCls = ivExp ? "warn" : ivCheap ? "bull" : "neutral";
@@ -3925,7 +3930,7 @@
       const thetaStr =
         thetaPer != null && isFinite(thetaPer)
           ? "Losing about $" + Math.abs(thetaPer).toFixed(2) + " per contract per day to time decay (theta × 100, sign ignored for magnitude)."
-          : "Theta: open OPTS after load — we pull live Greeks from the chain.";
+          : "Theta: after SIGNAL load — Greeks come from the same chain pull behind the IV strip.";
 
       const emove = price > 0 ? price * (atrPct / 100) * Math.sqrt(5) : 0;
       const emStr =
@@ -4338,12 +4343,12 @@
       if (hBtn && hLbl && hDot) {
         if (sig.detail === "calls") {
           hBtn.className = "hero-cta calls";
-          hLbl.textContent = "BUY CALLS";
+          hLbl.textContent = "CALL SETUP · WATCHLIST";
           hDot.textContent = "●";
           hBtn.disabled = false;
         } else if (sig.detail === "puts") {
           hBtn.className = "hero-cta puts";
-          hLbl.textContent = "BUY PUTS";
+          hLbl.textContent = "PUT SETUP · WATCHLIST";
           hDot.textContent = "●";
           hBtn.disabled = false;
         } else if (sig.detail === "chop") {
@@ -4444,6 +4449,7 @@
         price,
         sig,
       });
+      if (state.page === 2) renderDynamicWatchlist();
     }
 
     function dteDays(exp) {
@@ -4476,8 +4482,10 @@
         const needle0 = document.getElementById("ivNeedle");
         if (needle0) needle0.style.transform = "rotate(-90deg)";
         updateIvContextLine(null);
-        document.getElementById("suggestedWrap").innerHTML = `<div class="card muted">No expirations returned.</div>`;
-        document.querySelector("#chainTable tbody").innerHTML = "";
+        const sw0 = document.getElementById("suggestedWrap");
+        if (sw0) sw0.innerHTML = `<div class="card muted">No expirations returned.</div>`;
+        const tb0 = document.querySelector("#chainTable tbody");
+        if (tb0) tb0.innerHTML = "";
         return;
       }
 
@@ -4550,19 +4558,22 @@
       state.suggested = sug;
 
       const rows = opts.slice().sort((a, b) => parseFloat(a.strike) - parseFloat(b.strike));
-      document.querySelector("#chainTable tbody").innerHTML = rows.map((o) => {
-        const mid = midOpt(o);
-        const iv = ivOpt(o);
-        const del = o.greeks?.delta != null ? parseFloat(o.greeks.delta).toFixed(2) : "—";
-        return `<tr data-occ="${o.symbol}" data-mid="${mid}" data-type="${o.option_type}">
+      const tbody = document.querySelector("#chainTable tbody");
+      if (tbody) {
+        tbody.innerHTML = rows.map((o) => {
+          const mid = midOpt(o);
+          const iv = ivOpt(o);
+          const del = o.greeks?.delta != null ? parseFloat(o.greeks.delta).toFixed(2) : "—";
+          return `<tr data-occ="${o.symbol}" data-mid="${mid}" data-type="${o.option_type}">
           <td>${o.strike}</td><td>${o.option_type}</td><td>${mid.toFixed(2)}</td><td>${del}</td><td>${iv.toFixed(0)}%</td>
         </tr>`;
-      }).join("");
-      document.querySelectorAll("#chainTable tbody tr").forEach((tr) => {
-        tr.addEventListener("click", () =>
-          openOrderModal(tr.dataset.occ, sym, tr.dataset.type, parseFloat(tr.dataset.mid))
-        );
-      });
+        }).join("");
+        tbody.querySelectorAll("tr").forEach((tr) => {
+          tr.addEventListener("click", () =>
+            openOrderModal(tr.dataset.occ, sym, tr.dataset.type, parseFloat(tr.dataset.mid))
+          );
+        });
+      }
     }
 
     async function loadClock() {
@@ -4589,59 +4600,127 @@
       if (sp) sp.className = "pill-session " + sess.cls;
     }
 
+    /** Morning-brief regime + GEX hint (paired with live SPY/QQQ/VIX in the strip). */
+    function updateStripFromScan() {
+      const s925 = state.scanData?.scan925;
+      const mc = s925?.marketContext;
+      const el = document.getElementById("stripRegime");
+      const sub = document.getElementById("stripRegimeSub");
+      if (!el) return;
+      if (mc?.regime) {
+        const raw = String(mc.regime).replace(/_/g, " ");
+        const label = raw.length > 16 ? raw.slice(0, 14) + "…" : raw;
+        el.textContent = label.toUpperCase();
+        const r = String(mc.regime).toLowerCase();
+        el.className =
+          "pnl-val pnl-val--strip " +
+          (r.includes("chop") ? "pnl-warn" : r.includes("bear") || r.includes("risk") ? "pnl-neg" : "pnl-pos");
+      } else {
+        el.textContent = "—";
+        el.className = "pnl-val pnl-val--strip";
+      }
+      if (sub) {
+        const g = s925?.gexSpy;
+        if (g && g.gexRegime) sub.textContent = String(g.gexRegime).slice(0, 18);
+        else if (s925) sub.textContent = "9:25";
+        else sub.textContent = "";
+      }
+    }
+
+    function stripCellMissing(el) {
+      if (!el) return true;
+      const t = String(el.textContent || "").trim();
+      return !t || t === "—";
+    }
+
+    /** When live quotes fail, fill SPY/QQQ/VIX from 9:25 scan context (only empty cells). */
+    function applyIndexStripFallbackFromScan() {
+      const mc = state.scanData?.scan925?.marketContext;
+      const elSpy = document.getElementById("stripSpy");
+      const elQq = document.getElementById("stripQqq");
+      const subSpy = document.getElementById("stripSpySub");
+      const subQq = document.getElementById("stripQqqSub");
+      const elVix = document.getElementById("pnlVix");
+      function fillIdx(el, sub, pct) {
+        if (!el || !stripCellMissing(el)) return;
+        if (pct == null || !isFinite(pct)) {
+          if (sub && mc) sub.textContent = "9:25";
+          return;
+        }
+        el.textContent = (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%";
+        el.className = "pnl-val " + (pct > 0.02 ? "pnl-pos" : pct < -0.02 ? "pnl-neg" : "");
+        if (sub) sub.textContent = "9:25";
+      }
+      fillIdx(elSpy, subSpy, mc?.spyPct);
+      fillIdx(elQq, subQq, mc?.qqqPct);
+      if (elVix && stripCellMissing(elVix) && mc?.vix != null && isFinite(mc.vix)) {
+        elVix.textContent = mc.vix.toFixed(2);
+        elVix.className =
+          "pnl-val " + (mc.vix < 18 ? "vix-low" : mc.vix <= 25 ? "vix-mid" : "vix-hi");
+      }
+    }
+
+    async function refreshIndexStripQuotes() {
+      const elSpy = document.getElementById("stripSpy");
+      const elQq = document.getElementById("stripQqq");
+      const subSpy = document.getElementById("stripSpySub");
+      const subQq = document.getElementById("stripQqqSub");
+      const elVix = document.getElementById("pnlVix");
+      function setIdx(el, sub, pq) {
+        if (!el) return;
+        if (!pq || !isFinite(pq.pct)) {
+          el.textContent = "—";
+          el.className = "pnl-val";
+          if (sub) sub.textContent = "";
+          return;
+        }
+        const pct = pq.pct;
+        el.textContent = (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%";
+        el.className = "pnl-val " + (pct > 0.02 ? "pnl-pos" : pct < -0.02 ? "pnl-neg" : "");
+        if (sub) sub.textContent = "live";
+      }
+      try {
+        const vq = await api("/v1/markets/quotes", "GET", { symbols: "SPY,QQQ,VIX" });
+        if (vq.error) throw new Error(String(vq.error));
+        const ql = normList(vq.quotes?.quote);
+        const by = {};
+        ql.forEach((q) => {
+          if (q.symbol) by[String(q.symbol).toUpperCase()] = parseQuote(q);
+        });
+        setIdx(elSpy, subSpy, by.SPY);
+        setIdx(elQq, subQq, by.QQQ);
+        const vix = by.VIX?.last;
+        if (elVix && vix != null && isFinite(vix)) {
+          elVix.textContent = vix.toFixed(2);
+          elVix.className =
+            "pnl-val " + (vix < 18 ? "vix-low" : vix <= 25 ? "vix-mid" : "vix-hi");
+        } else if (elVix) {
+          elVix.textContent = "—";
+          elVix.className = "pnl-val";
+        }
+      } catch (e) {
+        applyIndexStripFallbackFromScan();
+      }
+    }
+
     async function loadBalances() {
       const data = await api("/v1/accounts/{ACCOUNT_ID}/balances", "GET", {});
-      if (data.error) return;
-      state.balances = data.balances || data;
-      const b = state.balances;
-      const eq = parseFloat(b.total_equity ?? b.equity ?? 0);
-      const cash = parseFloat(b.cash?.cash_available ?? b.cash_available ?? 0);
-      const dpl = parseFloat(b.open_pl_day ?? b.day_change ?? 0);
-      const tpl = parseFloat(b.open_pl ?? b.total_open_pl ?? 0);
-      const openPl = parseFloat(b.open_pl ?? b.total_open_pl ?? 0);
-
-      let vix = null;
-      try {
-        const vq = await api("/v1/markets/quotes", "GET", { symbols: "VIX" });
-        const ql = normList(vq.quotes?.quote);
-        const v = ql[0];
-        if (v) vix = parseFloat(v.last ?? v.close ?? v.bid ?? 0);
-      } catch (e) { /* noop */ }
-
-      const fmtN = (n) => (typeof n === "number" && isFinite(n) ? n.toFixed(0) : "—");
-      const fmtSigned = (n) =>
-        typeof n === "number" && isFinite(n) ? (n >= 0 ? "+" : "") + n.toFixed(0) : "—";
-
-      const elEq = document.getElementById("pnlEq");
-      const elDay = document.getElementById("pnlDay");
-      const elOpen = document.getElementById("pnlOpen");
-      const elVix = document.getElementById("pnlVix");
-      if (elEq) {
-        elEq.textContent = fmtN(eq);
-        elEq.className = "pnl-val";
+      if (!data.error) {
+        state.balances = data.balances || data;
+        const b = state.balances;
+        const eq = parseFloat(b.total_equity ?? b.equity ?? 0);
+        const cash = parseFloat(b.cash?.cash_available ?? b.cash_available ?? 0);
+        const dpl = parseFloat(b.open_pl_day ?? b.day_change ?? 0);
+        const tpl = parseFloat(b.open_pl ?? b.total_open_pl ?? 0);
+        document.getElementById("acctSummary").innerHTML = [
+          ["Equity", eq], ["Cash", cash], ["Day P&L", dpl], ["Total P&L", tpl],
+        ].map(([k, v]) =>
+          `<div class="summary-cell"><div class="k">${k}</div><div class="v" style="color:${v >= 0 ? "var(--green)" : v < 0 ? "var(--red)" : "var(--accent)"}">${typeof v === "number" ? (k.includes("P") ? (v >= 0 ? "+" : "") + v.toFixed(0) : v.toFixed(0)) : "—"}</div></div>`
+        ).join("");
       }
-      if (elDay) {
-        elDay.textContent = fmtSigned(dpl);
-        elDay.className = "pnl-val " + (dpl > 0 ? "pnl-pos" : dpl < 0 ? "pnl-neg" : "");
-      }
-      if (elOpen) {
-        elOpen.textContent = fmtSigned(openPl);
-        elOpen.className = "pnl-val pnl-warn";
-      }
-      if (elVix && vix != null && isFinite(vix)) {
-        elVix.textContent = vix.toFixed(2);
-        elVix.className =
-          "pnl-val " + (vix < 18 ? "vix-low" : vix <= 25 ? "vix-mid" : "vix-hi");
-      } else if (elVix) {
-        elVix.textContent = "—";
-        elVix.className = "pnl-val";
-      }
-
-      document.getElementById("acctSummary").innerHTML = [
-        ["Equity", eq], ["Cash", cash], ["Day P&L", dpl], ["Total P&L", tpl],
-      ].map(([k, v]) =>
-        `<div class="summary-cell"><div class="k">${k}</div><div class="v" style="color:${v >= 0 ? "var(--green)" : v < 0 ? "var(--red)" : "var(--accent)"}">${typeof v === "number" ? (k.includes("P") ? (v >= 0 ? "+" : "") + v.toFixed(0) : v.toFixed(0)) : "—"}</div></div>`
-      ).join("");
+      await refreshIndexStripQuotes();
+      updateStripFromScan();
+      applyIndexStripFallbackFromScan();
     }
 
     async function loadPositions() {
@@ -4755,7 +4834,7 @@
       });
       el.querySelectorAll("[data-pos-detail]").forEach((btn) => {
         btn.addEventListener("click", () => {
-          toast("Use SIGNAL + OPTS for full Greeks and chain detail.", "success");
+          toast("SIGNAL tab has IV/Greeks; WATCH merges scan + alert names.", "success");
         });
       });
     }
@@ -4931,16 +5010,32 @@
       loadOrders();
     }
 
+    /** One page width = #mainSwipe width; %-translate was wrong (was % of 700% strip → blank tabs on phones). */
+    function applyPageTransform() {
+      const main = document.getElementById("mainSwipe");
+      const pages = document.getElementById("pages");
+      if (!main || !pages) return;
+      const w = main.getBoundingClientRect().width || main.clientWidth || 0;
+      if (!w) return;
+      const idx = Math.max(0, Math.min(6, state.page | 0));
+      pages.style.transform = "translate3d(-" + idx * w + "px,0,0)";
+    }
+
     function setPage(i) {
-      state.page = i;
-      const pct = (100 / 7) * i;
-      document.getElementById("pages").style.transform = "translateX(-" + pct + "%)";
-      document.querySelectorAll(".nav-item").forEach((n) => n.classList.toggle("active", parseInt(n.dataset.i, 10) === i));
-      if (i === 3) {
+      state.page = Math.max(0, Math.min(6, i));
+      applyPageTransform();
+      const page = state.page;
+      document.querySelectorAll(".nav-item").forEach((n) => n.classList.toggle("active", parseInt(n.dataset.i, 10) === page));
+      if (page === 3) {
         document.getElementById("trackerActionBanner").style.display = "none";
         refreshMainTop();
       }
-      if (i === 5) renderIgnitionHistoryScan();
+      try {
+        if (page === 2) renderDynamicWatchlist();
+      } catch (e) {
+        console.error("renderDynamicWatchlist", e);
+      }
+      if (page === 5) renderIgnitionHistoryScan();
     }
 
     function underlyingFromOcc(occ) {
@@ -5354,6 +5449,143 @@
       }
     }
 
+    function renderDynamicWatchlist() {
+      const metaEl = document.getElementById("wlDynMeta");
+      const listEl = document.getElementById("wlDynList");
+      if (!listEl) return;
+
+      const escW = (s) =>
+        String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+
+      const d = state.scanData;
+      const s925 = d?.scan925;
+      const s955 = d?.scan955;
+      const mc = s925?.marketContext || {};
+
+      if (metaEl) {
+        const parts = [];
+        if (mc.regime) parts.push("Regime " + String(mc.regime).replace(/_/g, " "));
+        if (mc.vix != null && isFinite(mc.vix)) parts.push("VIX " + mc.vix.toFixed(2));
+        if (mc.spyPct != null && isFinite(mc.spyPct))
+          parts.push("SPY " + (mc.spyPct >= 0 ? "+" : "") + mc.spyPct.toFixed(2) + "%");
+        if (mc.qqqPct != null && isFinite(mc.qqqPct))
+          parts.push("QQQ " + (mc.qqqPct >= 0 ? "+" : "") + mc.qqqPct.toFixed(2) + "%");
+        const gex = s925?.gexSpy;
+        if (gex && gex.gexRegime) parts.push("GEX " + String(gex.gexRegime));
+        metaEl.textContent = parts.length
+          ? parts.join(" · ")
+          : "Pulls from 9:25 / 9:55 scans, tape context, and open alerts — full narrative stays on SCAN.";
+      }
+
+      const bySym = new Map();
+
+      function add(sym, tag, note) {
+        if (!sym || typeof sym !== "string") return;
+        const u = sym.toUpperCase().replace(/\s/g, "");
+        if (!u) return;
+        let row = bySym.get(u);
+        if (!row) {
+          row = { symbol: u, tags: new Set(), notes: [] };
+          bySym.set(u, row);
+        }
+        row.tags.add(tag);
+        if (note && String(note).trim()) row.notes.push(String(note).trim());
+      }
+
+      const focus = (state.ticker || "").toUpperCase().trim();
+      if (focus) add(focus, "FOCUS", "Loaded on SIGNAL");
+
+      const bt = (state.bannerTicker || "").toUpperCase().trim();
+      if (bt && bt !== "SETUP" && bt !== "SETUP.") add(bt, "SCANNER", "Scanner banner name");
+
+      if (s925) {
+        (s925.watchlistBull || []).forEach((t) => {
+          const sym = t && t.symbol;
+          const n = t && t.score != null ? "Score " + t.score : "";
+          add(sym, "9:25 BULL", n);
+        });
+        (s925.watchlistBear || []).forEach((t) => add(t && t.symbol, "9:25 BEAR", ""));
+        (s925.watchlistAvoid || []).forEach((t) => add(t && t.symbol, "AVOID", ""));
+      }
+
+      if (s955) {
+        (s955.confirmedTickers || []).forEach((t) => {
+          const sym = t && t.symbol;
+          let n = "";
+          if (t && t.changePct != null && isFinite(t.changePct))
+            n = (t.changePct >= 0 ? "+" : "") + t.changePct.toFixed(2) + "%";
+          add(sym, "OR CONFIRMED", n);
+        });
+        (s955.watchingTickers || []).forEach((t) => {
+          const sym = t && t.symbol;
+          const st = t && t.stage;
+          const n =
+            st && (st.label || st.action)
+              ? String(st.label || "") + (st.action ? ": " + String(st.action).slice(0, 100) : "")
+              : "";
+          add(sym, "OR WATCH", n);
+        });
+      }
+
+      for (const a of state.alertTrackerList || []) {
+        const sym = (a.ticker || "").toUpperCase();
+        if (!sym) continue;
+        const sum = a.aiTrackingSummary ? String(a.aiTrackingSummary).slice(0, 120) : "";
+        add(sym, "OPEN ALERT", sum);
+      }
+
+      const rows = Array.from(bySym.values()).sort((a, b) => a.symbol.localeCompare(b.symbol));
+
+      function tagClass(tag) {
+        if (tag === "AVOID") return "wl-dyn-tag wl-dyn-tag--avoid";
+        if (tag === "9:25 BEAR") return "wl-dyn-tag wl-dyn-tag--bear";
+        if (tag === "9:25 BULL") return "wl-dyn-tag wl-dyn-tag--bull";
+        if (tag === "OR CONFIRMED") return "wl-dyn-tag wl-dyn-tag--conf";
+        if (tag === "OR WATCH") return "wl-dyn-tag wl-dyn-tag--watch";
+        if (tag === "OPEN ALERT") return "wl-dyn-tag wl-dyn-tag--alert";
+        if (tag === "FOCUS" || tag === "SCANNER") return "wl-dyn-tag wl-dyn-tag--focus";
+        return "wl-dyn-tag";
+      }
+
+      if (!rows.length) {
+        listEl.innerHTML =
+          '<div class="card muted" style="padding:20px;text-align:center;line-height:1.5;">No symbols yet — wait for scans, open alerts, or load a ticker on SIGNAL.</div>';
+        return;
+      }
+
+      listEl.innerHTML = rows
+        .map((r) => {
+          const tags = Array.from(r.tags).sort();
+          const tagHtml = tags.map((t) => `<span class="${tagClass(t)}">${escW(t)}</span>`).join("");
+          const uniqNotes = [...new Set(r.notes)].filter(Boolean);
+          const noteHtml = uniqNotes.length
+            ? `<p class="muted" style="margin-top:8px;font-size:0.78rem;line-height:1.45;">${escW(uniqNotes.join(" · "))}</p>`
+            : "";
+          return `<div class="card wl-dyn-row" style="margin-bottom:10px;padding:12px;background:var(--bg2);border-color:var(--border2);">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span class="font-bebas" style="font-size:1.35rem;letter-spacing:0.5px;color:var(--text);">${escW(r.symbol)}</span>
+          <button type="button" class="hero-cta watch" data-wl-load="${escW(r.symbol)}" style="padding:8px 14px;font-size:0.72rem;">LOAD</button>
+        </div>
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">${tagHtml}</div>
+        ${noteHtml}
+      </div>`;
+        })
+        .join("");
+
+      listEl.querySelectorAll("[data-wl-load]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const sym = btn.getAttribute("data-wl-load");
+          if (!sym) return;
+          document.getElementById("tickerInput").value = sym;
+          goTicker();
+          setPage(0);
+        });
+      });
+    }
+
     async function pollScanData() {
       try {
         const r = await fetch("/api/scan-data");
@@ -5375,12 +5607,13 @@
         state.scanContentHash = sig;
         await pollScanAlertsFeed();
         renderScanDashboard(d);
+        renderDynamicWatchlist();
         await loadLearningPanels();
         state.scanUpdatedAt = Date.now();
         const fu = document.getElementById("scanFooterUpdated");
         if (fu) fu.textContent = "Updated just now";
       } catch {
-        /* offline */
+        renderDynamicWatchlist();
       }
     }
 
@@ -5725,6 +5958,8 @@
             '<span class="muted">No EOD analysis in blob yet.</span>';
         }
       }
+      updateStripFromScan();
+      applyIndexStripFallbackFromScan();
     }
 
     async function pollAlerts() {
@@ -6005,7 +6240,15 @@
     }
     document.getElementById("guideCards").innerHTML = guideHtml();
 
-    setInterval(() => { loadClock(); loadWatchlist(); loadMarketData(); }, 30000);
+    setInterval(() => {
+      loadClock();
+      loadWatchlist();
+      loadMarketData();
+      refreshIndexStripQuotes().then(() => {
+        updateStripFromScan();
+        applyIndexStripFallbackFromScan();
+      });
+    }, 30000);
     setInterval(() => { loadBalances(); loadPositions(); loadOrders(); }, 60000);
     setInterval(pollAlerts, 30000);
     setInterval(pollScanData, 60000);
@@ -6029,6 +6272,10 @@
     pollAlertTracker();
     loadLearnings();
     initPushAndSw();
+
+    window.addEventListener("resize", () => applyPageTransform());
+    window.addEventListener("orientationchange", () => setTimeout(applyPageTransform, 150));
+    applyPageTransform();
   </script>
 </body>
 </html>

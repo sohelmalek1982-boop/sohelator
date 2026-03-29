@@ -24,6 +24,20 @@ const BASE_WATCH = [
   "TSM", "UBER",
 ];
 
+/** One-line summary for tracking AI vs outcome (stored on each alert). */
+function buildAiTrackingSummary(text, parsed) {
+  const p = parsed || {};
+  const bits = [];
+  if (p.action) bits.push(String(p.action).trim());
+  if (p.target) bits.push("Target " + String(p.target).trim());
+  if (p.stop) bits.push("Stop " + String(p.stop).trim());
+  if (p.confidence != null) bits.push("Conf " + p.confidence + "%");
+  if (bits.length) return bits.join(" · ").slice(0, 280);
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  return t.slice(0, 220) + (t.length > 220 ? "…" : "");
+}
+
 const TICKER_BLOCK = new Set([
   "THE", "AND", "FOR", "ARE", "BUT", "NOT", "YOU", "ALL", "CAN", "HER",
   "WAS", "ONE", "OUR", "OUT", "DAY", "GET", "HAS", "HIM", "HIS", "HOW",
@@ -1244,6 +1258,17 @@ async function runScan() {
       memory
     );
 
+    const holdTypeLabel =
+      /PUT|BEAR|fade/i.test(revType) && !/BULL|CALL bounce/i.test(revType)
+        ? "SWING (bear)"
+        : "SWING (bull)";
+    const holdProfile = "swing_1_3d";
+    const swingHoldOk = true;
+    const aiTrackingSummary = buildAiTrackingSummary(
+      aiAnalysis,
+      aiAnalysisParsed
+    );
+
     const pending = {
       ticker: s.ticker,
       setupType: s.setupType,
@@ -1292,6 +1317,10 @@ async function runScan() {
       timestamp: Date.now(),
       winRate,
       urgencyTier: urgency.tier,
+      holdTypeLabel,
+      holdProfile,
+      swingHoldOk,
+      aiTrackingSummary,
     };
 
     const pendingKey = "pending_" + Date.now() + "_" + s.ticker;
@@ -1324,6 +1353,10 @@ async function runScan() {
       outcome: null,
       winRate,
       urgencyTier: urgency.tier,
+      holdTypeLabel,
+      holdProfile,
+      swingHoldOk,
+      aiTrackingSummary,
     };
     await alertsStore.setJSON(alertKey, alertRecord);
 
@@ -1337,10 +1370,7 @@ async function runScan() {
       ? `🔊 VOL: ${s.volAnalysis.currentVolRatio}x avg — ${s.volAnalysis.priceVolumeSignal}`
       : `📊 VOL: ${s.volAnalysis?.currentVolRatio ?? "—"}x avg`;
 
-    const holdType =
-      /PUT|BEAR|fade/i.test(revType) && !/BULL|CALL bounce/i.test(revType)
-        ? "SWING (bear)"
-        : "SWING (bull)";
+    const holdType = holdTypeLabel;
     const ignLine =
       s.ignition?.status === "LAUNCH"
         ? `🚀 IGNITION: ${s.ignition.score}/100 — ALL 3 ENGINES FIRING`
