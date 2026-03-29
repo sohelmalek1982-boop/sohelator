@@ -378,13 +378,18 @@
     .main.has-banner:not(.has-tracker-banner) { top: calc(var(--topbar-h) + 46px + var(--safe-top)); }
     .main.has-tracker-banner:not(.has-banner) { top: calc(var(--topbar-h) + 46px + var(--safe-top)); }
     .main.has-banner.has-tracker-banner { top: calc(var(--topbar-h) + 92px + var(--safe-top)); }
+    /* Widths set in JS (applyPageTransform) — %-based flex + px translate misaligns on mobile WebKit → “blank” tabs. */
     .pages {
-      display: flex; width: 700%; height: 100%; transition: transform 0.28s ease-out; will-change: transform;
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      height: 100%;
+      transition: transform 0.28s ease-out;
+      will-change: transform;
     }
     .page {
-      flex: 0 0 14.285714%;
-      width: 14.285714%;
-      min-width: 14.285714%;
+      flex: 0 0 auto;
+      box-sizing: border-box;
       height: 100%;
       overflow-y: auto;
       overflow-x: hidden;
@@ -5010,15 +5015,30 @@
       loadOrders();
     }
 
-    /** One page width = #mainSwipe width; %-translate was wrong (was % of 700% strip → blank tabs on phones). */
+    /** Lock each .page width to #mainSwipe in px so translate3d lands exactly on a column (fixes blank tabs on iOS). */
     function applyPageTransform() {
       const main = document.getElementById("mainSwipe");
       const pages = document.getElementById("pages");
       if (!main || !pages) return;
-      const w = main.getBoundingClientRect().width || main.clientWidth || 0;
-      if (!w) return;
+      let w = main.getBoundingClientRect().width || main.clientWidth || 0;
+      if (w < 2) {
+        requestAnimationFrame(applyPageTransform);
+        return;
+      }
       const idx = Math.max(0, Math.min(6, state.page | 0));
-      pages.style.transform = "translate3d(-" + idx * w + "px,0,0)";
+      const pageEls = pages.querySelectorAll(".page");
+      const total = 7 * w;
+      pages.style.width = total + "px";
+      pageEls.forEach((p) => {
+        p.style.flex = "0 0 " + w + "px";
+        p.style.width = w + "px";
+        p.style.minWidth = w + "px";
+        p.style.maxWidth = w + "px";
+      });
+      const x = -idx * w;
+      const tf = "translate3d(" + x + "px,0,0)";
+      pages.style.transform = tf;
+      pages.style.webkitTransform = tf;
     }
 
     function setPage(i) {
@@ -6274,8 +6294,15 @@
     initPushAndSw();
 
     window.addEventListener("resize", () => applyPageTransform());
-    window.addEventListener("orientationchange", () => setTimeout(applyPageTransform, 150));
-    applyPageTransform();
+    window.addEventListener("orientationchange", () => setTimeout(applyPageTransform, 200));
+    window.addEventListener("load", () => applyPageTransform());
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", () => applyPageTransform());
+    }
+    requestAnimationFrame(() => {
+      applyPageTransform();
+      requestAnimationFrame(applyPageTransform);
+    });
   </script>
 </body>
 </html>
