@@ -3,6 +3,7 @@ const { getStore } = require("@netlify/blobs");
 const { getAlertCurrentPnl } = require("./lib/optionsData");
 const { getMemoryStore } = require("./lib/memory");
 const { forecastSetup } = require("./lib/forecast");
+const { isNyRegularSessionNow } = require("./lib/marketCalendar");
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -31,6 +32,18 @@ async function tradierGet(path, params = {}) {
 function normList(x) {
   if (!x) return [];
   return Array.isArray(x) ? x : [x];
+}
+
+/** Seconds since last quote update, or null if unknown. */
+function quoteAgeSeconds(q) {
+  if (!q) return null;
+  const raw =
+    q.bid_timestamp ?? q.ask_timestamp ?? q.last_quote_time ?? q.prev_bid_timestamp;
+  if (raw == null) return null;
+  let sec = typeof raw === "number" ? raw : Date.parse(String(raw)) / 1000;
+  if (!isFinite(sec) || sec <= 0) return null;
+  if (sec > 1e12) sec /= 1000;
+  return Math.max(0, Date.now() / 1000 - sec);
 }
 
 function getRecommendedAction(alert, estimatedPnl) {
@@ -190,6 +203,11 @@ exports.handler = async (event) => {
         alert.price ??
         0;
       const q = quotes[alert.ticker];
+      const quoteAgeSec = quoteAgeSeconds(q);
+      const staleQuote =
+        isNyRegularSessionNow() &&
+        quoteAgeSec != null &&
+        quoteAgeSec > 120;
       const currentPrice = parseFloat(
         q?.last ?? q?.close ?? alert.currentUnderlying ?? 0
       );
@@ -246,6 +264,8 @@ exports.handler = async (event) => {
         recommendedAction: rec.action,
         recommendedMeta: rec,
         forecastData,
+        quoteAgeSeconds: quoteAgeSec,
+        staleQuote,
         lastUpdated: Date.now(),
       };
     })

@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>SOHELATOR</title>
-  <meta name="sohel-build" content="inds-interpreted-20260328" />
+  <meta name="sohel-build" content="health-scan-polish-20260328" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Chakra+Petch:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
@@ -1626,6 +1626,8 @@
           <span class="sb-seg">NEXT <span class="sb-val" id="scanNextScan">—</span></span>
           <span class="sb-seg">SIGNALS TODAY <span class="sb-val" id="scanSignalsToday">—</span></span>
           <span class="sb-seg">WIN RATE <span class="sb-val" id="scanWinRate">—</span></span>
+          <span class="sb-seg" style="flex:1 1 100%;">JOBS <span class="sb-val" id="scanJobHealth" style="font-weight:600;font-size:0.62rem;">—</span></span>
+          <span class="sb-seg" style="flex:1 1 100%;">DATA AS OF <span class="sb-val" id="scanDataAsOf" style="font-weight:600;font-size:0.62rem;">—</span></span>
         </div>
 
         <h2 class="section">9:25 morning brief</h2>
@@ -1634,6 +1636,7 @@
           <div class="font-mono" style="font-size:0.65rem;color:var(--accent);margin-bottom:10px;" id="mbSubtitle">—</div>
           <div id="mbYesterdayBanner" style="display:none;font-size:0.72rem;color:var(--muted);margin-bottom:8px;" class="muted"></div>
           <div id="mbChipsRow" class="scan-chip-row"></div>
+          <p id="mbRegimeSizing" class="muted" style="font-size:0.72rem;margin-top:6px;line-height:1.45;display:none;"></p>
           <div id="mbBody" class="scan-mb-body"></div>
           <div id="mbWatch" style="margin-top:14px;"></div>
         </div>
@@ -2602,6 +2605,12 @@
                 : fd.forecastWinRate >= 50
                   ? "#ffd700"
                   : "#ff3b5c";
+          const staleLine = a.staleQuote
+            ? `<div style="font-family:'Space Mono',monospace;font-size:8px;color:#ff8c42;margin-top:8px;padding:6px 8px;border-radius:6px;background:rgba(255,140,66,.08);border:1px solid rgba(255,140,66,.25)">Stale quote — underlying tape &gt;2 min old (session). Verify before acting.</div>`
+            : "";
+          const forecastDisc = fd
+            ? `<div style="font-family:'DM Sans',sans-serif;font-size:9px;color:#3a5a6e;margin-top:6px;line-height:1.45">Historical pattern stats only — not investment advice or a guarantee of results.</div>`
+            : "";
 
           if (tierKey === "WATCH") {
             return (
@@ -2614,10 +2623,11 @@
               <div style="padding:12px 14px 14px">
                 <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:0.5px;color:#8aacbe">${esc(formatBuyLine(a))}</div>
                 <div style="margin-top:12px;font-family:'Space Mono',monospace;font-size:9px;padding:8px 12px;border-radius:7px;font-weight:700;letter-spacing:0.3px;background:rgba(255,215,0,.06);color:#ffd700;border:1px solid rgba(255,215,0,.25);display:inline-block">GET READY</div>
+                ${staleLine}
               </div>
-              <div style="display:flex;gap:6px;padding:0 14px 14px">
-                <button type="button" style="flex:1;height:40px;padding:0 14px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px" data-at-load="${esc(a.ticker)}">LOAD</button>
-                <button type="button" class="log-trade-from-alert" style="flex:1;height:40px;padding:0 14px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px"
+              <div style="display:flex;gap:4px;padding:0 14px 14px;flex-wrap:wrap">
+                <button type="button" style="flex:1;min-width:72px;height:40px;padding:0 10px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px" data-at-load="${esc(a.ticker)}">LOAD</button>
+                <button type="button" class="log-trade-from-alert" style="flex:1;min-width:72px;height:40px;padding:0 10px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px"
                   data-lt-ticker="${esc(a.ticker)}"
                   data-lt-strike="${esc(o.strike ?? "")}"
                   data-lt-expiry="${esc(o.expiry ?? "")}"
@@ -2626,6 +2636,26 @@
                   data-lt-score="${a.score != null ? a.score : ""}"
                   data-lt-stage="${esc(a.stage || "")}"
                 >LOG</button>
+                <button type="button" class="log-outcome-alert" style="width:44px;height:40px;padding:0;border-radius:8px;background:rgba(0,255,135,.12);border:1px solid rgba(0,255,135,.35);color:#00ff87;font-family:'Space Mono',monospace;font-size:10px;font-weight:700"
+                  data-lo-ticker="${esc(a.ticker)}"
+                  data-lo-strike="${esc(o.strike ?? "")}"
+                  data-lo-expiry="${esc(o.expiry ?? "")}"
+                  data-lo-premium="${prem0}"
+                  data-lo-dir="${esc(o.optType || a.direction || "call")}"
+                  data-lo-score="${a.score != null ? a.score : ""}"
+                  data-lo-stage="${esc(a.stage || "")}"
+                  data-lo-outcome="win"
+                >W</button>
+                <button type="button" class="log-outcome-alert" style="width:44px;height:40px;padding:0;border-radius:8px;background:rgba(255,59,92,.12);border:1px solid rgba(255,59,92,.35);color:#ff3b5c;font-family:'Space Mono',monospace;font-size:10px;font-weight:700"
+                  data-lo-ticker="${esc(a.ticker)}"
+                  data-lo-strike="${esc(o.strike ?? "")}"
+                  data-lo-expiry="${esc(o.expiry ?? "")}"
+                  data-lo-premium="${prem0}"
+                  data-lo-dir="${esc(o.optType || a.direction || "call")}"
+                  data-lo-score="${a.score != null ? a.score : ""}"
+                  data-lo-stage="${esc(a.stage || "")}"
+                  data-lo-outcome="loss"
+                >L</button>
               </div>
             </div>`
             );
@@ -2675,6 +2705,7 @@
                 <div style="font-family:'Space Mono',monospace;font-size:9px;color:${pnlColor};margin-top:2px">$${currentPremium.toFixed(2)} premium</div>
               </div>
             </div>
+            ${staleLine}
             ${
               fd
                 ? `<div style="padding:8px 12px;border-top:1px solid #0f1820;background:#0a1218">
@@ -2687,6 +2718,7 @@
                 </div>
               </div>
               <div style="font-family:'DM Sans',sans-serif;font-size:10px;color:#2e4a5e;margin-top:4px;line-height:1.5">${esc(fd.recommendation || "")}</div>
+              ${forecastDisc}
             </div>`
                 : ""
             }
@@ -2698,11 +2730,11 @@
                 <span>-50%</span><span>ENTRY</span><span>+80%</span><span>+150%</span>
               </div>
             </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#060e14">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#060e14;flex-wrap:wrap;gap:8px">
               <div style="font-family:'Space Mono',monospace;font-size:9px;padding:6px 12px;border-radius:7px;font-weight:700;letter-spacing:.3px;background:${action.bg};color:${action.color};border:1px solid ${action.border}">${esc(action.text)}</div>
-              <div style="display:flex;gap:6px">
-                <button type="button" style="height:40px;padding:0 14px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px" data-at-load="${esc(a.ticker)}">LOAD</button>
-                <button type="button" class="log-trade-from-alert" style="height:40px;padding:0 14px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px"
+              <div style="display:flex;gap:4px;flex-wrap:wrap">
+                <button type="button" style="height:40px;padding:0 12px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px" data-at-load="${esc(a.ticker)}">LOAD</button>
+                <button type="button" class="log-trade-from-alert" style="height:40px;padding:0 12px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px"
                   data-lt-ticker="${esc(a.ticker)}"
                   data-lt-strike="${esc(o.strike ?? "")}"
                   data-lt-expiry="${esc(o.expiry ?? "")}"
@@ -2711,6 +2743,26 @@
                   data-lt-score="${a.score != null ? a.score : ""}"
                   data-lt-stage="${esc(a.stage || "")}"
                 >LOG</button>
+                <button type="button" class="log-outcome-alert" style="width:44px;height:40px;padding:0;border-radius:8px;background:rgba(0,255,135,.12);border:1px solid rgba(0,255,135,.35);color:#00ff87;font-family:'Space Mono',monospace;font-size:10px;font-weight:700"
+                  data-lo-ticker="${esc(a.ticker)}"
+                  data-lo-strike="${esc(o.strike ?? "")}"
+                  data-lo-expiry="${esc(o.expiry ?? "")}"
+                  data-lo-premium="${prem0}"
+                  data-lo-dir="${esc(o.optType || a.direction || "call")}"
+                  data-lo-score="${a.score != null ? a.score : ""}"
+                  data-lo-stage="${esc(a.stage || "")}"
+                  data-lo-outcome="win"
+                >W</button>
+                <button type="button" class="log-outcome-alert" style="width:44px;height:40px;padding:0;border-radius:8px;background:rgba(255,59,92,.12);border:1px solid rgba(255,59,92,.35);color:#ff3b5c;font-family:'Space Mono',monospace;font-size:10px;font-weight:700"
+                  data-lo-ticker="${esc(a.ticker)}"
+                  data-lo-strike="${esc(o.strike ?? "")}"
+                  data-lo-expiry="${esc(o.expiry ?? "")}"
+                  data-lo-premium="${prem0}"
+                  data-lo-dir="${esc(o.optType || a.direction || "call")}"
+                  data-lo-score="${a.score != null ? a.score : ""}"
+                  data-lo-stage="${esc(a.stage || "")}"
+                  data-lo-outcome="loss"
+                >L</button>
               </div>
             </div>
             <div style="border-top:1px solid #0f1820;padding:10px 14px;cursor:pointer" class="snap-hdr" data-snap="${aid}">
@@ -2749,6 +2801,8 @@
               stage: btn.dataset.ltStage || undefined,
               outcome: "open",
             };
+            const mode = localStorage.getItem("sohel_execution_mode");
+            if (mode === "paper" || mode === "live") body.executionMode = mode;
             const res = await fetch("/api/log-trade", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -2756,6 +2810,34 @@
             });
             const j = await res.json();
             if (j.ok) toast("Trade logged", "success");
+            else toast(j.error || "Log failed", "error");
+          } catch {
+            toast("Log failed", "error");
+          }
+        });
+      });
+      el.querySelectorAll(".log-outcome-alert").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          try {
+            const body = {
+              ticker: btn.dataset.loTicker,
+              strike: btn.dataset.loStrike || undefined,
+              expiry: btn.dataset.loExpiry || undefined,
+              entryPremium: parseFloat(btn.dataset.loPremium) || undefined,
+              direction: btn.dataset.loDir || "call",
+              signalScore: btn.dataset.loScore ? parseFloat(btn.dataset.loScore) : undefined,
+              stage: btn.dataset.loStage || undefined,
+              outcome: btn.dataset.loOutcome === "win" ? "win" : "loss",
+            };
+            const mode = localStorage.getItem("sohel_execution_mode");
+            if (mode === "paper" || mode === "live") body.executionMode = mode;
+            const res = await fetch("/api/log-trade", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            const j = await res.json();
+            if (j.ok) toast(btn.dataset.loOutcome === "win" ? "Logged as win" : "Logged as loss", "success");
             else toast(j.error || "Log failed", "error");
           } catch {
             toast("Log failed", "error");
@@ -5221,6 +5303,41 @@
       }
     }
 
+    function formatJobHealthBrief(jh) {
+      if (!jh || typeof jh !== "object") return "—";
+      const order = ["scanner", "scan-925", "scan-955", "scan-eod"];
+      const now = Date.now();
+      const parts = [];
+      for (const id of order) {
+        const row = jh[id];
+        if (!row || !row.lastOk) continue;
+        const ago = Math.round((now - row.lastOk) / 60000);
+        const label = id.replace("scan-", "").replace("scanner", "scan");
+        parts.push(label + " " + (ago < 120 ? ago + "m ago" : "—"));
+      }
+      if (jh.scanner && jh.scanner.lastError) parts.push("scan err");
+      return parts.length ? parts.join(" · ") : "—";
+    }
+
+    function formatScanDataAsOf(d) {
+      const tz = { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" };
+      const bit = [];
+      if (d.scan925 && d.scan925.timestamp)
+        bit.push("9:25 " + new Date(d.scan925.timestamp).toLocaleTimeString("en-US", tz));
+      if (d.scan955 && d.scan955.timestamp)
+        bit.push("9:55 " + new Date(d.scan955.timestamp).toLocaleTimeString("en-US", tz));
+      if (d.eodLatest && d.eodLatest.timestamp)
+        bit.push("EOD " + new Date(d.eodLatest.timestamp).toLocaleTimeString("en-US", tz));
+      if (d.marketClock && d.marketClock.state)
+        bit.push(
+          "clock " +
+            String(d.marketClock.state) +
+            (d.marketClock.next_change ? " · next " + String(d.marketClock.next_change).slice(11, 16) : "")
+        );
+      if (d.lastUpdated) bit.push("feed " + new Date(d.lastUpdated).toLocaleTimeString("en-US", tz));
+      return bit.length ? bit.join(" · ") : "—";
+    }
+
     function renderScanDashboard(d) {
       const s925 = d.scan925;
       const s955 = d.scan955;
@@ -5228,6 +5345,11 @@
       const run = d.runningStats;
       const m = state.lastScanMeta;
       const todayStr = scanNyLongDate();
+
+      const jhEl = document.getElementById("scanJobHealth");
+      if (jhEl) jhEl.textContent = formatJobHealthBrief(d.jobHealth);
+      const dao = document.getElementById("scanDataAsOf");
+      if (dao) dao.textContent = formatScanDataAsOf(d);
 
       const dot = document.getElementById("scanMktDot");
       const pill = document.getElementById("scanMktPill");
@@ -5311,6 +5433,19 @@
             `<span class="scan-chip gex">${g ? "GEX " + (g.gexRegime || "") : "GEX —"}</span>`,
           ].join("");
         }
+        const mbr = document.getElementById("mbRegimeSizing");
+        if (mbr) {
+          if (mc.regime) {
+            mbr.style.display = "block";
+            mbr.textContent =
+              "Sizing: align with regime — " +
+              String(mc.regime).replace(/_/g, " ") +
+              ". Reduce size in chop / elevated VIX; standard in trend / calm.";
+          } else {
+            mbr.style.display = "none";
+            mbr.textContent = "";
+          }
+        }
         if (mbBody) mbBody.textContent = s925.claudeAnalysis || "";
         const bulls = s925.watchlistBull || [];
         const bears = s925.watchlistBear || [];
@@ -5339,6 +5474,11 @@
           mbBanner.textContent = "Next morning brief: 9:25am (Mon–Fri)";
         }
         if (mbChips) mbChips.innerHTML = "";
+        const mbr0 = document.getElementById("mbRegimeSizing");
+        if (mbr0) {
+          mbr0.style.display = "none";
+          mbr0.textContent = "";
+        }
         if (mbBody)
           mbBody.textContent =
             "No pre-market blob yet — deploy scheduled scans or wait for 9:25am.";

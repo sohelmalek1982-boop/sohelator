@@ -1,5 +1,7 @@
 const { getStore } = require("@netlify/blobs");
 
+const DECISION_SCHEMA_VERSION = 1;
+
 function getMemoryStore() {
   return getStore({
     name: "trading-memory",
@@ -38,6 +40,10 @@ async function recordTrade(trade) {
       100;
   }
 
+  const executionMode =
+    trade.executionMode ||
+    (trade.paper === true ? "paper" : trade.paper === false ? "live" : null);
+
   const tradeRecord = {
     id,
     timestamp: Date.now(),
@@ -59,6 +65,10 @@ async function recordTrade(trade) {
     exitReason: trade.exitReason || null,
     exitType: trade.exitType || null,
   };
+  if (executionMode) {
+    tradeRecord.executionMode = executionMode;
+    tradeRecord.paper = executionMode === "paper";
+  }
 
   await store.setJSON(id, tradeRecord);
   await updateTickerStats(store, trade.ticker, tradeRecord);
@@ -314,6 +324,7 @@ function buildAlertSnapshotPayload(alert, master) {
     id: alert.id,
     ticker: alert.ticker,
     timestamp: Date.now(),
+    decisionSchemaVersion: DECISION_SCHEMA_VERSION,
     ...nyDateParts(),
     sessionMinute: getSessionMinute(),
 

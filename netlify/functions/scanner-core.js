@@ -15,6 +15,8 @@ const { recommendSize } = require("./lib/sizing");
 const { getMasterAnalysis } = require("./lib/masterAnalysis");
 const { analyzeVolume } = require("./lib/volumeAnalysis");
 const { calculateIgnition } = require("./lib/ignition");
+const { isEquitySessionDay } = require("./lib/marketCalendar");
+const { recordJobOk } = require("./lib/jobHealth");
 
 const BASE_WATCH = [
   "NVDA", "TSLA", "SPY", "QQQ", "AAPL", "AMD", "MSFT", "META", "GOOGL",
@@ -722,6 +724,18 @@ async function runScan() {
     siteID: process.env.NETLIFY_SITE_ID,
     token: process.env.NETLIFY_TOKEN,
   });
+  if (!isEquitySessionDay(new Date())) {
+    await scannerStore.setJSON("last_scan", {
+      timestamp: Date.now(),
+      tickersScanned: [],
+      setupsFound: [],
+      alertsSent: 0,
+      skipped: true,
+      reason: "nyse holiday or weekend",
+    });
+    await recordJobOk("scanner", { skipped: true, reason: "holiday" });
+    return { ok: true, skipped: true, reason: "holiday" };
+  }
   let alertCount = 0;
   const confirmedSetups = [];
   const tickerList = [];
@@ -738,6 +752,10 @@ async function runScan() {
         tickersScanned: [],
         setupsFound: [],
         alertsSent: 0,
+        skipped: true,
+        reason: "market not open",
+      });
+      await recordJobOk("scanner", {
         skipped: true,
         reason: "market not open",
       });
@@ -1100,6 +1118,21 @@ async function runScan() {
       continue;
     }
 
+    const dedupKey = "alert_dedup_" + s.ticker + "_" + s.stage;
+    try {
+      const prev = await alertsStore.get(dedupKey, { type: "json" });
+      if (
+        prev &&
+        typeof prev.ts === "number" &&
+        Date.now() - prev.ts < 15 * 60 * 1000
+      ) {
+        console.log("dedup skip", s.ticker, s.stage);
+        continue;
+      }
+    } catch (e) {
+      console.error("dedup", e);
+    }
+
     let revType = s.setupType;
     if (s.reversal) {
       revType =
@@ -1421,7 +1454,14 @@ async function runScan() {
       data: { url: "/", ticker: s.ticker },
     });
 
+    try {
+      await alertsStore.setJSON(dedupKey, { ts: Date.now() });
+    } catch (e) {
+      console.error("dedup write", e);
+    }
+
     alertCount++;
+    await new Promise((r) => setTimeout(r, 250));
   }
 
   let history = [];
@@ -1433,10 +1473,12 @@ async function runScan() {
   }
   for (let i = top5.length - 1; i >= 0; i--) {
     const s = top5[i];
+    const cs = confirmedSetups.find((c) => c.ticker === s.ticker);
+    const histScore = cs?.alertScore ?? cs?.score ?? s.score;
     history.unshift({
       ticker: s.ticker,
       setupType: s.setupType,
-      score: finalScore,
+      score: histScore,
       timestamp: Date.now(),
       outcome: null,
     });
@@ -1454,6 +1496,11 @@ async function runScan() {
       scannerScore: c.score,
     })),
     alertsSent: alertCount,
+  });
+
+  await recordJobOk("scanner", {
+    alertsSent: alertCount,
+    setups: confirmedSetups.length,
   });
 
   return {

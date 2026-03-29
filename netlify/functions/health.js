@@ -1,5 +1,4 @@
 const fetch = require("node-fetch");
-const { getStore } = require("@netlify/blobs");
 const { getJobHealth } = require("./lib/jobHealth");
 
 function tradierBase() {
@@ -20,7 +19,8 @@ async function tradierClock() {
     });
     const j = await res.json();
     return j.clock || j;
-  } catch {
+  } catch (e) {
+    console.error("health tradierClock", e);
     return null;
   }
 }
@@ -43,39 +43,18 @@ exports.handler = async (event) => {
       body: JSON.stringify({ error: "GET only" }),
     };
   }
-
-  const store = getStore({
-    name: "morning-scans",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
-  const learningStore = getStore({
-    name: "learnings",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
-
-  const [scan925, scan955, eodLatest, runningStats, jobHealth, marketClock] =
-    await Promise.all([
-      store.get("scan_925_latest", { type: "json" }),
-      store.get("scan_955_latest", { type: "json" }),
-      learningStore.get("eod_latest", { type: "json" }),
-      learningStore.get("running_stats", { type: "json" }),
-      getJobHealth(),
-      tradierClock(),
-    ]);
-
+  const [jobHealth, clock] = await Promise.all([
+    getJobHealth(),
+    tradierClock(),
+  ]);
   return {
     statusCode: 200,
     headers,
     body: JSON.stringify({
-      scan925,
-      scan955,
-      eodLatest,
-      runningStats,
+      ok: true,
       jobHealth,
-      marketClock,
-      lastUpdated: Date.now(),
+      marketClock: clock,
+      at: Date.now(),
     }),
   };
 };

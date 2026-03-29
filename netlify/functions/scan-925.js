@@ -8,6 +8,7 @@ const { checkEarnings } = require("./lib/earnings");
 const { getMasterAnalysis } = require("./lib/masterAnalysis");
 const { calculateGEX } = require("./lib/gex");
 const { calculateRegime } = require("./lib/marketRegime");
+const { recordJobOk, recordJobError } = require("./lib/jobHealth");
 
 const ETF_BLOCK = new Set([
   "SPY", "QQQ", "DIA", "IWM", "XLK", "XLE", "XLF", "XBI", "XLV", "ARKK",
@@ -535,6 +536,15 @@ ${watchlistAvoid.map((t) => `⚠️ ${t.symbol} — SKIP (earnings)`).join("\n")
     });
   }
 
+  try {
+    await recordJobOk("scan-925", {
+      timestamp: scanData.timestamp,
+      candidates: watchlistBull.length + watchlistBear.length,
+    });
+  } catch (e) {
+    console.error("recordJobOk scan-925", e);
+  }
+
   return { statusCode: 200, body: JSON.stringify({ ok: true, scanData }) };
 }
 
@@ -568,7 +578,11 @@ async function httpHandler(event) {
       body: JSON.stringify(data || null),
     };
   }
-  return run925();
+  return run925().catch(async (e) => {
+    console.error(e);
+    await recordJobError("scan-925", e.message);
+    return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
+  });
 }
 
 exports.handler = schedule("30 14 * * 1-5", httpHandler);

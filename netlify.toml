@@ -94,6 +94,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/health"
+  to = "/.netlify/functions/health"
+  status = 200
+
+[[redirects]]
   from = "/api/scan-925"
   to = "/.netlify/functions/scan-925"
   status = 200

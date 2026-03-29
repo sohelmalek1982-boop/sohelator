@@ -15,6 +15,8 @@ const {
   formatPatterns,
   generateImprovements,
 } = require("./lib/eodPatterns");
+const { recordJobOk, recordJobError } = require("./lib/jobHealth");
+const { forecastSetup } = require("./lib/forecast");
 
 function tradierBase() {
   return (process.env.TRADIER_ENV || "production").toLowerCase() === "sandbox"
@@ -174,6 +176,14 @@ async function runEod() {
     console.error("eod snapshots load", e);
   }
 
+  let priorPatterns = null;
+  try {
+    const ms = memStore || getMemoryStore();
+    priorPatterns = await ms.get("patterns_all_time", { type: "json" });
+  } catch (e) {
+    console.error("eod prior patterns", e);
+  }
+
   const symSet = new Set(["SPY", "QQQ"]);
   for (const t of scan925?.watchlistBull || []) symSet.add(t.symbol);
   for (const t of scan925?.watchlistBear || []) symSet.add(t.symbol);
@@ -221,6 +231,16 @@ async function runEod() {
       }
       const estOptionReturn =
         alertPrice > 0 ? stockMovePct * 0.45 * 2 : 0;
+
+      let priorForecast = null;
+      try {
+        if (priorPatterns) {
+          priorForecast = await forecastSetup(snap, priorPatterns);
+        }
+      } catch (e) {
+        console.error("eod forecastSetup", snap.id, e);
+      }
+      const fc = priorForecast?.forecastWinRate;
       snap.outcome = {
         filled: true,
         priceAtClose: closePrice,
@@ -231,6 +251,13 @@ async function runEod() {
         correct: directionCorrect,
         exitReason: "EOD",
         holdMinutes: (Date.now() - snap.timestamp) / 60000,
+        priorPatternForecastWinRate:
+          fc != null ? fc : null,
+        priorForecastConfidence: priorForecast?.forecastConfidence ?? null,
+        forecastVsOutcome:
+          fc != null && directionCorrect != null
+            ? (fc >= 50) === !!directionCorrect
+            : null,
       };
       try {
         await memStore.setJSON(`snapshot_${snap.id}`, snap);
@@ -508,7 +535,17 @@ Also briefly: Was the GEX regime directionally useful? Did options-flow / sector
   }
 
   const gradeMatchEod = eodAnalysis.match(/Grade[:\s]+([A-F][+-]?)/i);
-  const gradeLetter = gradeMatchEod ? gradeMatchEod[1] : null;
+  let gradeLetter = gradeMatchEod ? gradeMatchEod[1] : null;
+  if (
+    !gradeLetter &&
+    winRate != null &&
+    totalCalls > 0
+  ) {
+    if (winRate >= 70) gradeLetter = "A";
+    else if (winRate >= 55) gradeLetter = "B";
+    else if (winRate >= 40) gradeLetter = "C";
+    else gradeLetter = "D";
+  }
 
   const eodData = {
     date: dateStr,
@@ -560,6 +597,16 @@ Also briefly: Was the GEX regime directionally useful? Did options-flow / sector
   stats.winRateHistory.push({ date: dateStr, winRate });
   if (stats.winRateHistory.length > 60) stats.winRateHistory.shift();
   await learningStore.setJSON(statsKey, stats);
+
+  try {
+    await recordJobOk("scan-eod", {
+      timestamp: eodData.timestamp,
+      winRate: eodData.winRate,
+      gradeLetter: eodData.gradeLetter,
+    });
+  } catch (e) {
+    console.error("recordJobOk scan-eod", e);
+  }
 
   const bot = process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TELEGRAM_CHAT_ID;
@@ -628,7 +675,11 @@ async function httpHandler(event) {
       body: JSON.stringify(data || null),
     };
   }
-  return runEod();
+  return runEod().catch(async (e) => {
+    console.error(e);
+    await recordJobError("scan-eod", e.message);
+    return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
+  });
 }
 
 exports.handler = schedule("5 21 * * 1-5", httpHandler);

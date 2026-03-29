@@ -1,5 +1,6 @@
 const { schedule } = require("@netlify/functions");
 const { runScan } = require("./scanner-core");
+const { recordJobError } = require("./lib/jobHealth");
 
 async function handler() {
   try {
@@ -7,6 +8,7 @@ async function handler() {
     return { statusCode: 200, body: JSON.stringify(result) };
   } catch (e) {
     console.error(e);
+    await recordJobError("scanner", e.message);
     return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
   }
 }

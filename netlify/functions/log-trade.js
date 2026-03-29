@@ -53,6 +53,8 @@ exports.handler = async (event) => {
       holdDays: body.holdDays,
       exitReason: body.exitReason,
       exitType: body.exitType,
+      executionMode: body.executionMode,
+      paper: body.paper,
     });
     return {
       statusCode: 200,

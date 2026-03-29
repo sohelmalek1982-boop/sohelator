@@ -4,6 +4,7 @@ const { schedule } = require("@netlify/functions");
 const { withSohelContext, buildTradingContext } = require("./lib/sohelContext");
 const { getMemoryContext } = require("./lib/memory");
 const { getMasterAnalysis } = require("./lib/masterAnalysis");
+const { recordJobOk, recordJobError } = require("./lib/jobHealth");
 
 function tradierBase() {
   return (process.env.TRADIER_ENV || "production").toLowerCase() === "sandbox"
@@ -623,6 +624,15 @@ ${claudeOverall.slice(0, 500)}…
     });
   }
 
+  try {
+    await recordJobOk("scan-955", {
+      timestamp: scan955Data.timestamp,
+      confirmed: confirmedTickers.length,
+    });
+  } catch (e) {
+    console.error("recordJobOk scan-955", e);
+  }
+
   return { statusCode: 200, body: JSON.stringify({ ok: true }) };
 }
 
@@ -649,7 +659,11 @@ async function httpHandler(event) {
       body: JSON.stringify(data || null),
     };
   }
-  return run955();
+  return run955().catch(async (e) => {
+    console.error(e);
+    await recordJobError("scan-955", e.message);
+    return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
+  });
 }
 
 exports.handler = schedule("55 14 * * 1-5", httpHandler);
