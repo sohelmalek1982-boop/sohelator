@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>SOHELATOR</title>
-  <meta name="sohel-build" content="ui-play-radar-scroll-20260328" />
+  <meta name="sohel-build" content="ui-parked-quick-20260328" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
@@ -598,6 +598,82 @@
     .at-headline { font-family: var(--font-ui); font-size: 1.28rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; margin: 8px 0; }
     .mini-gauge { height: 6px; background: rgba(0, 0, 0, 0.45); border-radius: 3px; margin-top: 6px; position: relative; overflow: hidden; border: 0.5px solid var(--border); }
     .mini-gauge > i { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--cyan); border-radius: 1px; box-shadow: 0 0 10px rgba(0, 242, 255, 0.55); }
+
+    /* Parked / “BIG UI” — larger tap targets (use when stopped, not while driving) */
+    body.parked-mode {
+      --topbar-h: 132px;
+      --nav-float-h: 76px;
+    }
+    body.parked-mode .ticker-wrap input {
+      padding: 14px 14px;
+      font-size: 1rem;
+      min-height: 48px;
+    }
+    body.parked-mode .btn-go {
+      padding: 14px 20px;
+      font-size: 0.95rem;
+      min-height: 48px;
+      min-width: 64px;
+    }
+    body.parked-mode .bottomnav { padding: 10px 6px; }
+    body.parked-mode .nav-item { padding: 10px 4px; font-size: 0.52rem; }
+    body.parked-mode .nav-item .emoji { font-size: 1.22rem; }
+    body.parked-mode .big-btn { padding: 18px; font-size: 1.12rem; min-height: 52px; }
+    body.parked-mode .confirm-btn { padding: 18px; font-size: 1.1rem; min-height: 54px; }
+    body.parked-mode .qty-row button { width: 52px; height: 52px; }
+    body.parked-mode .hero .font-bebas { font-size: 2.5rem !important; }
+    body.parked-mode #heroPrice { font-size: 1.6rem !important; }
+    body.parked-mode .play-radar-play { font-size: 0.98rem; }
+    body.parked-mode .pill { font-size: 1rem; padding: 12px 18px; }
+    body.parked-mode .page { padding-bottom: 32px; }
+
+    .play-radar-tools {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 0.5px solid var(--border);
+    }
+    .btn-tool {
+      font-family: var(--font-ui);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      padding: 10px 14px;
+      min-height: 44px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(0, 242, 255, 0.4);
+      background: rgba(0, 242, 255, 0.08);
+      color: var(--cyan);
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(0, 242, 255, 0.12);
+    }
+    .btn-tool:active { transform: scale(0.98); opacity: 0.9; }
+    .btn-tool.on {
+      background: rgba(0, 255, 136, 0.15);
+      border-color: var(--green);
+      color: var(--green);
+      box-shadow: var(--glow-lime);
+    }
+    .tool-auto-speak {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.68rem;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+    }
+    .tool-auto-speak input { width: 16px; height: 16px; accent-color: var(--cyan); }
+    .safety-hint {
+      font-size: 0.62rem;
+      line-height: 1.4;
+      color: var(--muted);
+      margin-top: 8px;
+      opacity: 0.9;
+    }
   </style>
 </head>
 <body class="term-app">
@@ -638,6 +714,12 @@
           </div>
           <div class="play-radar-play" id="playRadarPlay">Enter a ticker and tap GO — we’ll show if a setup is live and how to trade it.</div>
           <div class="play-radar-exec" id="playRadarExec"><strong>Execute</strong><span id="playRadarExecBody">—</span></div>
+          <div class="play-radar-tools" role="group" aria-label="Parked helpers">
+            <button type="button" class="btn-tool" id="btnSpeakBrief" title="Read summary aloud (Bluetooth / speaker)">🔊 Brief</button>
+            <button type="button" class="btn-tool" id="btnParkedMode" aria-pressed="false" title="Larger buttons and type">BIG UI</button>
+            <label class="tool-auto-speak"><input type="checkbox" id="chkAutoSpeak" /> Read aloud after GO</label>
+          </div>
+          <p class="safety-hint">Stop in a safe place before trading. Don’t use the screen while the truck is moving — pull over, then GO / 🔊 / orders.</p>
         </div>
         <div class="card hero wait" id="heroCard">
           <div style="position:relative;z-index:1;display:flex;justify-content:space-between;align-items:flex-start;">
@@ -866,6 +948,8 @@
       optionLegQuotes: {},
       alertTrackerList: [],
       trackerBannerDismissed: false,
+      /** True only when user tapped GO — cleared inside loadMarketData (not on 30s poll). */
+      justUserGo: false,
     };
 
     const STAGE_DEFS = [
@@ -1912,6 +1996,8 @@
 
     async function loadMarketData() {
       const sym = state.ticker.toUpperCase();
+      const triggeredByGo = state.justUserGo;
+      state.justUserGo = false;
       const [quote, c5, c15, c60, daily] = await Promise.all([
         fetchQuote(sym),
         fetchTimesales(sym, "5min"),
@@ -1993,6 +2079,13 @@
       const chop = adxVal < 20 ? 80 : 30;
       const ivGuess = state.ivAtm?.iv != null ? Math.min(100, state.ivAtm.iv) : 40;
       renderRisk(adxVal, ivGuess, state.tf.align.n, rsiVal, chop);
+
+      if (triggeredByGo) {
+        buzz(12);
+        try {
+          if (localStorage.getItem("sohel_autoSpeak") === "1") speakTradeBrief();
+        } catch (e) { /* noop */ }
+      }
     }
 
     function dteDays(exp) {
@@ -2356,6 +2449,9 @@
         return;
       }
       toast("Order submitted", "success");
+      try {
+        if (navigator.vibrate) navigator.vibrate([28, 45, 28]);
+      } catch (e) { /* noop */ }
       closeOrderModal();
       setPage(4);
       state.subTab = "ord";
@@ -2739,7 +2835,52 @@
       }
     }
 
+    function buzz(ms) {
+      try {
+        if (navigator.vibrate) navigator.vibrate(ms);
+      } catch (e) { /* noop */ }
+    }
+
+    function speakTradeBrief() {
+      if (!("speechSynthesis" in window)) {
+        toast("Read-aloud not supported here", "info");
+        return;
+      }
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) { /* noop */ }
+      const sym = (state.ticker || "").toUpperCase();
+      const play = document.getElementById("playRadarPlay")?.textContent?.trim() || "";
+      const exec = document.getElementById("playRadarExecBody")?.textContent?.trim() || "";
+      const sig = document.getElementById("signalText")?.textContent?.trim() || "";
+      const price = document.getElementById("heroPrice")?.textContent?.trim() || "";
+      const parts = [
+        "SOHELATOR. " + sym + ".",
+        play,
+        "Signal: " + sig + ".",
+        price && price !== "—" ? "Last about " + price + "." : "",
+        exec && exec !== "—" ? "Execute: " + exec + "." : "",
+      ].filter(Boolean);
+      const u = new SpeechSynthesisUtterance(parts.join(" "));
+      u.rate = 0.92;
+      u.onerror = () => toast("Speech failed", "error");
+      window.speechSynthesis.speak(u);
+    }
+
+    function applyParkedMode(on) {
+      document.body.classList.toggle("parked-mode", on);
+      const b = document.getElementById("btnParkedMode");
+      if (b) {
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      }
+      try {
+        localStorage.setItem("sohel_parkedMode", on ? "1" : "0");
+      } catch (e) { /* noop */ }
+    }
+
     function goTicker() {
+      state.justUserGo = true;
       const v = document.getElementById("tickerInput").value.trim();
       if (v) state.ticker = v.toUpperCase();
       updateActiveTickerPill();
@@ -2753,6 +2894,25 @@
         x.textContent = "—";
       }
       loadMarketData();
+    }
+
+    if (localStorage.getItem("sohel_parkedMode") === "1") applyParkedMode(true);
+    const chkAutoSpeakEl = document.getElementById("chkAutoSpeak");
+    if (chkAutoSpeakEl) {
+      chkAutoSpeakEl.checked = localStorage.getItem("sohel_autoSpeak") === "1";
+      chkAutoSpeakEl.addEventListener("change", (e) => {
+        try {
+          localStorage.setItem("sohel_autoSpeak", e.target.checked ? "1" : "0");
+        } catch (err) { /* noop */ }
+      });
+    }
+    const btnSpeakBrief = document.getElementById("btnSpeakBrief");
+    if (btnSpeakBrief) btnSpeakBrief.addEventListener("click", speakTradeBrief);
+    const btnParkedMode = document.getElementById("btnParkedMode");
+    if (btnParkedMode) {
+      btnParkedMode.addEventListener("click", () => {
+        applyParkedMode(!document.body.classList.contains("parked-mode"));
+      });
     }
 
     document.getElementById("goBtn").addEventListener("click", goTicker);
