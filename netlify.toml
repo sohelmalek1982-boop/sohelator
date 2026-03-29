@@ -2,6 +2,17 @@
   publish = "public"
   functions = "netlify/functions"
 
+# Avoid stale index.html after UI deploys (browser + CDN)
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
 [functions]
   node_bundler = "esbuild"
 
@@ -22,6 +33,19 @@
 
 [functions."scan-now"]
   timeout = 60
+
+[functions."ticker-intel"]
+  timeout = 60
+
+[[redirects]]
+  from = "/api/ticker-intel"
+  to = "/.netlify/functions/ticker-intel"
+  status = 200
+
+[[redirects]]
+  from = "/api/log-trade"
+  to = "/.netlify/functions/log-trade"
+  status = 200
 
 [[redirects]]
   from = "/api/tradier"
