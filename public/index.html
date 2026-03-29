@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>SOHELATOR</title>
-  <meta name="sohel-build" content="tab-dom-fix-20260329" />
+  <meta name="sohel-build" content="research-brief-ui-20260328" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Chakra+Petch:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
@@ -1583,6 +1583,16 @@
           <div class="intel-card" id="intelLevelsCard"><h5>KEY LEVELS</h5><span class="muted">—</span></div>
         </div>
 
+        <div class="card" id="researchBriefCard" style="margin-top:14px;border-color:rgba(0,229,255,0.22);">
+          <h2 class="section section-in-card">Research brief</h2>
+          <p class="muted" style="font-size:0.72rem;margin-bottom:10px;line-height:1.45;">One structured AI pass over tape + memory (bull / bear / risk / verdict). Cached per symbol per NY day — inspired by multi-agent research, without a separate Python stack.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <button type="button" class="big-btn call" id="btnResearchBrief" style="margin-top:0;padding:10px 14px;font-size:0.85rem;">Generate brief</button>
+            <button type="button" class="big-btn watch" id="btnResearchBriefForce" style="margin-top:0;padding:10px 14px;font-size:0.75rem;">Refresh (new run)</button>
+          </div>
+          <div id="researchBriefWrap" style="display:none;margin-top:14px;"></div>
+        </div>
+
         <h2 class="section">Tape pulse</h2>
         <div class="card signal-snapshot-card" id="signalSnapshotCard"><span class="muted" style="font-size:0.8rem;">Loading indicators…</span></div>
 
@@ -2134,6 +2144,87 @@
       el.textContent = msg;
       w.appendChild(el);
       setTimeout(() => el.remove(), 3000);
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function renderResearchBriefHtml(j) {
+      const b = j.brief || {};
+      const meta =
+        (j.cached ? "Cached" : "Fresh") +
+        " · NY " +
+        (j.nyDate || "—") +
+        (j.model ? " · " + j.model : "");
+      const verdict = escapeHtml(b.verdict);
+      return (
+        `<div style="font-size:0.68rem;color:var(--muted);margin-bottom:10px;">${escapeHtml(meta)}</div>` +
+        `<div style="border-left:3px solid var(--cyan);padding:10px 12px;margin-bottom:12px;background:rgba(0,229,255,0.06);border-radius:4px;font-size:0.8rem;line-height:1.5;color:var(--text);"><strong style="color:var(--cyan);">Verdict</strong><br/>${verdict}</div>` +
+        `<div class="intel-body" style="margin-bottom:10px;"><strong>Technical</strong><br/>${escapeHtml(b.technical)}</div>` +
+        `<div class="intel-body" style="margin-bottom:10px;"><strong>Context</strong><br/>${escapeHtml(b.context)}</div>` +
+        `<div class="intel-body" style="margin-bottom:10px;"><strong>Bull case</strong><br/>${escapeHtml(b.bullCase)}</div>` +
+        `<div class="intel-body" style="margin-bottom:10px;"><strong>Bear case</strong><br/>${escapeHtml(b.bearCase)}</div>` +
+        `<div class="intel-body"><strong>Risk</strong><br/>${escapeHtml(b.risk)}</div>`
+      );
+    }
+
+    async function fetchResearchBrief(refresh) {
+      const wrap = document.getElementById("researchBriefWrap");
+      const btn = document.getElementById("btnResearchBrief");
+      const btnF = document.getElementById("btnResearchBriefForce");
+      const sym = (state.ticker || "").toUpperCase().trim();
+      if (!sym) {
+        toast("Enter a ticker and tap GO first.", "error");
+        return;
+      }
+      const setBusy = (on) => {
+        [btn, btnF].forEach((x) => {
+          if (!x) return;
+          x.disabled = on;
+        });
+      };
+      const labelGo = "Generate brief";
+      const labelForce = "Refresh (new run)";
+      setBusy(true);
+      if (btn) btn.textContent = "…";
+      if (btnF) btnF.textContent = "…";
+      if (wrap) {
+        wrap.style.display = "block";
+        wrap.innerHTML =
+          `<p class="muted" style="font-size:0.75rem;">${refresh ? "Running fresh synthesis…" : "Loading research brief…"}</p>`;
+      }
+      try {
+        const r = await fetch("/api/research-brief", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbol: sym, refresh: !!refresh }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!wrap) return;
+        if (!j.ok) {
+          const err = j.error || "Brief unavailable.";
+          wrap.innerHTML = `<p class="muted" style="color:var(--yellow);line-height:1.45;">${escapeHtml(err)}</p>`;
+          toast(err, "error");
+          return;
+        }
+        wrap.innerHTML = renderResearchBriefHtml(j);
+        toast(j.cached ? "Loaded cached brief." : "Research brief ready.", "success");
+      } catch {
+        if (wrap) {
+          wrap.innerHTML =
+            `<p class="muted" style="color:var(--red);">Network error — try again.</p>`;
+        }
+        toast("Could not reach research brief.", "error");
+      } finally {
+        setBusy(false);
+        if (btn) btn.textContent = labelGo;
+        if (btnF) btnF.textContent = labelForce;
+      }
     }
 
     function normList(x) {
@@ -6233,6 +6324,15 @@
     document.getElementById("btnWhatsScanning").addEventListener("click", () => {
       setPage(5);
     });
+
+    const btnResearchBrief = document.getElementById("btnResearchBrief");
+    const btnResearchBriefForce = document.getElementById("btnResearchBriefForce");
+    if (btnResearchBrief) {
+      btnResearchBrief.addEventListener("click", () => fetchResearchBrief(false));
+    }
+    if (btnResearchBriefForce) {
+      btnResearchBriefForce.addEventListener("click", () => fetchResearchBrief(true));
+    }
 
     function guideHtml() {
       const cards = [

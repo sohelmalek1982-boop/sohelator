@@ -43,6 +43,14 @@
 [functions."ai-test"]
   timeout = 120
 
+[functions."research-brief"]
+  timeout = 60
+
+[[redirects]]
+  from = "/api/research-brief"
+  to = "/.netlify/functions/research-brief"
+  status = 200
+
 [[redirects]]
   from = "/api/ticker-intel"
   to = "/.netlify/functions/ticker-intel"
