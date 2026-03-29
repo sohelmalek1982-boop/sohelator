@@ -1,7 +1,20 @@
 /**
- * Volume / price–volume analysis for candles (5m or any OHLCV series).
- * Normalizes { volume | vol | v } and { high, low, close } field names.
+ * Intraday 5m volume analysis — session candles only (US equities, NY calendar day).
+ * Ratios compare the current bar vs a recent intraday baseline (last 5 completed bars),
+ * not multi-day / overnight aggregates.
  */
+
+function candleTimeMs(c) {
+  const t = c?.time ?? c?.t ?? c?.timestamp;
+  if (t == null) return null;
+  const n = typeof t === "number" ? (t < 1e12 ? t * 1000 : t) : Date.parse(String(t));
+  return Number.isFinite(n) ? n : null;
+}
+
+function nyDateKey(ms) {
+  if (ms == null) return null;
+  return new Date(ms).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
 
 function normalizeCandle(c) {
   if (!c) return null;
@@ -10,7 +23,8 @@ function normalizeCandle(c) {
   const close = +(c.close ?? c.c);
   const volume = Math.max(1, +(c.volume ?? c.vol ?? c.v ?? 0));
   if (Number.isNaN(close)) return null;
-  return { high, low, close, volume };
+  const time = candleTimeMs(c);
+  return { high, low, close, volume, time };
 }
 
 function normalizeCandles(candles) {
@@ -18,25 +32,55 @@ function normalizeCandles(candles) {
   return candles.map(normalizeCandle).filter(Boolean);
 }
 
+/** Keep only candles on the same NY session day as the last bar (current session). */
+function filterSessionCandles(norm) {
+  if (!norm.length) return [];
+  const lastMs = candleTimeMs(norm[norm.length - 1]);
+  const dayKey = lastMs != null ? nyDateKey(lastMs) : null;
+  if (!dayKey) return norm;
+  return norm.filter((c) => {
+    const ms = candleTimeMs(c);
+    return ms != null && nyDateKey(ms) === dayKey;
+  });
+}
+
+/**
+ * @param {object[]} candles - raw OHLCV (5m), may include `time` / `t`
+ * @param {object} _quote - reserved
+ */
 function analyzeVolume(candles, _quote) {
-  const norm = normalizeCandles(candles);
-  if (!norm || norm.length < 5) return null;
+  const normAll = normalizeCandles(candles);
+  if (!normAll.length) return null;
+
+  const norm = filterSessionCandles(normAll);
+  if (norm.length < 3) return null;
 
   const volumes = norm.map((c) => c.volume);
   const closes = norm.map((c) => c.close);
   const highs = norm.map((c) => c.high);
 
-  const n = norm.length;
-  const take = Math.min(20, n);
-  const avg20 =
-    volumes.slice(-take).reduce((a, b) => a + b, 0) / take;
+  const sessionAvg =
+    volumes.reduce((a, b) => a + b, 0) / volumes.length;
+
+  /** Last 5 completed bars (exclude forming current bar) — intraday baseline. */
+  let recentCandles = volumes.length >= 6 ? volumes.slice(-6, -1) : volumes.slice(0, -1);
+  if (recentCandles.length === 0) recentCandles = [volumes[volumes.length - 1]];
+  const recentAvg =
+    recentCandles.reduce((a, b) => a + b, 0) / recentCandles.length;
 
   const lastCandle = norm[norm.length - 1];
-  const last3Avg = volumes.slice(-3).reduce((a, b) => a + b, 0) / 3;
-  const last5Avg = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5;
+  const currentVol = lastCandle.volume;
+  const prevVol = volumes.length >= 2 ? volumes[volumes.length - 2] : currentVol;
+  const prev2Vol = volumes.length >= 3 ? volumes[volumes.length - 3] : prevVol;
 
-  const currentVolRatio = avg20 > 0 ? lastCandle.volume / avg20 : 1;
-  const recentVolRatio = avg20 > 0 ? last3Avg / avg20 : 1;
+  const baseline = recentAvg > 0 ? recentAvg : sessionAvg > 0 ? sessionAvg : 1;
+  const currentVolRatio = baseline > 0 ? currentVol / baseline : 1;
+
+  const last3Avg =
+    volumes.length >= 3
+      ? volumes.slice(-3).reduce((a, b) => a + b, 0) / 3
+      : currentVol;
+  const recentVolRatio = sessionAvg > 0 ? last3Avg / sessionAvg : 1;
 
   const vol5 = volumes.slice(-5);
   const volSlope =
@@ -45,6 +89,15 @@ function analyzeVolume(candles, _quote) {
       : 0;
   const volumeTrend =
     volSlope > 0.1 ? "RISING" : volSlope < -0.1 ? "FALLING" : "FLAT";
+
+  const volExpanding =
+    currentVol > prevVol && prevVol > prev2Vol;
+
+  let expandingStreak = 0;
+  for (let i = volumes.length - 1; i > 0; i--) {
+    if (volumes[i] > volumes[i - 1]) expandingStreak++;
+    else break;
+  }
 
   const priceChange =
     closes.length >= 2 ? closes[closes.length - 1] - closes[closes.length - 2] : 0;
@@ -58,26 +111,22 @@ function analyzeVolume(candles, _quote) {
     priceVolumeSignal = "BULLISH CONFIRMATION";
     priceVolumeInterpretation =
       `Price rising on ${currentVolRatio.toFixed(1)}x ` +
-      `volume. Real institutional buying. ` +
-      `This move has conviction behind it.`;
+      `recent intraday volume. Real participation on this 5m bar.`;
   } else if (priceUp && !volUp) {
     priceVolumeSignal = "WEAK MOVE";
     priceVolumeInterpretation =
-      `Price rising but volume is below average. ` +
-      `No institutional conviction. ` +
-      `This move may fade — watch closely.`;
+      `Price rising but volume is light vs recent 5m bars. ` +
+      `No strong intraday conviction — move may fade.`;
   } else if (!priceUp && volUp) {
     priceVolumeSignal = "BEARISH CONFIRMATION";
     priceVolumeInterpretation =
       `Price dropping on ${currentVolRatio.toFixed(1)}x ` +
-      `volume. Real selling pressure. ` +
-      `Calls are at risk — tighten stop.`;
+      `recent intraday volume. Selling pressure showing in the tape.`;
   } else {
     priceVolumeSignal = "WEAK SELLING";
     priceVolumeInterpretation =
-      `Price dipping but volume is light. ` +
-      `No real conviction behind the drop. ` +
-      `Likely a normal pullback in a bull trend.`;
+      `Price dipping on lighter-than-recent volume. ` +
+      `Often a normal pullback if trend is intact.`;
   }
 
   const isSurge = currentVolRatio >= 2.0;
@@ -87,9 +136,15 @@ function analyzeVolume(candles, _quote) {
   const maxHigh = recentHighs.length ? Math.max(...recentHighs) : 0;
   const allTimeHighInWindow =
     maxHigh > 0 && closes[closes.length - 1] >= maxHigh * 0.995;
-  const isClimaxVolume = isMegaSurge && allTimeHighInWindow;
+  const isClimaxVolume =
+    isMegaSurge &&
+    allTimeHighInWindow &&
+    (expandingStreak >= 2 || volExpanding);
 
-  const midSlice = closes.length >= 10 ? closes.slice(-10, -3) : closes.slice(0, Math.max(0, closes.length - 3));
+  const midSlice =
+    closes.length >= 10
+      ? closes.slice(-10, -3)
+      : closes.slice(0, Math.max(0, closes.length - 3));
   const prevHigh = midSlice.length ? Math.max(...midSlice) : closes[0];
   const isPullback =
     closes.length >= 5 && closes[closes.length - 1] < prevHigh * 0.99;
@@ -103,6 +158,7 @@ function analyzeVolume(candles, _quote) {
     last5Vols.length >= 5 && last5Vols[4] < last5Vols[0] * 0.8;
   const hasVolumeDivergence = priceHigherHighs && volumeLowerHighs;
 
+  /** Session VWAP — only today's 5m bars. */
   let pvSum = 0;
   let vSum = 0;
   for (const c of norm) {
@@ -130,6 +186,7 @@ function analyzeVolume(candles, _quote) {
   if (vwapCrossVolume && aboveVWAP) volumeScore += 20;
   if (volumeTrend === "RISING" && priceUp) volumeScore += 10;
   if (volumeTrend === "FALLING" && priceUp) volumeScore -= 10;
+  if (volExpanding && priceUp) volumeScore += 5;
   volumeScore = Math.max(0, Math.min(100, volumeScore));
 
   const alerts = [];
@@ -139,9 +196,9 @@ function analyzeVolume(candles, _quote) {
       type: "SURGE_BULL",
       urgency: "HIGH",
       message:
-        `🔥 Volume SURGE — ` +
-        `${currentVolRatio.toFixed(1)}x average. ` +
-        `Institutions buying hard. Strong confirmation.`,
+        `🔥 Intraday volume SURGE — ` +
+        `${currentVolRatio.toFixed(1)}x recent 5m avg. ` +
+        `Institutions active — strong confirmation.`,
       action: "ENTER OR ADD — high conviction move",
     });
   }
@@ -151,10 +208,10 @@ function analyzeVolume(candles, _quote) {
       type: "SURGE_BEAR",
       urgency: "HIGH",
       message:
-        `🚨 Volume SURGE on DOWN move — ` +
-        `${currentVolRatio.toFixed(1)}x average. ` +
-        `Real selling pressure detected.`,
-      action: "EXIT CALLS — institutions selling",
+        `🚨 SURGE on DOWN 5m bar — ` +
+        `${currentVolRatio.toFixed(1)}x recent avg. ` +
+        `Real selling pressure.`,
+      action: "EXIT CALLS — heavy selling volume",
     });
   }
 
@@ -163,10 +220,9 @@ function analyzeVolume(candles, _quote) {
       type: "CLIMAX",
       urgency: "HIGH",
       message:
-        `⚠️ CLIMAX VOLUME at price high — ` +
-        `massive volume at the top often signals ` +
-        `everyone who wanted to buy has bought.`,
-      action: "TAKE PROFITS — potential exhaustion",
+        `⚠️ CLIMAX intraday volume near session high — ` +
+        `possible exhaustion after volume ramp.`,
+      action: "TAKE PROFITS — watch next candle",
     });
   }
 
@@ -176,8 +232,7 @@ function analyzeVolume(candles, _quote) {
       urgency: "MEDIUM",
       message:
         `👀 Volume dry-up on pullback — ` +
-        `price dipping but no real selling pressure. ` +
-        `Classic bull trend re-entry setup.`,
+        `light vs recent 5m bars. Weak selling into dip.`,
       action: "WATCH FOR RE-ENTRY — weak pullback",
     });
   }
@@ -187,9 +242,8 @@ function analyzeVolume(candles, _quote) {
       type: "DIVERGENCE",
       urgency: "MEDIUM",
       message:
-        `⚡ Volume divergence — price making ` +
-        `higher highs but volume is shrinking. ` +
-        `Smart money not participating in new highs.`,
+        `⚡ Intraday divergence — higher highs, ` +
+        `volume not confirming on 5m.`,
       action: "TIGHTEN STOP — distribution signal",
     });
   }
@@ -200,9 +254,8 @@ function analyzeVolume(candles, _quote) {
       urgency: "HIGH",
       message:
         `✅ VWAP reclaimed on ${currentVolRatio.toFixed(1)}x ` +
-        `volume. High-conviction bull signal. ` +
-        `Institutions stepped in at VWAP.`,
-      action: "STRONG ENTRY — volume confirmed VWAP reclaim",
+        `recent volume. Session buyers defending.`,
+      action: "STRONG ENTRY — VWAP reclaim confirmed",
     });
   }
 
@@ -212,18 +265,23 @@ function analyzeVolume(candles, _quote) {
       urgency: "HIGH",
       message:
         `🚨 VWAP lost on ${currentVolRatio.toFixed(1)}x ` +
-        `volume. Institutional selling at VWAP. ` +
-        `Bull thesis broken.`,
-      action: "EXIT CALLS — VWAP lost with conviction",
+        `intraday volume.`,
+      action: "EXIT CALLS — VWAP lost with size",
     });
   }
 
   return {
     currentVolume: lastCandle.volume,
-    avgVolume20: Math.round(avg20),
+    /** @deprecated use avgVolumeRecent — kept for older clients */
+    avgVolume20: Math.round(recentAvg),
+    avgVolumeRecent: Math.round(recentAvg),
+    avgVolumeSession: Math.round(sessionAvg),
+    baseline: "intraday_5m_session",
     currentVolRatio: +currentVolRatio.toFixed(2),
     recentVolRatio: +recentVolRatio.toFixed(2),
     volumeTrend,
+    volExpanding,
+    expandingStreak,
 
     priceVolumeSignal,
     priceVolumeInterpretation,
@@ -276,7 +334,7 @@ function buildVolumeSummary(
   dryUp
 ) {
   const lines = [];
-  lines.push(`Volume: ${ratio.toFixed(1)}x avg (${signal})`);
+  lines.push(`Intraday 5m volume: ${ratio.toFixed(1)}x recent bar avg (${signal})`);
   lines.push(interp);
   if (alerts.length > 0) {
     lines.push("Volume alerts:");
@@ -301,10 +359,8 @@ function buildVolumeInterpretation(
     return {
       headline: "CLIMAX VOLUME — TAKE PROFITS",
       detail:
-        `Massive ${ratio.toFixed(1)}x volume ` +
-        `surge at price high. This often signals ` +
-        `exhaustion — everyone who wanted to buy ` +
-        `has bought. Consider taking profits now.`,
+        `Massive ${ratio.toFixed(1)}x recent 5m volume ` +
+        `into the session high. Often marks a short-term exhaustion.`,
       color: "#ffd700",
       action: "TAKE PROFITS — potential top",
     };
@@ -314,11 +370,8 @@ function buildVolumeInterpretation(
     return {
       headline: "VOLUME DRY-UP — RE-ENTRY SIGNAL",
       detail:
-        `Price pulling back on very light ` +
-        `volume (${ratio.toFixed(1)}x avg). No ` +
-        `real selling pressure. Bulls still in ` +
-        `control. Classic re-entry setup in ` +
-        `a bull trend.`,
+        `Pullback on very light volume (${ratio.toFixed(1)}x ` +
+        `recent bars). Little institutional selling into the dip.`,
       color: "#00ff87",
       action: "WATCH FOR ENTRY — weak pullback",
     };
@@ -328,10 +381,8 @@ function buildVolumeInterpretation(
     return {
       headline: "VOLUME DIVERGENCE — WARNING",
       detail:
-        `Price making new highs but volume ` +
-        `is shrinking each push. Smart money ` +
-        `not participating. Distribution likely. ` +
-        `Do not chase — tighten your stop.`,
+        `Price pressing higher but 5m volume is fading. ` +
+        `Participation not confirming the move.`,
       color: "#ffd700",
       action: "TIGHTEN STOP — smart money leaving",
     };
@@ -341,11 +392,8 @@ function buildVolumeInterpretation(
     return {
       headline: "VWAP RECLAIMED ON VOLUME",
       detail:
-        `Just crossed above VWAP on ` +
-        `${ratio.toFixed(1)}x average volume. ` +
-        `This is a strong bull signal — ` +
-        `institutions stepped in and bought ` +
-        `at VWAP. High-conviction entry.`,
+        `Cross back above session VWAP on ${ratio.toFixed(1)}x ` +
+        `recent intraday volume.`,
       color: "#00ff87",
       action: "STRONG ENTRY SIGNAL",
     };
@@ -355,11 +403,7 @@ function buildVolumeInterpretation(
     return {
       headline: "VWAP LOST ON VOLUME — EXIT",
       detail:
-        `Just lost VWAP on ` +
-        `${ratio.toFixed(1)}x average volume. ` +
-        `Institutions selling at VWAP. ` +
-        `Bull thesis is broken. ` +
-        `Exit calls immediately.`,
+        `Lost session VWAP on elevated 5m volume vs recent bars.`,
       color: "#ff3b5c",
       action: "EXIT NOW — VWAP lost",
     };
@@ -367,12 +411,10 @@ function buildVolumeInterpretation(
 
   if (ratio >= 2 && priceUp) {
     return {
-      headline: `VOLUME SURGE — ${ratio.toFixed(1)}x AVG`,
+      headline: `VOLUME SURGE — ${ratio.toFixed(1)}x RECENT AVG`,
       detail:
-        `Price rising on ${ratio.toFixed(1)}x ` +
-        `normal volume. Real institutional buying ` +
-        `behind this move. Not a fake-out. ` +
-        `This move has conviction.`,
+        `This 5m bar is printing well above the prior five completed bars — ` +
+        `real participation behind the push.`,
       color: "#00ff87",
       action: "HIGH CONVICTION — stay in trade",
     };
@@ -382,10 +424,8 @@ function buildVolumeInterpretation(
     return {
       headline: `VOLUME SURGE DOWN — ${ratio.toFixed(1)}x`,
       detail:
-        `Price dropping on ${ratio.toFixed(1)}x ` +
-        `volume. Real selling pressure detected. ` +
-        `This is not a normal dip — ` +
-        `institutions are exiting.`,
+        `Down candle with heavy volume vs recent 5m baseline — ` +
+        `not a quiet drift lower.`,
       color: "#ff3b5c",
       action: "EXIT CALLS — real selling",
     };
@@ -395,26 +435,23 @@ function buildVolumeInterpretation(
     return {
       headline: "WEAK MOVE — LOW CONVICTION",
       detail:
-        `Price rising but volume is only ` +
-        `${ratio.toFixed(1)}x average. No institutional ` +
-        `backing. This rally could fade. ` +
-        `Wait for volume to confirm before ` +
-        `adding to position.`,
+        `Up bar but only ${ratio.toFixed(1)}x recent average volume — ` +
+        `wait for volume to confirm before adding.`,
       color: "#ffd700",
       action: "HOLD BUT DO NOT ADD — needs volume",
     };
   }
 
   return {
-    headline: `VOLUME ${ratio.toFixed(1)}x AVERAGE`,
-    detail: `Volume is ${
+    headline: `VOLUME ${ratio.toFixed(1)}x RECENT AVG`,
+    detail: `Vs prior five completed 5m bars, volume is ${
       ratio >= 1.5 ? "above" : ratio < 0.7 ? "well below" : "near"
     } average. ${
       trend === "RISING"
-        ? "Volume trending up — building momentum."
+        ? "Volume building bar to bar."
         : trend === "FALLING"
-          ? "Volume fading — watch for conviction."
-          : "Volume holding steady."
+          ? "Volume fading — watch the next candle."
+          : "Volume steady."
     }`,
     color: ratio >= 1.5 ? "#00e5ff" : "#4a6070",
     action:
