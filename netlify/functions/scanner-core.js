@@ -9,6 +9,7 @@ const { calculateUrgency, buildTelegramMessage } = require("./lib/urgency");
 const { recommendSize } = require("./lib/sizing");
 const { getMasterAnalysis } = require("./lib/masterAnalysis");
 const { analyzeVolume } = require("./lib/volumeAnalysis");
+const { calculateIgnition } = require("./lib/ignition");
 
 const BASE_WATCH = [
   "NVDA", "TSLA", "SPY", "QQQ", "AAPL", "AMD", "MSFT", "META", "GOOGL",
@@ -967,6 +968,51 @@ async function runScan() {
           }
           adjRank = Math.max(0, Math.min(100, Math.round(adjRank)));
 
+          const macdPrevIgn = calcMACD(closes.slice(0, -1)).hist;
+          const macdPrev2Ign =
+            closes.length >= 3 ? calcMACD(closes.slice(0, -2)).hist : macdPrevIgn;
+          const rsiPrevIgn =
+            closes.length >= 2 ? calcRSI(closes.slice(0, -1), 14) : rsi14;
+          const adxPrevIgn =
+            adxCandles.length >= 16
+              ? calcADX(adxCandles.slice(0, -1), 14)
+              : adxVal;
+
+          const candlesIg = candles.map((c) => ({
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+            volume: c.vol || 0,
+          }));
+          const ignitionRaw = calculateIgnition(candlesIg, {
+            macd: macdHist,
+            macdPrev: macdPrevIgn,
+            macdPrev2: macdPrev2Ign,
+            rsi: rsi14,
+            rsiPrev: rsiPrevIgn,
+            adx: adxVal,
+            adxPrev: adxPrevIgn,
+          });
+
+          let ignAdj = adjRank;
+          if (ignitionRaw) {
+            if (ignitionRaw.status === "LAUNCH") ignAdj += 20;
+            else if (ignitionRaw.status === "IGNITING") ignAdj += 10;
+            else if (ignitionRaw.status === "COLD") ignAdj -= 15;
+          }
+          ignAdj = Math.max(0, Math.min(100, Math.round(ignAdj)));
+
+          const ignition =
+            ignitionRaw != null
+              ? {
+                  score: ignitionRaw.ignitionScore,
+                  status: ignitionRaw.status,
+                  direction: ignitionRaw.direction,
+                  engines: ignitionRaw.engines,
+                }
+              : null;
+
           analyzed.push({
             ticker: symbol,
             price,
@@ -978,7 +1024,7 @@ async function runScan() {
             vwapDist: vwapDist.toFixed(2),
             bbB,
             setupType,
-            score: adjRank,
+            score: ignAdj,
             bull,
             bear,
             breakout,
@@ -991,6 +1037,7 @@ async function runScan() {
             adxSlope,
             macdSlope,
             volAnalysis,
+            ignition,
           });
         } catch {
           /* one symbol failed */
@@ -1136,6 +1183,7 @@ async function runScan() {
       },
       indicators,
       macdDir,
+      ignition: s.ignition || null,
       timestamp: Date.now(),
     };
 
@@ -1162,6 +1210,7 @@ async function runScan() {
       masterAnalysis: pending.masterAnalysis,
       volume: volAtAlert,
       aiAnalysis,
+      ignition: pending.ignition,
       timestamp: Date.now(),
       outcome: null,
     });
@@ -1174,6 +1223,12 @@ async function runScan() {
       /PUT|BEAR|fade/i.test(revType) && !/BULL|CALL bounce/i.test(revType)
         ? "SWING (bear)"
         : "SWING (bull)";
+    const ignLine =
+      s.ignition?.status === "LAUNCH"
+        ? `🚀 IGNITION: ${s.ignition.score}/100 — ALL 3 ENGINES FIRING`
+        : s.ignition?.status === "IGNITING"
+          ? `⚡ IGNITING: ${s.ignition.score}/100 — move building`
+          : `📊 IGNITION: ${s.ignition?.score ?? "—"}/100`;
     const tg =
       (s.stageEmoji || "🔥") +
       " <b>" +
@@ -1199,6 +1254,8 @@ async function runScan() {
       s.rsi +
       " | MACD: " +
       macdDir +
+      "\n" +
+      ignLine +
       "\n" +
       volLine +
       "\n" +

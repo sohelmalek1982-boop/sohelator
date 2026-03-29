@@ -217,6 +217,41 @@
     .pill-mkt.open { border-color: var(--green); color: var(--green); background: rgba(0, 255, 136, 0.1); box-shadow: 0 0 16px rgba(0, 255, 136, 0.2); }
     .pill-mkt.closed { border-color: var(--red); color: var(--red); box-shadow: 0 0 12px rgba(255, 45, 106, 0.15); }
     .pill-mkt.ext { border-color: var(--yellow); color: var(--yellow); box-shadow: 0 0 12px rgba(255, 204, 0, 0.15); }
+    .pill-session {
+      font-family: var(--font-data), ui-monospace, monospace;
+      font-size: 0.58rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid #1a2530;
+      color: #4a6070;
+      background: rgba(6, 14, 20, 0.85);
+      max-width: 120px;
+      text-align: center;
+      line-height: 1.2;
+    }
+    .pill-session.open { color: #00ff87; border-color: rgba(0, 255, 135, 0.35); }
+    .pill-session.premarket { color: #ffd700; border-color: rgba(255, 215, 0, 0.35); }
+    .pill-session.power { color: #ff8c42; border-color: rgba(255, 140, 66, 0.45); box-shadow: 0 0 10px rgba(255, 140, 66, 0.2); }
+    .pill-session.after { color: #00e5ff; border-color: rgba(0, 229, 255, 0.35); }
+    .pill-session.closed { color: #4a6070; }
+    .section-label {
+      font-family: var(--font-data), ui-monospace, monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      margin: 18px 0 8px;
+    }
+    .alert-card-fire, .alert-card-strong, .alert-card-watch {
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 12px;
+      background: #060e14;
+    }
+    .alert-card-fire { border: 1px solid rgba(255, 215, 0, 0.25); }
+    .alert-card-strong { border: 1px solid rgba(0, 229, 255, 0.35); }
+    .alert-card-watch { border: 1px solid #1a2530; }
     .pill-ticker {
       padding: 6px 12px; border-radius: var(--radius-pill); font-size: 0.72rem; font-weight: 700;
       background: rgba(0, 242, 255, 0.08); color: var(--cyan);
@@ -1290,6 +1325,7 @@
       </div>
       <div class="topbar-right">
         <span class="pill-mkt closed" id="mktPill"><span class="dot closed" id="mktDot"></span><span id="mktText">—</span></span>
+        <span class="pill-session closed" id="mktSessionPill"><span id="mktSessionText">—</span></span>
         <span class="pill-ticker font-mono" id="activeTickerPill">NVDA</span>
         <input id="tickerInput" class="ticker-input-mob" type="text" maxlength="8" placeholder="SYM" value="NVDA" autocomplete="off" />
         <button type="button" class="btn-go btn-go-mob" id="goBtn">GO</button>
@@ -1385,6 +1421,64 @@
           <div id="volumeSignalNarrative" class="stage-volume-note" style="display:none;"></div>
         </div>
 
+        <div class="section-label">MOVE DETECTION</div>
+
+        <div id="ignitionCard" class="card" style="border:1px solid rgba(74,96,112,.2);overflow:hidden">
+          <div id="ignTopAccent" style="height:3px;background:linear-gradient(90deg,#4a6070,transparent)"></div>
+          <div style="padding:16px 16px 12px;display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:1px;margin-bottom:4px">IGNITION STATUS</div>
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:38px;letter-spacing:2px;line-height:1;color:#4a6070" id="ignStatus">—</div>
+              <div style="font-family:'Space Mono',monospace;font-size:11px;margin-top:4px;color:#4a6070" id="ignDir">—</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:56px;letter-spacing:-1px;line-height:1;color:#4a6070" id="ignScore">—</div>
+              <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted)">IGNITION SCORE</div>
+            </div>
+          </div>
+          <div style="padding:0 16px 14px;font-family:'DM Sans',sans-serif;font-size:14px;line-height:1.7;color:var(--text-muted)" id="ignDesc">Load 5m data…</div>
+          <div style="margin:0 16px 14px;padding:10px 14px;border-radius:8px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.5px" id="ignAction"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:#0f1820;border-top:1px solid #0f1820">
+            <div style="background:#060e14;padding:12px 10px" id="engPrice">
+              <div style="font-size:18px;margin-bottom:5px">💰</div>
+              <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--muted);margin-bottom:4px">PRICE ACCEL</div>
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:.5px;line-height:1;margin-bottom:4px" id="priceEngScore">—</div>
+              <div style="height:4px;background:#0a1218;border-radius:2px;overflow:hidden;margin-bottom:4px">
+                <div style="height:100%;border-radius:2px;transition:width .3s;width:0%" id="priceEngBar"></div>
+              </div>
+              <div style="font-family:'Space Mono',monospace;font-size:8px;font-weight:700" id="priceEngStatus">—</div>
+              <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--muted);margin-top:3px;line-height:1.5" id="priceEngVals"></div>
+            </div>
+            <div style="background:#060e14;padding:12px 10px" id="engMom">
+              <div style="font-size:18px;margin-bottom:5px">⚡</div>
+              <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--muted);margin-bottom:4px">MOMENTUM</div>
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:.5px;line-height:1;margin-bottom:4px" id="momEngScore">—</div>
+              <div style="height:4px;background:#0a1218;border-radius:2px;overflow:hidden;margin-bottom:4px">
+                <div style="height:100%;border-radius:2px;transition:width .3s;width:0%" id="momEngBar"></div>
+              </div>
+              <div style="font-family:'Space Mono',monospace;font-size:8px;font-weight:700" id="momEngStatus">—</div>
+              <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--muted);margin-top:3px;line-height:1.5" id="momEngVals"></div>
+            </div>
+            <div style="background:#060e14;padding:12px 10px" id="engVol">
+              <div style="font-size:18px;margin-bottom:5px">📊</div>
+              <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--muted);margin-bottom:4px">VOLUME</div>
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:.5px;line-height:1;margin-bottom:4px" id="volEngScore">—</div>
+              <div style="height:4px;background:#0a1218;border-radius:2px;overflow:hidden;margin-bottom:4px">
+                <div style="height:100%;border-radius:2px;transition:width .3s;width:0%" id="volEngBar"></div>
+              </div>
+              <div style="font-family:'Space Mono',monospace;font-size:8px;font-weight:700" id="volEngStatus">—</div>
+              <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--muted);margin-top:3px;line-height:1.5" id="volEngVals"></div>
+            </div>
+          </div>
+          <div style="padding:10px 14px 14px;border-top:1px solid #0f1820">
+            <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--muted);letter-spacing:.5px;margin-bottom:6px;display:flex;justify-content:space-between">
+              <span>VOLUME — LAST 8 CANDLES (5M)</span>
+              <span id="volBarSignal" style="font-weight:700"></span>
+            </div>
+            <div id="volBarsContainer" style="display:flex;align-items:flex-end;gap:3px;height:50px"></div>
+          </div>
+        </div>
+
         <h2 class="section">Market intelligence</h2>
         <div class="intel-grid mega-intel" id="signalIntelGrid">
           <div class="intel-card" id="intelGexCard"><h5>GAMMA EXPOSURE</h5><span class="muted">Load ticker…</span></div>
@@ -1465,6 +1559,10 @@
 
       <!-- 5 SCAN -->
       <section class="page" id="page-5">
+        <h2 class="section">Ignition history (loaded ticker)</h2>
+        <div class="card" id="ignitionHistoryScan" style="background:var(--bg3);border-color:var(--border2);font-size:0.78rem;line-height:1.55;">
+          <span class="muted">Load a ticker on SIGNAL — last 5 ignition states appear here.</span>
+        </div>
         <h2 class="section">Morning brief</h2>
         <div class="card brief-card-glow" id="morningBriefCard" style="background:var(--bg3);">
           <div class="font-mono" style="font-size:0.7rem;color:var(--muted);margin-bottom:8px;" id="mbDate">—</div>
@@ -1557,6 +1655,7 @@
 
   <div class="toast-wrap" id="toasts"></div>
 
+  <script src="/ignition.js"></script>
   <script src="/volumeAnalysis.js"></script>
   <script>
     async function api(path, method = "GET", params = {}, body = {}) {
@@ -1604,6 +1703,11 @@
       justUserGo: false,
       /** Set from Tradier clock — INDICATORS tab uses for placeholder when closed. */
       marketOpen: true,
+      fiveMinCandles: [],
+      ignition: null,
+      ignitionHistory: [],
+      _ignHistSym: null,
+      indicators: null,
     };
 
     const STAGE_DEFS = [
@@ -1616,6 +1720,244 @@
       { key: "bear", icon: "🔴", label: "BEAR", cls: "st-bear" },
       { key: "chop", icon: "⚠️", label: "CHOP", cls: "st-chop" },
     ];
+
+    function candlesNormalizedForIgnition(c5) {
+      return c5.map((c) => ({
+        open: c.o != null ? +c.o : +c.c,
+        high: +c.h,
+        low: +c.l,
+        close: +c.c,
+        volume: +(c.v || 0),
+      }));
+    }
+
+    function getMarketSessionEt(now) {
+      const d = now || new Date();
+      const wd = d.toLocaleDateString("en-US", { timeZone: "America/New_York", weekday: "short" });
+      const hm = d.toLocaleTimeString("en-US", {
+        timeZone: "America/New_York",
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      const [hh, mm] = hm.split(":").map((x) => parseInt(x, 10));
+      const mins = hh * 60 + mm;
+      const isWeekend = wd === "Sat" || wd === "Sun";
+      if (isWeekend) return { label: "CLOSED", cls: "closed" };
+      const open = 9 * 60 + 30;
+      const close = 16 * 60;
+      const powerStart = 15 * 60;
+      if (mins < open) return { label: "PRE-MARKET", cls: "premarket" };
+      if (mins >= close) return { label: "AFTER HOURS", cls: "after" };
+      if (mins >= powerStart && mins < close) return { label: "POWER HOUR", cls: "power" };
+      return { label: "OPEN", cls: "open" };
+    }
+
+    function renderIgnition(ign) {
+      if (!ign) return;
+      const c = ign.statusColor;
+      const stEl = document.getElementById("ignStatus");
+      if (stEl) {
+        stEl.textContent = ign.status;
+        stEl.style.color = c;
+      }
+      const dirEl = document.getElementById("ignDir");
+      if (dirEl) {
+        dirEl.textContent =
+          ign.direction === "BULL" ? "↑ BULL MOVE " + ign.status : "↓ BEAR MOVE " + ign.status;
+        dirEl.style.color = c;
+      }
+      const scEl = document.getElementById("ignScore");
+      if (scEl) {
+        scEl.textContent = ign.ignitionScore;
+        scEl.style.color = c;
+      }
+      const card = document.getElementById("ignitionCard");
+      if (card) card.style.borderColor = c + "30";
+      const topAcc = document.getElementById("ignTopAccent");
+      if (topAcc) topAcc.style.background = "linear-gradient(90deg," + c + ",transparent)";
+      const dEl = document.getElementById("ignDesc");
+      if (dEl) dEl.textContent = ign.description;
+      const actEl = document.getElementById("ignAction");
+      if (actEl) {
+        actEl.textContent = ign.action;
+        actEl.style.background = c + "10";
+        actEl.style.color = c;
+        actEl.style.border = "1px solid " + c + "30";
+      }
+      const engines = [
+        {
+          id: "price",
+          data: ign.engines.price,
+          vals: ign.engines.price.ratio + "x range",
+        },
+        {
+          id: "mom",
+          data: ign.engines.momentum,
+          vals:
+            "MACD +" +
+            ign.engines.momentum.expandingBars +
+            " bars<br/>RSI vel " +
+            ign.engines.momentum.rsiVelocity,
+        },
+        {
+          id: "vol",
+          data: ign.engines.volume,
+          vals: ign.engines.volume.ratio + "x recent<br/>+" + ign.engines.volume.expandingBars + " bars",
+        },
+      ];
+      engines.forEach((e) => {
+        const ec =
+          e.data.status === "FIRING" ? c : e.data.status === "BUILDING" ? "#ffd700" : "#4a6070";
+        const scoreEl = document.getElementById(e.id + "EngScore");
+        if (scoreEl) {
+          scoreEl.textContent = e.data.score;
+          scoreEl.style.color = ec;
+        }
+        const barEl = document.getElementById(e.id + "EngBar");
+        if (barEl) {
+          barEl.style.width = e.data.score + "%";
+          barEl.style.background = ec;
+        }
+        const stE = document.getElementById(e.id + "EngStatus");
+        if (stE) {
+          stE.textContent = e.data.status;
+          stE.style.color = ec;
+        }
+        const vals = document.getElementById(e.id + "EngVals");
+        if (vals) vals.innerHTML = e.vals.replace(/\n/g, "<br>");
+      });
+      const container = document.getElementById("volBarsContainer");
+      if (container) {
+        container.innerHTML = "";
+        ign.barData.forEach((bar) => {
+          const div = document.createElement("div");
+          div.style.flex = "1";
+          div.style.height = bar.heightPct + "%";
+          div.style.minHeight = "3px";
+          div.style.borderRadius = "2px 2px 0 0";
+          div.style.background = bar.isCurrent
+            ? "#00e5ff"
+            : bar.isUp
+              ? "rgba(0,255,135,.5)"
+              : "rgba(255,59,92,.4)";
+          if (bar.isCurrent) div.style.boxShadow = "0 0 6px rgba(0,229,255,.4)";
+          container.appendChild(div);
+        });
+      }
+      const vs = document.getElementById("volBarSignal");
+      if (vs) {
+        vs.textContent =
+          ign.engines.volume.status === "FIRING"
+            ? "BUILDING ↑"
+            : ign.engines.volume.status === "BUILDING"
+              ? "WATCH ↑"
+              : "FLAT →";
+        vs.style.color = c;
+      }
+    }
+
+    function pushIgnitionHistoryClient(ign, sym) {
+      if (!ign || !sym) return;
+      if (state._ignHistSym !== sym) {
+        state._ignHistSym = sym;
+        state.ignitionHistory = [];
+      }
+      const last = state.ignitionHistory[0];
+      if (last && last.status === ign.status && last.score === ign.ignitionScore) return;
+      const t = new Date();
+      const timeStr = t.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+      let line =
+        timeStr +
+        " — " +
+        ign.status +
+        " " +
+        ign.ignitionScore +
+        (ign.direction === "BULL" ? " ↑ BULL" : " ↓ BEAR");
+      state.ignitionHistory.unshift({ timeStr, line, score: ign.ignitionScore, status: ign.status });
+      state.ignitionHistory = state.ignitionHistory.slice(0, 5);
+      renderIgnitionHistoryScan();
+    }
+
+    function renderIgnitionHistoryScan() {
+      const el = document.getElementById("ignitionHistoryScan");
+      if (!el) return;
+      if (!state.ignitionHistory.length) {
+        el.innerHTML =
+          '<span class="muted">No ignition transitions yet today — keep ' +
+          (state.ticker || "").toUpperCase() +
+          " loaded on SIGNAL.</span>";
+        return;
+      }
+      el.innerHTML = state.ignitionHistory.map((h) => `<div class="font-mono" style="margin-bottom:6px;">${h.line.replace(/</g, "&lt;")}</div>`).join("");
+    }
+
+    window.toggleSnapshot = function (id) {
+      const snap = document.getElementById("snapshot_" + id);
+      if (!snap) return;
+      snap.style.display = snap.style.display === "none" ? "block" : "none";
+    };
+
+    function pnlActionBand(pnlPct) {
+      const p = pnlPct != null && isFinite(pnlPct) ? pnlPct : 0;
+      if (p >= 100)
+        return { text: "TAKE HALF OFF", color: "#00ff87", bg: "rgba(0,255,135,.1)", border: "rgba(0,255,135,.35)" };
+      if (p >= 80)
+        return { text: "AT TARGET — CONSIDER EXIT", color: "#00ff87", bg: "rgba(0,255,135,.1)", border: "rgba(0,255,135,.3)" };
+      if (p >= 60)
+        return { text: "TRAIL STOP TO +30%", color: "#00ff87", bg: "rgba(0,255,135,.08)", border: "rgba(0,255,135,.28)" };
+      if (p >= 40)
+        return { text: "MOVE STOP TO BREAKEVEN", color: "#00ff87", bg: "rgba(0,255,135,.06)", border: "rgba(0,255,135,.25)" };
+      if (p >= 0)
+        return { text: "HOLD — SETUP INTACT", color: "#ffd700", bg: "rgba(255,215,0,.08)", border: "rgba(255,215,0,.3)" };
+      if (p > -40)
+        return { text: "HOLD OR CUT — WATCH", color: "#ff8c42", bg: "rgba(255,140,66,.1)", border: "rgba(255,140,66,.35)" };
+      return { text: "EXIT — STOP HIT", color: "#ff3b5c", bg: "rgba(255,59,92,.12)", border: "rgba(255,59,92,.35)" };
+    }
+
+    function ignitionBadgeStyle(st) {
+      if (st === "LAUNCH") return { bg: "rgba(0,255,135,.12)", border: "rgba(0,255,135,.4)", color: "#00ff87" };
+      if (st === "IGNITING") return { bg: "rgba(255,215,0,.12)", border: "rgba(255,215,0,.4)", color: "#ffd700" };
+      if (st === "WARMING UP") return { bg: "rgba(255,140,66,.12)", border: "rgba(255,140,66,.4)", color: "#ff8c42" };
+      return { bg: "rgba(74,96,112,.15)", border: "rgba(74,96,112,.45)", color: "#4a6070" };
+    }
+
+    function posPrimaryBtn(pnlPct) {
+      const p = pnlPct != null && isFinite(pnlPct) ? pnlPct : 0;
+      if (p >= 100)
+        return {
+          text: "TAKE HALF OFF (+" + p.toFixed(0) + "%)",
+          bg: "rgba(0,255,135,.1)",
+          color: "#00ff87",
+          border: "rgba(0,255,135,.35)",
+        };
+      if (p >= 80)
+        return { text: "TAKE PROFIT — AT TARGET", bg: "rgba(0,255,135,.08)", color: "#00ff87", border: "rgba(0,255,135,.3)" };
+      if (p >= 40)
+        return { text: "HOLD — STOP AT BREAKEVEN", bg: "rgba(0,229,255,.06)", color: "#00e5ff", border: "rgba(0,229,255,.35)" };
+      if (p >= 0)
+        return { text: "HOLD — WATCHING", bg: "rgba(255,215,0,.06)", color: "#ffd700", border: "rgba(255,215,0,.35)" };
+      return {
+        text: "CUT LOSS NOW (-" + Math.abs(p).toFixed(0) + "%)",
+        bg: "rgba(255,59,92,.1)",
+        color: "#ff3b5c",
+        border: "rgba(255,59,92,.35)",
+      };
+    }
+
+    function formatTimeInTrade(ts) {
+      if (!ts) return "—";
+      const opened = new Date(ts);
+      if (isNaN(opened.getTime())) return "—";
+      const ms = Date.now() - opened.getTime();
+      if (ms < 0) return "—";
+      const days = Math.floor(ms / 86400000);
+      const h = Math.floor(ms / 3600000);
+      const m = Math.floor((ms % 3600000) / 60000);
+      if (days >= 1) return "Day " + (days + 1);
+      if (h >= 1) return h + "h " + m + "m";
+      return m + "m";
+    }
 
     function detectStageClient(adxVal, macdH, rsiVal, bbB, vwapDist, rsi2) {
       const aboveVWAP = vwapDist > 0;
@@ -2128,58 +2470,165 @@
         el.innerHTML = '<span class="muted">No stored alerts in blob yet.</span>';
         return;
       }
+      const esc = (s) =>
+        String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
       el.innerHTML = rows
         .map((a) => {
           const tier = alertUrgencyTier(a);
+          const tierKey = tier.key;
           const o = a.option || {};
+          const t = (a.ticker || "").toUpperCase();
+          const typ = (o.optType || a.direction || "call").toString().toLowerCase().includes("put") ? "PUT" : "CALL";
+          const strike = o.strike != null ? o.strike : "—";
+          const expiry = o.expiry || "—";
+          const aid = String(a.timestamp || 0) + "_" + t.replace(/\W/g, "");
           const und0 = a.underlyingAtAlert ?? a.indicators?.price ?? a.price ?? 0;
           const prem0 = a.premiumAtAlert ?? o.mid ?? 0;
           const undNow = a.currentUnderlying ?? 0;
           const live = a.liveOptionQuote;
-          const pnl = a.realOptionPnlPct;
-          const pnlCls = pnl == null ? "flat" : pnl >= 0 ? "profit" : "loss";
-          const pnlStr = pnl != null ? (pnl >= 0 ? "+" : "") + pnl.toFixed(1) + "%" : "—";
-          const act = alertActionHeadline(a);
-          const th = live ? parseFloat(live.theta || 0) * 100 : null;
+          const bid = parseFloat(live?.bid ?? 0);
+          const ask = parseFloat(live?.ask ?? 0);
+          const currentPremium =
+            bid && ask ? (bid + ask) / 2 : parseFloat(live?.last ?? o.mid ?? prem0 ?? 0) || 0;
+          const pnlPct =
+            a.realOptionPnlPct != null
+              ? a.realOptionPnlPct
+              : a.estimatedOptionPnlPct != null
+                ? a.estimatedOptionPnlPct
+                : 0;
+          const pnlColor = pnlPct >= 0 ? "#00ff87" : "#ff3b5c";
+          const barWidth = Math.max(0, Math.min(100, ((pnlPct + 50) / 200) * 100));
+          const action = pnlActionBand(pnlPct);
+          const timeStr = a.timestamp
+            ? new Date(a.timestamp).toLocaleString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+                month: "short",
+                day: "numeric",
+              })
+            : "—";
+          const score = a.score != null ? a.score : "—";
+          const winRate = "—";
+          const iv = o.iv != null ? String(o.iv).replace(/%/g, "") : "—";
+          const del = o.delta != null ? parseFloat(o.delta).toFixed(2) : "—";
+          const ign = a.ignition;
+          const ib = ign ? ignitionBadgeStyle(ign.status) : null;
+          const adxSnap = a.indicators?.adx ?? "—";
+          const macdSnap = a.indicators?.macd ?? "—";
+          const rsiSnap = a.indicators?.rsi ?? "—";
+          const vwapSnap = a.indicators?.vwapDist ?? "—";
           const vr = a.volume != null && a.volume.ratio != null ? +a.volume.ratio : null;
-          let volBadgeHtml = "";
-          if (vr != null) {
-            if (vr > 2) volBadgeHtml = '<span class="at-vol-pill surge">SURGE</span>';
-            else if (vr >= 1.3) volBadgeHtml = '<span class="at-vol-pill conf">CONFIRMED</span>';
-            else if (vr < 0.8) volBadgeHtml = '<span class="at-vol-pill light">LIGHT</span>';
+          const volSignal = vr != null ? (vr > 2 ? "SURGE" : vr < 0.8 ? "LIGHT" : "NORMAL") : "—";
+
+          if (tierKey === "WATCH") {
+            return (
+              `<div class="alert-card-watch">
+              <div style="height:1px;background:#1e3a4a"></div>
+              <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #0f1820">
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:#eaf4ff">${esc(t)}</div>
+                <div style="font-family:'Space Mono',monospace;font-size:9px;color:#1e3a4a">${esc(timeStr)}</div>
+              </div>
+              <div style="padding:12px 14px 14px">
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:0.5px;color:#8aacbe">${esc(formatBuyLine(a))}</div>
+                <div style="margin-top:12px;font-family:'Space Mono',monospace;font-size:9px;padding:8px 12px;border-radius:7px;font-weight:700;letter-spacing:0.3px;background:rgba(255,215,0,.06);color:#ffd700;border:1px solid rgba(255,215,0,.25);display:inline-block">GET READY</div>
+              </div>
+              <div style="display:flex;gap:6px;padding:0 14px 14px">
+                <button type="button" style="flex:1;height:40px;padding:0 14px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px" data-at-load="${esc(a.ticker)}">LOAD</button>
+                <button type="button" class="log-trade-from-alert" style="flex:1;height:40px;padding:0 14px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px"
+                  data-lt-ticker="${esc(a.ticker)}"
+                  data-lt-strike="${esc(o.strike ?? "")}"
+                  data-lt-expiry="${esc(o.expiry ?? "")}"
+                  data-lt-premium="${prem0}"
+                  data-lt-dir="${esc(o.optType || a.direction || "call")}"
+                  data-lt-score="${a.score != null ? a.score : ""}"
+                  data-lt-stage="${esc(a.stage || "")}"
+                >LOG</button>
+              </div>
+            </div>`
+            );
           }
-          const volLine =
-            vr != null
-              ? "VOL AT ALERT: " +
-                vr +
-                "x avg — " +
-                (vr > 2 ? "SURGE CONFIRMED" : vr < 0.8 ? "light volume" : "normal flow")
+
+          const isFire = tierKey === "FIRE";
+          const headBadge = isFire ? "🔥 FIRE ALERT" : "⚡ STRONG";
+          const badgeBg = isFire ? "rgba(255,215,0,.1)" : "rgba(0,229,255,.1)";
+          const badgeBr = isFire ? "rgba(255,215,0,.3)" : "rgba(0,229,255,.35)";
+          const badgeCol = isFire ? "#ffd700" : "#00e5ff";
+          const topGrad = isFire
+            ? "linear-gradient(90deg,#ffd700,#ff8c42,transparent)"
+            : "linear-gradient(90deg,#00e5ff,#8860ff,transparent)";
+          const pnlFont = isFire ? "28px" : "24px";
+          const ignBadgeHtml =
+            ign && ib
+              ? `<div id="alertIgnBadge_${aid}" style="display:inline-block;margin-top:6px;font-family:'Space Mono',monospace;font-size:8px;padding:3px 8px;border-radius:5px;font-weight:700;background:${ib.bg};border:1px solid ${ib.border};color:${ib.color}">🚀 IGNITION: ${ign.score}/100 — ${esc(ign.status)}</div>`
               : "";
-          return `<div class="card at-card ${pnlCls}">
-            <span class="tier-pill ${tier.cls}">${tier.key}</span>
-            <span class="setup-badge" style="margin-left:0;">${a.stageLabel || a.setupType || "ALERT"}</span>
-            <div class="at-headline">${formatBuyLine(a)} ${volBadgeHtml}</div>
-            ${volLine ? `<div class="at-vol-line">${volLine}</div>` : ""}
-            <div class="font-mono" style="font-size:0.72rem;color:var(--muted);line-height:1.5;">
-              Alerted at: stock <span class="font-mono">$${(+und0).toFixed(2)}</span> · premium <span class="font-mono">$${(+prem0).toFixed(2)}</span><br/>
-              Now: stock <span class="font-mono">$${(+undNow).toFixed(2)}</span> · option P&amp;L <strong style="color:${pnl == null ? "var(--muted)" : pnl >= 0 ? "var(--green)" : "var(--red)"};">${pnlStr}</strong>
-              ${th != null ? `<br/>Theta ≈ <span class="font-mono">$${th.toFixed(2)}</span>/day decay` : ""}
+
+          return (
+            `<div class="` +
+            (isFire ? "alert-card-fire" : "alert-card-strong") +
+            `">
+            <div style="height:2px;background:${topGrad}"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px;border-bottom:1px solid #0f1820">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="font-family:'Space Mono',monospace;font-size:9px;padding:3px 8px;border-radius:5px;font-weight:700;background:${badgeBg};border:1px solid ${badgeBr};color:${badgeCol};letter-spacing:.5px">${headBadge}</div>
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:1px;color:#eaf4ff">${esc(t)}</div>
+              </div>
+              <div style="font-family:'Space Mono',monospace;font-size:9px;color:#1e3a4a">${esc(timeStr)}</div>
             </div>
-            <div style="margin-top:10px;font-weight:800;font-size:0.95rem;color:${act === "EXIT NOW" ? "var(--red)" : act === "TAKE PROFIT" ? "var(--green)" : "var(--yellow)"};">Action: ${act}</div>
-            <div class="muted" style="font-size:0.7rem;margin-top:4px;">${(a.recommendedMeta?.reason || "").replace(/</g, "&lt;")}</div>
-            <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-              <button type="button" class="btn-go" data-at-load="${a.ticker}">LOAD TICKER</button>
-              <button type="button" class="btn-go log-trade-from-alert" style="background:var(--purple);color:#fff;"
-                data-lt-ticker="${(a.ticker || "").replace(/"/g, "")}"
-                data-lt-strike="${String(o.strike ?? "").replace(/"/g, "")}"
-                data-lt-expiry="${String(o.expiry ?? "").replace(/"/g, "")}"
-                data-lt-premium="${prem0}"
-                data-lt-dir="${String(o.optType || a.direction || "call").replace(/"/g, "")}"
-                data-lt-score="${a.score != null ? a.score : ""}"
-                data-lt-stage="${String(a.stage || "").replace(/"/g, "")}"
-              >LOG TRADE</button>
+            <div style="padding:12px 14px 10px;border-bottom:1px solid #0f1820">
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:${isFire ? 28 : 24}px;letter-spacing:1px;color:#eaf4ff;margin-bottom:4px">BUY ${esc(t)} $${esc(strike)} ${esc(typ)}</div>
+              <div style="font-family:'Space Mono',monospace;font-size:9px;color:#2e4a5e;letter-spacing:.3px">EXP ${esc(expiry)} · SCORE ${esc(score)}/100 · WIN RATE ${winRate}% · Δ${esc(del)} · IV ${esc(iv)}%</div>
+              ${ignBadgeHtml}
             </div>
-          </div>`;
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#0f1820">
+              <div style="background:#060e14;padding:12px 12px">
+                <div style="font-family:'Space Mono',monospace;font-size:7px;color:#1e3a4a;letter-spacing:.5px;margin-bottom:6px">ALERTED AT</div>
+                <div style="font-family:'Space Mono',monospace;font-size:11px;color:#8aacbe;margin-bottom:3px">Stock $${(+und0).toFixed(2)}</div>
+                <div style="font-family:'Space Mono',monospace;font-size:11px;color:#8aacbe">Premium $${(+prem0).toFixed(2)}</div>
+              </div>
+              <div style="background:#060e14;padding:12px 12px">
+                <div style="font-family:'Space Mono',monospace;font-size:7px;color:#1e3a4a;letter-spacing:.5px;margin-bottom:6px">NOW — LIVE</div>
+                <div style="font-family:'Space Mono',monospace;font-size:11px;margin-bottom:3px;color:${pnlColor}">Stock $${(+undNow).toFixed(2)}</div>
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:${pnlFont};letter-spacing:.5px;line-height:1;color:${pnlColor}">${pnlPct > 0 ? "+" : ""}${pnlPct.toFixed(1)}%</div>
+                <div style="font-family:'Space Mono',monospace;font-size:9px;color:${pnlColor};margin-top:2px">$${currentPremium.toFixed(2)} premium</div>
+              </div>
+            </div>
+            <div style="padding:8px 14px 0;background:#060e14">
+              <div style="height:6px;background:#0a1218;border-radius:3px;overflow:hidden">
+                <div style="height:100%;border-radius:3px;background:${pnlColor};width:${barWidth}%"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-top:3px;font-family:'Space Mono',monospace;font-size:7px;color:#1e3a4a">
+                <span>-50%</span><span>ENTRY</span><span>+80%</span><span>+150%</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#060e14">
+              <div style="font-family:'Space Mono',monospace;font-size:9px;padding:6px 12px;border-radius:7px;font-weight:700;letter-spacing:.3px;background:${action.bg};color:${action.color};border:1px solid ${action.border}">${esc(action.text)}</div>
+              <div style="display:flex;gap:6px">
+                <button type="button" style="height:40px;padding:0 14px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px" data-at-load="${esc(a.ticker)}">LOAD</button>
+                <button type="button" class="log-trade-from-alert" style="height:40px;padding:0 14px;border-radius:8px;background:#0a1218;border:1px solid #1a2530;color:#4a6070;font-family:'Space Mono',monospace;font-size:9px"
+                  data-lt-ticker="${esc(a.ticker)}"
+                  data-lt-strike="${esc(o.strike ?? "")}"
+                  data-lt-expiry="${esc(o.expiry ?? "")}"
+                  data-lt-premium="${prem0}"
+                  data-lt-dir="${esc(o.optType || a.direction || "call")}"
+                  data-lt-score="${a.score != null ? a.score : ""}"
+                  data-lt-stage="${esc(a.stage || "")}"
+                >LOG</button>
+              </div>
+            </div>
+            <div style="border-top:1px solid #0f1820;padding:10px 14px;cursor:pointer" class="snap-hdr" data-snap="${aid}">
+              <div style="font-family:'Space Mono',monospace;font-size:8px;color:#1e3a4a;letter-spacing:.5px">INDICATORS AT ALERT TIME ▾</div>
+              <div id="snapshot_${aid}" style="display:none;margin-top:8px;font-family:'Space Mono',monospace;font-size:10px;color:#4a6070;line-height:2">
+                ADX ${esc(adxSnap)} · MACD ${esc(macdSnap)} · RSI ${esc(rsiSnap)} · VWAP ${esc(vwapSnap)}%<br/>
+                Stage: ${esc(a.stageLabel || a.setupType || "—")}<br/>
+                Ignition: ${ign ? esc(ign.score) + "/100 (" + esc(ign.status) + ")" : "—"}<br/>
+                Vol: ${vr != null ? vr.toFixed(1) : "—"}x recent (${esc(volSignal)})
+              </div>
+            </div>
+          </div>`
+          );
         })
         .join("");
       el.querySelectorAll("[data-at-load]").forEach((btn) => {
@@ -2188,6 +2637,9 @@
           goTicker();
           setPage(0);
         });
+      });
+      el.querySelectorAll(".snap-hdr").forEach((hdr) => {
+        hdr.addEventListener("click", () => window.toggleSnapshot(hdr.dataset.snap));
       });
       el.querySelectorAll(".log-trade-from-alert").forEach((btn) => {
         btn.addEventListener("click", async () => {
@@ -3515,6 +3967,38 @@
       const vwap = vwapSession(c5);
       const price = quote?.last || closes5[closes5.length - 1] || 0;
       const vwapDist = vwap ? ((price - vwap) / vwap) * 100 : 0;
+
+      state.fiveMinCandles = c5;
+      const pInd = state.indicators || {};
+      const indForIgn = {
+        macd: macdH,
+        macdPrev: pInd.macd != null ? pInd.macd : macdH,
+        macdPrev2: pInd.macdPrev != null ? pInd.macdPrev : macdH,
+        rsi: rsiVal,
+        rsiPrev: pInd.rsi != null ? pInd.rsi : rsiVal,
+        adx: adxVal,
+        adxPrev: pInd.adx != null ? pInd.adx : adxVal,
+      };
+      if (typeof window.calculateIgnition === "function" && c5.length >= 5) {
+        const ign = window.calculateIgnition(candlesNormalizedForIgnition(c5), indForIgn);
+        state.ignition = ign;
+        renderIgnition(ign);
+        pushIgnitionHistoryClient(ign, sym);
+      } else {
+        state.ignition = null;
+        const igDesc = document.getElementById("ignDesc");
+        if (igDesc) igDesc.textContent = "Need at least 5 five-minute bars for ignition.";
+      }
+      state.indicators = {
+        macd: macdH,
+        macdPrev: pInd.macd != null ? pInd.macd : macdH,
+        macdPrev2: pInd.macdPrev != null ? pInd.macdPrev : macdH,
+        rsi: rsiVal,
+        rsiPrev: pInd.rsi != null ? pInd.rsi : rsiVal,
+        adx: adxVal,
+        adxPrev: pInd.adx != null ? pInd.adx : adxVal,
+      };
+
       state.volumeAnalysis =
         typeof window.analyzeVolumeForUi === "function" && c5.length >= 5
           ? window.analyzeVolumeForUi(
@@ -3839,6 +4323,12 @@
       if (tx) tx.textContent = desc;
       if (pill) pill.className = "pill-mkt " + st;
       state.marketOpen = st === "open" || st === "ext";
+
+      const sess = getMarketSessionEt();
+      const sp = document.getElementById("mktSessionPill");
+      const stx = document.getElementById("mktSessionText");
+      if (stx) stx.textContent = sess.label;
+      if (sp) sp.className = "pill-session " + sess.cls;
     }
 
     async function loadBalances() {
@@ -3937,20 +4427,66 @@
         const trail =
           looksOpt && entryPrem > 0 && last > 0 ? calcTrailStopClient(entryPrem, last) : null;
         const th = qu?.greeks?.theta != null ? (parseFloat(qu.greeks.theta) * 100).toFixed(2) : null;
-        return `<div class="card pos-card">
-          <div class="font-mono" style="font-size:0.75rem;">${p.symbol}</div>
-          <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:0.85rem;">
-            <span>Qty ${qty}</span><span>Cost/ctr ${per.toFixed(2)}</span><span>Mark ${last.toFixed(2)}</span>
+        const pnlColor = win ? "#00ff87" : "#ff3b5c";
+        const barColor = win ? "#00ff87" : "#ff3b5c";
+        const barColor2 = win ? "#1a3a24" : "#3a1a24";
+        const borderColor = win ? "rgba(0,255,135,.28)" : "rgba(255,59,92,.35)";
+        const pnlSign = pl >= 0 ? "+" : "";
+        const barW = Math.max(0, Math.min(100, ((plp + 50) / 200) * 100));
+        const pb = posPrimaryBtn(plp);
+        const holdType = /P\d/.test(symStr) || /put/i.test(symStr) ? "LONG PUT" : "LONG CALL";
+        const openedAt = p.date_acquired;
+        const tit = formatTimeInTrade(openedAt);
+        const openedMs = openedAt ? new Date(openedAt).getTime() : 0;
+        const hoursHeld = openedMs ? (Date.now() - openedMs) / 3600000 : 0;
+        const daysHeld = openedMs ? (Date.now() - openedMs) / 86400000 : 0;
+        const warnLong = hoursHeld >= 6 && daysHeld < 1;
+        const stopStatus = trail ? trail.action : "—";
+        const stopColor = pnlColor;
+        return `<div class="pos-card" style="background:#060e14;border:1px solid ${borderColor};border-radius:14px;overflow:hidden;margin-bottom:10px">
+          <div style="height:3px;background:linear-gradient(90deg,${barColor},${barColor2},transparent)"></div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 14px 10px">
+            <div>
+              <div style="font-family:'Space Mono',monospace;font-size:11px;color:#00e5ff;font-weight:700;line-height:1.5;margin-bottom:3px">${symStr.replace(/</g, "&lt;")}</div>
+              <div style="font-family:'DM Sans',sans-serif;font-size:11px;color:#1e3a4a">${qty} contracts · ${holdType}</div>
+              <div style="font-family:'Space Mono',monospace;font-size:9px;color:#2e4a5e;margin-top:4px">TIME IN TRADE: ${tit}${warnLong ? " · ⚠️ 6h+ — review time-based exit" : ""}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:40px;letter-spacing:.5px;line-height:1;color:${pnlColor}">${pnlSign}$${Math.abs(pl).toFixed(0)}</div>
+              <div style="font-family:'Space Mono',monospace;font-size:12px;color:${pnlColor};margin-top:2px">${pnlSign}${plp.toFixed(1)}%</div>
+            </div>
           </div>
-          <div class="progress"><div style="width:${Math.min(100, Math.abs(plp))}%;background:${win ? "var(--green)" : "var(--red)"}"></div></div>
-          <div class="font-mono" style="margin-top:10px;font-size:1.35rem;font-weight:800;color:${win ? "var(--green)" : "var(--red)"};text-shadow:0 0 20px ${win ? "rgba(0,255,135,0.25)" : "rgba(255,59,92,0.25)"};">${win ? "+" : ""}$${pl.toFixed(0)} <span style="font-size:0.75rem;opacity:0.85;">(${plp.toFixed(1)}%)</span></div>
-          ${
-            trail
-              ? `<div class="muted" style="font-size:0.72rem;margin-top:8px;line-height:1.45;"><strong>Trail stop</strong> ${trail.action}<br/><span class="font-mono">Ref level ~$${trail.level.toFixed(2)}</span> (prem vs mark)</div>`
-              : ""
-          }
-          ${th != null ? `<div class="muted" style="font-size:0.68rem;margin-top:4px;">Theta ≈ $${th}/day (est.)</div>` : ""}
-          <button type="button" class="big-btn ${win ? "call" : "put"}" style="margin-top:10px;padding:10px;font-size:0.9rem;" data-close="${p.symbol}" data-qty="${Math.abs(qty)}" data-plp="${plp.toFixed(1)}">${win ? "TAKE PROFIT" : "CLOSE POSITION"}</button>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:#0f1820;border-top:1px solid #0f1820;border-bottom:1px solid #0f1820">
+            <div style="background:#060e14;padding:10px 10px">
+              <div style="font-family:'Space Mono',monospace;font-size:7px;color:#1e3a4a;margin-bottom:3px">COST/CONTRACT</div>
+              <div style="font-family:'Space Mono',monospace;font-size:14px">$${entryPrem.toFixed(2)}</div>
+            </div>
+            <div style="background:#060e14;padding:10px 10px">
+              <div style="font-family:'Space Mono',monospace;font-size:7px;color:#1e3a4a;margin-bottom:3px">NOW/CONTRACT</div>
+              <div style="font-family:'Space Mono',monospace;font-size:14px;color:${pnlColor}">$${last.toFixed(2)}</div>
+            </div>
+            <div style="background:#060e14;padding:10px 10px">
+              <div style="font-family:'Space Mono',monospace;font-size:7px;color:#1e3a4a;margin-bottom:3px">THETA/DAY</div>
+              <div style="font-family:'Space Mono',monospace;font-size:14px;color:#ff8c42">${th != null ? "-$" + th : "—"}</div>
+            </div>
+          </div>
+          <div style="padding:12px 14px;border-bottom:1px solid #0f1820">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <div style="font-family:'Space Mono',monospace;font-size:8px;color:#1e3a4a;letter-spacing:.5px">TRAIL STOP</div>
+              <div style="font-family:'Space Mono',monospace;font-size:9px;font-weight:700;color:${stopColor}">${stopStatus}</div>
+            </div>
+            <div style="height:6px;background:#0a1218;border-radius:3px;position:relative;overflow:visible">
+              <div style="height:100%;border-radius:3px;background:linear-gradient(90deg,#1a3a24,${barColor});width:${barW}%"></div>
+              <div style="position:absolute;top:-4px;left:${barW}%;transform:translateX(-50%);width:2px;height:14px;background:#fff;border-radius:1px"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:4px;font-family:'Space Mono',monospace;font-size:8px;color:#1e3a4a">
+              <span>ENTRY</span><span style="color:${pnlColor}">▲ NOW ${pnlSign}${plp.toFixed(1)}%</span><span>+80% HALF</span><span>+150%</span>
+            </div>
+          </div>
+          <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+            <button type="button" style="width:100%;height:52px;border-radius:10px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;cursor:pointer;background:${pb.bg};color:${pb.color};border:1px solid ${pb.border}" data-close="${p.symbol}" data-qty="${Math.abs(qty)}" data-plp="${plp.toFixed(1)}">${pb.text}</button>
+            <button type="button" style="width:100%;height:48px;border-radius:10px;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;cursor:pointer;background:#0a1218;color:#2e4a5e;border:1px solid #1a2530" data-pos-detail="${p.symbol}">VIEW DETAILS</button>
+          </div>
         </div>`;
       }).join("");
 
@@ -3958,6 +4494,11 @@
         btn.addEventListener("click", () =>
           closePosition(btn.dataset.close, btn.dataset.qty, parseFloat(btn.dataset.plp))
         );
+      });
+      el.querySelectorAll("[data-pos-detail]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          toast("Use SIGNAL + OPTS for full Greeks and chain detail.", "success");
+        });
       });
     }
 
@@ -4141,6 +4682,7 @@
         document.getElementById("trackerActionBanner").style.display = "none";
         refreshMainTop();
       }
+      if (i === 5) renderIgnitionHistoryScan();
     }
 
     function underlyingFromOcc(occ) {
