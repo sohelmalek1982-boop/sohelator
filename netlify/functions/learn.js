@@ -60,8 +60,16 @@ exports.handler = async (event) => {
     return { statusCode: 204, headers, body: "" };
   }
 
-  const learnStore = getStore("learnings");
-  const alertsStore = getStore("alerts");
+  const learnStore = getStore({
+    name: "learnings",
+    siteID: process.env.NETLIFY_SITE_ID,
+    token: process.env.NETLIFY_TOKEN,
+  });
+  const alertsStore = getStore({
+    name: "alerts",
+    siteID: process.env.NETLIFY_SITE_ID,
+    token: process.env.NETLIFY_TOKEN,
+  });
 
   if (event.httpMethod === "GET") {
     const items = [];

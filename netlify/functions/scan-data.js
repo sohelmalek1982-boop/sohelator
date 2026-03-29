@@ -19,8 +19,16 @@ exports.handler = async (event) => {
     };
   }
 
-  const store = getStore("morning-scans");
-  const learningStore = getStore("learnings");
+  const store = getStore({
+    name: "morning-scans",
+    siteID: process.env.NETLIFY_SITE_ID,
+    token: process.env.NETLIFY_TOKEN,
+  });
+  const learningStore = getStore({
+    name: "learnings",
+    siteID: process.env.NETLIFY_SITE_ID,
+    token: process.env.NETLIFY_TOKEN,
+  });
 
   const [scan925, scan955, eodLatest, runningStats] = await Promise.all([
     store.get("scan_925_latest", { type: "json" }),

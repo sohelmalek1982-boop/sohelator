@@ -547,8 +547,16 @@ async function fetchOptionLeg(sym, underlying, setupType, price) {
 }
 
 async function runScan() {
-  const scannerStore = getStore("scanner");
-  const alertsStore = getStore("alerts");
+  const scannerStore = getStore({
+    name: "scanner",
+    siteID: process.env.NETLIFY_SITE_ID,
+    token: process.env.NETLIFY_TOKEN,
+  });
+  const alertsStore = getStore({
+    name: "alerts",
+    siteID: process.env.NETLIFY_SITE_ID,
+    token: process.env.NETLIFY_TOKEN,
+  });
   let alertCount = 0;
   const confirmedSetups = [];
   const tickerList = [];

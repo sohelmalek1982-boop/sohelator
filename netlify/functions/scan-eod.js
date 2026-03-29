@@ -84,9 +84,21 @@ async function runEod() {
   }
 
   const dateStr = dateStrUs();
-  const store = getStore("morning-scans");
-  const alertStore = getStore("alerts");
-  const learningStore = getStore("learnings");
+  const store = getStore({
+    name: "morning-scans",
+    siteID: process.env.NETLIFY_SITE_ID,
+    token: process.env.NETLIFY_TOKEN,
+  });
+  const alertStore = getStore({
+    name: "alerts",
+    siteID: process.env.NETLIFY_SITE_ID,
+    token: process.env.NETLIFY_TOKEN,
+  });
+  const learningStore = getStore({
+    name: "learnings",
+    siteID: process.env.NETLIFY_SITE_ID,
+    token: process.env.NETLIFY_TOKEN,
+  });
 
   const [scan925, scan955] = await Promise.all([
     store.get("scan_925_latest", { type: "json" }),
@@ -377,7 +389,11 @@ async function httpHandler(event) {
     return { statusCode: 204, headers: cors, body: "" };
   }
   if (event.httpMethod === "GET") {
-    const learningStore = getStore("learnings");
+    const learningStore = getStore({
+      name: "learnings",
+      siteID: process.env.NETLIFY_SITE_ID,
+      token: process.env.NETLIFY_TOKEN,
+    });
     const data = await learningStore.get("eod_latest", { type: "json" });
     return {
       statusCode: 200,

@@ -32,7 +32,11 @@ exports.handler = async (event) => {
       body: JSON.stringify({ error: "subscription required" }),
     };
   }
-  const store = getStore("subscriptions");
+  const store = getStore({
+    name: "subscriptions",
+    siteID: process.env.NETLIFY_SITE_ID,
+    token: process.env.NETLIFY_TOKEN,
+  });
   const key = "sub_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
   await store.setJSON(key, subscription);
   return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
