@@ -2,7 +2,23 @@
   publish = "public"
   functions = "netlify/functions"
 
-# Scanner runs many Tradier calls: in Netlify → Functions → increase timeout (e.g. 60–120s) if scans fail.
+[functions]
+  node_bundler = "esbuild"
+
+[functions."scan-925"]
+  timeout = 60
+
+[functions."scan-955"]
+  timeout = 60
+
+[functions."scan-eod"]
+  timeout = 60
+
+[functions."scanner-core"]
+  timeout = 60
+
+[functions."scan-weekend"]
+  timeout = 60
 
 [[redirects]]
   from = "/api/tradier"
