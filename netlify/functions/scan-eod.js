@@ -2,7 +2,19 @@ const fetch = require("node-fetch");
 const { getStore } = require("@netlify/blobs");
 const { schedule } = require("@netlify/functions");
 const { withSohelContext, buildTradingContext } = require("./lib/sohelContext");
-const { getMemoryContext } = require("./lib/memory");
+const {
+  getMemoryContext,
+  getMemoryStore,
+} = require("./lib/memory");
+const {
+  analyzePatterns,
+  finalizePatterns,
+  mergePatterns,
+  getTopPatterns,
+  getBottomPatterns,
+  formatPatterns,
+  generateImprovements,
+} = require("./lib/eodPatterns");
 
 function tradierBase() {
   return (process.env.TRADIER_ENV || "production").toLowerCase() === "sandbox"
@@ -42,9 +54,16 @@ function nyHM() {
 
 function dateStrUs() {
   return new Date().toLocaleDateString("en-US", {
+    timeZone: "America/New_York",
     month: "long",
     day: "numeric",
     year: "numeric",
+  });
+}
+
+function nySlashDate() {
+  return new Date().toLocaleDateString("en-US", {
+    timeZone: "America/New_York",
   });
 }
 
@@ -139,11 +158,28 @@ async function runEod() {
     console.error("eod history", e);
   }
 
+  let memStore = null;
+  let validSnaps = [];
+  try {
+    memStore = getMemoryStore();
+    const dateStrKey = nySlashDate().replace(/\//g, "_");
+    const todayKeys =
+      (await memStore.get(`snapshots_${dateStrKey}`, { type: "json" })) || [];
+    const idList = Array.isArray(todayKeys) ? todayKeys : [];
+    const snapshots = await Promise.all(
+      idList.map((id) => memStore.get(`snapshot_${id}`, { type: "json" }))
+    );
+    validSnaps = snapshots.filter(Boolean);
+  } catch (e) {
+    console.error("eod snapshots load", e);
+  }
+
   const symSet = new Set(["SPY", "QQQ"]);
   for (const t of scan925?.watchlistBull || []) symSet.add(t.symbol);
   for (const t of scan925?.watchlistBear || []) symSet.add(t.symbol);
   for (const t of scan955?.confirmedTickers || []) symSet.add(t.symbol);
   for (const a of todaysAlerts) symSet.add(a.ticker);
+  for (const s of validSnaps) symSet.add(s.ticker);
 
   const allSyms = [...symSet].filter(Boolean);
   let quotes = {};
@@ -154,6 +190,90 @@ async function runEod() {
     });
     for (const q of normList(qd.quotes?.quote)) {
       if (q.symbol) quotes[q.symbol] = q;
+    }
+  }
+
+  if (memStore && validSnaps.length) {
+    for (const snap of validSnaps) {
+      const quote = quotes[snap.ticker];
+      if (!quote) continue;
+      const closePrice = parseFloat(quote.last ?? quote.close ?? 0);
+      if (!closePrice) continue;
+      const alertPrice = snap.prediction?.optionPremium;
+      const stockAtAlert =
+        snap.indicators?.priceAtAlert != null
+          ? Number(snap.indicators.priceAtAlert)
+          : closePrice;
+      const stockMovePct =
+        stockAtAlert > 0
+          ? ((closePrice - stockAtAlert) / stockAtAlert) * 100
+          : 0;
+      const directionCorrect =
+        (snap.prediction.direction === "BULL" && stockMovePct > 0.3) ||
+        (snap.prediction.direction === "BEAR" && stockMovePct < -0.3);
+      const nr = snap.levels?.nearestResistance;
+      const ns = snap.levels?.nearestSupport;
+      let hitTarget = null;
+      if (snap.prediction.direction === "BULL" && nr != null) {
+        hitTarget = closePrice >= nr * 0.995;
+      } else if (snap.prediction.direction === "BEAR" && ns != null) {
+        hitTarget = closePrice <= ns * 1.005;
+      }
+      const estOptionReturn =
+        alertPrice > 0 ? stockMovePct * 0.45 * 2 : 0;
+      snap.outcome = {
+        filled: true,
+        priceAtClose: closePrice,
+        premiumAtClose: null,
+        stockMovePct: +stockMovePct.toFixed(2),
+        estimatedOptionReturn: +estOptionReturn.toFixed(1),
+        hitTarget,
+        correct: directionCorrect,
+        exitReason: "EOD",
+        holdMinutes: (Date.now() - snap.timestamp) / 60000,
+      };
+      try {
+        await memStore.setJSON(`snapshot_${snap.id}`, snap);
+      } catch (e) {
+        console.error("snapshot save", snap.id, e);
+      }
+    }
+  }
+
+  let patternsToday = null;
+  let allTimePatternsMerged = null;
+  let topPatterns = [];
+  let bottomPatterns = [];
+  let improvementSuggestions = [];
+  let totalDaysLearning = 0;
+
+  if (memStore && validSnaps.length) {
+    try {
+      const rawPatterns = analyzePatterns(validSnaps);
+      patternsToday = finalizePatterns(rawPatterns, validSnaps);
+      const dateKeyPat = nySlashDate().replace(/\//g, "_");
+      await memStore.setJSON(`patterns_${dateKeyPat}`, patternsToday);
+      const prevAll = (await memStore.get("patterns_all_time", {
+        type: "json",
+      })) || {};
+      allTimePatternsMerged = mergePatterns(prevAll, patternsToday);
+      await memStore.setJSON("patterns_all_time", allTimePatternsMerged);
+      topPatterns = getTopPatterns(allTimePatternsMerged, 5, 8);
+      bottomPatterns = getBottomPatterns(allTimePatternsMerged, 5, 8);
+      const rs = await learningStore.get("running_stats", { type: "json" });
+      totalDaysLearning = rs?.totalDays ?? 0;
+      improvementSuggestions = generateImprovements(
+        patternsToday,
+        allTimePatternsMerged,
+        totalDaysLearning
+      );
+      await learningStore.setJSON("latest_improvements", {
+        date: dateStr,
+        suggestions: improvementSuggestions,
+        updatedAt: Date.now(),
+      });
+    } catch (e) {
+      console.error("eod patterns", e);
     }
   }
 
@@ -302,6 +422,70 @@ Per-alert master summaries: ${todaysAlerts
   .filter(Boolean)
   .join(" | ") || "none"}
 
+SNAPSHOTS GRADED TODAY: ${validSnaps.length} (signal memory store)
+
+TODAY'S PATTERN ANALYSIS:
+${formatPatterns(patternsToday || {})}
+
+ALL-TIME PATTERNS (${totalDaysLearning || "N/A"} trading days in running stats):
+${formatPatterns(allTimePatternsMerged || {})}
+
+TOP PERFORMING CONDITIONS (all time):
+${
+  topPatterns.length
+    ? topPatterns
+        .map(
+          (p) =>
+            `• ${p.name}: ${p.winRate}% win rate (${p.count} signals)`
+        )
+        .join("\n")
+    : "(not enough bucketed data yet)"
+}
+
+WORST PERFORMING CONDITIONS (all time):
+${
+  bottomPatterns.length
+    ? bottomPatterns
+        .map(
+          (p) =>
+            `• ${p.name}: ${p.winRate}% win rate (${p.count} signals) — consider filtering`
+        )
+        .join("\n")
+    : "(not enough bucketed data yet)"
+}
+
+SYSTEM IMPROVEMENT ANALYSIS:
+Based on ${totalDaysLearning || "N/A"} days of real data:
+
+${
+  improvementSuggestions.length
+    ? improvementSuggestions
+        .map(
+          (s) =>
+            `[${s.impact} IMPACT] ${s.component}:
+  Current: ${s.current}
+  Suggested: ${s.suggested}
+  Why: ${s.reason}
+  Data: ${s.dataPoints} signals analyzed`
+        )
+        .join("\n\n")
+    : "(no automated suggestions yet — need more snapshot outcomes)"
+}
+
+For each suggestion:
+1. Do you agree based on the data?
+2. What would be the trade-off?
+3. Any other improvements you'd suggest based on what you're seeing?
+4. What additional data would help you make better predictions?
+5. If you could add one new indicator or data source what would it be and why?
+
+Based on this real performance data:
+1. What patterns are genuinely predictive?
+2. What signals should we filter out?
+3. What thresholds should we adjust?
+4. What new data would improve accuracy?
+5. Grade today's signal quality A-F
+
 Give: assessment, per-wrong-call fix, per-correct-call what worked, pattern analysis, signal tweaks with thresholds, grade A–D, watch tomorrow. If Friday: weekend hold checklist per open symbol.
 Also briefly: Was the GEX regime directionally useful? Did options-flow / sector bias from the morning match how names closed? Were key levels (if any in master summaries) respected?`;
 
@@ -314,7 +498,7 @@ Also briefly: Was the GEX regime directionally useful? Did options-flow / sector
       },
       body: JSON.stringify({
         model,
-        max_tokens: 1500,
+        max_tokens: 2200,
         system,
         messages: [{ role: "user", content: user }],
       }),
@@ -322,6 +506,9 @@ Also briefly: Was the GEX regime directionally useful? Did options-flow / sector
     const data = await res.json();
     eodAnalysis = data.content?.[0]?.text || data.error?.message || "";
   }
+
+  const gradeMatchEod = eodAnalysis.match(/Grade[:\s]+([A-F][+-]?)/i);
+  const gradeLetter = gradeMatchEod ? gradeMatchEod[1] : null;
 
   const eodData = {
     date: dateStr,
@@ -347,6 +534,13 @@ Also briefly: Was the GEX regime directionally useful? Did options-flow / sector
       : null,
     claudeAnalysis: eodAnalysis,
     model,
+    snapshotCount: validSnaps.length,
+    patternsToday: patternsToday || null,
+    patternsAllTime: allTimePatternsMerged || null,
+    topPatterns,
+    bottomPatterns,
+    improvementSuggestions,
+    gradeLetter,
   };
 
   await learningStore.setJSON("eod_" + dateStr.replace(/\s/g, "_"), eodData);

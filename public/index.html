@@ -1595,6 +1595,10 @@
         <div class="card" id="runningStatsCard" style="background:var(--bg3);border-color:var(--border2);">
           <div id="runStatsBody" class="muted" style="font-size:0.8rem;">—</div>
         </div>
+        <h2 class="section">Learning log (EOD)</h2>
+        <div class="card" id="learningTimelineCard" style="background:var(--bg3);border-color:var(--border2);">
+          <div id="learningTimelineWrap" class="muted" style="font-size:0.8rem;">Loading…</div>
+        </div>
         <h2 class="section">Scan history</h2>
         <div id="scanHistoryWrap" class="muted">—</div>
         <div class="scan-sticky-bar">
@@ -1615,6 +1619,8 @@
         <div id="learningLogWrap" class="muted" style="font-size:0.8rem;">Loading…</div>
         <h2 class="section">EOD reviews</h2>
         <div id="eodLearningWrap" class="muted" style="font-size:0.8rem;">—</div>
+        <h2 class="section">System insights</h2>
+        <div id="systemInsightsWrap" class="muted" style="font-size:0.8rem;">—</div>
         <button type="button" class="big-btn call" id="btnReviewEod" style="margin-top:12px;padding:12px;font-size:0.9rem;">REVIEW TODAY&apos;S PERFORMANCE</button>
       </section>
     </div>
@@ -2511,7 +2517,7 @@
               })
             : "—";
           const score = a.score != null ? a.score : "—";
-          const winRate = "—";
+          const winRate = a.winRate != null ? a.winRate : "—";
           const iv = o.iv != null ? String(o.iv).replace(/%/g, "") : "—";
           const del = o.delta != null ? parseFloat(o.delta).toFixed(2) : "—";
           const ign = a.ignition;
@@ -2522,6 +2528,15 @@
           const vwapSnap = a.indicators?.vwapDist ?? "—";
           const vr = a.volume != null && a.volume.ratio != null ? +a.volume.ratio : null;
           const volSignal = vr != null ? (vr > 2 ? "SURGE" : vr < 0.8 ? "LIGHT" : "NORMAL") : "—";
+          const fd = a.forecastData;
+          const forecastColor =
+            !fd
+              ? "#2e4a5e"
+              : fd.forecastWinRate >= 60
+                ? "#00ff87"
+                : fd.forecastWinRate >= 50
+                  ? "#ffd700"
+                  : "#ff3b5c";
 
           if (tierKey === "WATCH") {
             return (
@@ -2595,6 +2610,21 @@
                 <div style="font-family:'Space Mono',monospace;font-size:9px;color:${pnlColor};margin-top:2px">$${currentPremium.toFixed(2)} premium</div>
               </div>
             </div>
+            ${
+              fd
+                ? `<div style="padding:8px 12px;border-top:1px solid #0f1820;background:#0a1218">
+              <div style="font-family:'Space Mono',monospace;font-size:7px;color:#1e3a4a;margin-bottom:4px;letter-spacing:.5px">HISTORICAL FORECAST</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:${forecastColor}">${fd.forecastWinRate}%</div>
+                <div>
+                  <div style="font-family:'Space Mono',monospace;font-size:8px;color:${forecastColor};font-weight:700">${esc(fd.forecastConfidence)} CONFIDENCE</div>
+                  <div style="font-family:'DM Sans',sans-serif;font-size:10px;color:#2e4a5e;margin-top:1px">Based on ${fd.totalDataPoints != null ? fd.totalDataPoints : "—"} similar setups</div>
+                </div>
+              </div>
+              <div style="font-family:'DM Sans',sans-serif;font-size:10px;color:#2e4a5e;margin-top:4px;line-height:1.5">${esc(fd.recommendation || "")}</div>
+            </div>`
+                : ""
+            }
             <div style="padding:8px 14px 0;background:#060e14">
               <div style="height:6px;background:#0a1218;border-radius:3px;overflow:hidden">
                 <div style="height:100%;border-radius:3px;background:${pnlColor};width:${barWidth}%"></div>
@@ -4786,12 +4816,161 @@
       refreshMainTop();
     }
 
+    async function loadLearningPanels() {
+      const tw = document.getElementById("learningTimelineWrap");
+      if (!tw) return;
+      try {
+        const [logR, patR, impR] = await Promise.all([
+          fetch("/api/memory-data?type=learning-log"),
+          fetch("/api/memory-data?type=patterns"),
+          fetch("/api/memory-data?type=improvements"),
+        ]);
+        const log = await logR.json();
+        const pat = await patR.json();
+        const imp = await impR.json();
+        const reviews = (log.reviews || []).slice(0, 14);
+        const escL = (s) =>
+          String(s ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+        let overall = null;
+        if (pat && pat.ignitionRanges) {
+          let w = 0;
+          let t = 0;
+          for (const k of Object.keys(pat.ignitionRanges)) {
+            const o = pat.ignitionRanges[k];
+            if (o && o.total) {
+              w += o.wins || 0;
+              t += o.total;
+            }
+          }
+          overall = t > 0 ? Math.round((w / t) * 100) : null;
+        }
+        const topIg = pat?.ignitionRanges
+          ? Object.entries(pat.ignitionRanges)
+              .map(([k, v]) =>
+                v && v.winRate != null ? { name: "Ignition " + k, ...v } : null
+              )
+              .filter(Boolean)
+              .sort((a, b) => b.winRate - a.winRate)[0]
+          : null;
+        const worstIg = pat?.ignitionRanges
+          ? Object.entries(pat.ignitionRanges)
+              .map(([k, v]) =>
+                v && v.winRate != null ? { name: "Ignition " + k, ...v } : null
+              )
+              .filter(Boolean)
+              .sort((a, b) => a.winRate - b.winRate)[0]
+          : null;
+        const timeWin = pat?.timeWindows
+          ? Object.entries(pat.timeWindows)
+              .map(([k, v]) =>
+                v && v.winRate != null ? { name: k, ...v } : null
+              )
+              .filter(Boolean)
+              .sort((a, b) => b.winRate - a.winRate)[0]
+          : null;
+        const tickBest = pat?.byTicker
+          ? Object.entries(pat.byTicker)
+              .map(([k, v]) =>
+                v && v.winRate != null ? { name: k, ...v } : null
+              )
+              .filter(Boolean)
+              .sort((a, b) => b.winRate - a.winRate)[0]
+          : null;
+        const sug3 = (imp && imp.suggestions ? imp.suggestions : []).slice(0, 3);
+        tw.innerHTML =
+          '<div style="font-size:0.72rem;color:var(--accent);margin-bottom:10px;">Last 14 EOD reviews</div>' +
+          reviews
+            .map((r) => {
+              const gr =
+                r.gradeLetter ||
+                (String(r.claudeAnalysis || "").match(
+                  /Grade[:\s]+([A-F][+-]?)/i
+                ) || [])[1] ||
+                "—";
+              const topSug =
+                r.improvementSuggestions && r.improvementSuggestions[0];
+              const sug = topSug ? topSug.reason || topSug.component : "—";
+              return (
+                '<div class="card" style="margin-bottom:8px;padding:10px;background:var(--bg2);font-size:0.78rem;line-height:1.5;border-color:var(--border2);">' +
+                "<strong>" +
+                escL(r.date) +
+                "</strong> · WR " +
+                (r.winRate != null ? r.winRate + "%" : "—") +
+                " · " +
+                (r.snapshotCount != null ? r.snapshotCount : r.totalCalls ?? "—") +
+                " signals · Grade " +
+                escL(gr) +
+                '<br/><span class="muted">' +
+                escL(sug).slice(0, 220) +
+                (String(sug).length > 220 ? "…" : "") +
+                "</span></div>"
+              );
+            })
+            .join("") +
+          '<div style="margin-top:14px;font-size:0.72rem;color:var(--accent);">All-time stats (pattern memory)</div>' +
+          '<div class="muted" style="margin-top:8px;font-size:0.78rem;line-height:1.55;">' +
+          "Overall (bucketed): " +
+          (overall != null ? overall + "%" : "—") +
+          "<br/>" +
+          "Best ignition bucket: " +
+          (topIg ? escL(topIg.name) + " " + topIg.winRate + "%" : "—") +
+          "<br/>" +
+          "Weakest ignition bucket: " +
+          (worstIg ? escL(worstIg.name) + " " + worstIg.winRate + "%" : "—") +
+          "<br/>" +
+          "Best time window: " +
+          (timeWin ? escL(timeWin.name) + " " + timeWin.winRate + "%" : "—") +
+          "<br/>" +
+          "Best ticker (history): " +
+          (tickBest ? escL(tickBest.name) + " " + tickBest.winRate + "%" : "—") +
+          "<br/><br/><strong>Top improvement ideas</strong><br/>" +
+          (sug3.length
+            ? sug3
+                .map(
+                  (s) =>
+                    "• " +
+                    escL(s.component) +
+                    " — " +
+                    escL(s.reason).slice(0, 160) +
+                    (String(s.reason).length > 160 ? "…" : "")
+                )
+                .join("<br/>")
+            : "No suggestions stored yet — run EOD with snapshots.") +
+          "</div>";
+        const si = document.getElementById("systemInsightsWrap");
+        if (si && imp && imp.suggestions && imp.suggestions.length) {
+          si.innerHTML = imp.suggestions
+            .map(
+              (s) =>
+                '<div class="card" style="margin-bottom:8px;padding:10px;background:var(--bg3);font-size:0.78rem;line-height:1.5;border-color:var(--border2);"><span style="color:var(--accent);">' +
+                escL(s.impact) +
+                "</span> · " +
+                escL(s.component) +
+                "<br/><span class=\"muted\">" +
+                escL(s.reason) +
+                "</span></div>"
+            )
+            .join("");
+        } else if (si) {
+          si.innerHTML =
+            '<span class="muted">No improvement suggestions yet — EOD will populate after snapshots exist.</span>';
+        }
+      } catch {
+        tw.innerHTML =
+          '<span class="muted">Could not load learning / pattern data.</span>';
+      }
+    }
+
     async function pollScanData() {
       try {
         const r = await fetch("/api/scan-data");
         const d = await r.json();
         state.scanData = d;
         renderScanDashboard(d);
+        await loadLearningPanels();
       } catch {
         /* offline */
       }
@@ -5009,6 +5188,7 @@
       } catch {
         /* optional */
       }
+      await loadLearningPanels();
     }
 
     function urlBase64ToUint8Array(base64String) {

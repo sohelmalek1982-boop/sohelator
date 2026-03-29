@@ -8,7 +8,7 @@ const {
   normalizeIgnitionForContext,
 } = require("./lib/sohelContext");
 const { calculateRegime } = require("./lib/marketRegime");
-const { getMemoryContext } = require("./lib/memory");
+const { getMemoryContext, recordAlertSnapshot } = require("./lib/memory");
 const { predictSetup, calculateRetestEntry } = require("./lib/predictive");
 const { calculateUrgency, buildTelegramMessage } = require("./lib/urgency");
 const { recommendSize } = require("./lib/sizing");
@@ -1185,6 +1185,32 @@ async function runScan() {
         }
       : null;
 
+    const patternWin = memory?.allPatternStats?.find(
+      (p) => p.stage === s.stage
+    );
+    const winRate =
+      patternWin?.winRate != null && patternWin.totalTrades >= 2
+        ? patternWin.winRate
+        : null;
+
+    const urgency = calculateUrgency(
+      {
+        ticker: s.ticker,
+        stage: s.stage,
+        score: finalScore,
+        indicators: {
+          adx: parseFloat(s.adx) || 0,
+          rsi: parseFloat(s.rsi) || 0,
+          macd: parseFloat(s.macd) || 0,
+          vwapDist: parseFloat(s.vwapDist) || 0,
+          volRatio: s.volAnalysis?.currentVolRatio,
+        },
+        option: opt,
+      },
+      regime,
+      memory
+    );
+
     const pending = {
       ticker: s.ticker,
       setupType: s.setupType,
@@ -1231,13 +1257,16 @@ async function runScan() {
       ignition: s.ignition || null,
       aiAnalysisParsed: aiAnalysisParsed || null,
       timestamp: Date.now(),
+      winRate,
+      urgencyTier: urgency.tier,
     };
 
     const pendingKey = "pending_" + Date.now() + "_" + s.ticker;
     await alertsStore.setJSON(pendingKey, pending);
 
     const alertKey = "alert_" + Date.now() + "_" + s.ticker;
-    await alertsStore.setJSON(alertKey, {
+    const alertRecord = {
+      id: alertKey,
       ticker: s.ticker,
       setupType: s.setupType,
       score: finalScore,
@@ -1260,7 +1289,16 @@ async function runScan() {
       ignition: pending.ignition,
       timestamp: Date.now(),
       outcome: null,
-    });
+      winRate,
+      urgencyTier: urgency.tier,
+    };
+    await alertsStore.setJSON(alertKey, alertRecord);
+
+    try {
+      await recordAlertSnapshot(alertRecord, master);
+    } catch (e) {
+      console.error("recordAlertSnapshot", s.ticker, e);
+    }
 
     const volLine = s.volAnalysis?.isSurge
       ? `🔊 VOL: ${s.volAnalysis.currentVolRatio}x avg — ${s.volAnalysis.priceVolumeSignal}`

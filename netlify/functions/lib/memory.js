@@ -243,6 +243,226 @@ function buildInsights(tickerStats, patternStats, behavioral, recentTrades) {
   return insights;
 }
 
+const NY_TZ = "America/New_York";
+
+function getSessionMinute() {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: NY_TZ,
+    weekday: "long",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  }).formatToParts(now);
+  const wd = parts.find((p) => p.type === "weekday")?.value;
+  if (wd === "Saturday" || wd === "Sunday") return 0;
+  const h = +parts.find((p) => p.type === "hour").value;
+  const m = +parts.find((p) => p.type === "minute").value;
+  const minutesFromMidnight = h * 60 + m;
+  const openMin = 9 * 60 + 30;
+  const closeMin = 16 * 60;
+  if (minutesFromMidnight < openMin) return 0;
+  if (minutesFromMidnight > closeMin) return Math.max(0, closeMin - openMin);
+  return minutesFromMidnight - openMin;
+}
+
+function nyDateParts() {
+  const now = new Date();
+  const date = now.toLocaleDateString("en-US", { timeZone: NY_TZ });
+  const timeOfDay = now.toLocaleTimeString("en-US", {
+    timeZone: NY_TZ,
+    hour12: true,
+  });
+  const dayOfWeek = now.toLocaleDateString("en-US", {
+    timeZone: NY_TZ,
+    weekday: "long",
+  });
+  return { date, timeOfDay, dayOfWeek };
+}
+
+function buildAlertSnapshotPayload(alert, master) {
+  const tf = master?.timeframes;
+  const fiveM = tf?.fiveMin;
+  const mom = master?.momentum;
+  const vol = master?.volume;
+  const lv = master?.levels;
+  const ign = master?.ignition || alert?.ignition;
+  const ignEngines = ign?.engines || {};
+  const flow = master?.optionsFlow;
+  const gex = master?.gex;
+  const mp = master?.marketProfile;
+  const sec = master?.sector;
+  const li = master?.levelInteraction;
+  const pz = master?.pivotZones;
+
+  const priceAtAlert =
+    alert?.underlyingAtAlert ??
+    alert?.indicators?.price ??
+    alert?.price ??
+    null;
+
+  const stageStr = String(alert?.stage || "");
+  const isBear =
+    stageStr.includes("bear") ||
+    /PUT|BEAR|fade/i.test(String(alert?.setupType || "")) ||
+    String(alert?.option?.optType || "").toLowerCase() === "put";
+
+  const nearestResistance = lv?.nearestResistance;
+  const nearestSupport = lv?.nearestSupport;
+
+  return {
+    id: alert.id,
+    ticker: alert.ticker,
+    timestamp: Date.now(),
+    ...nyDateParts(),
+    sessionMinute: getSessionMinute(),
+
+    prediction: {
+      direction: isBear ? "BEAR" : "BULL",
+      stage: alert.stage,
+      stageLabel: alert.stageLabel,
+      action: alert.action,
+      optionStrike: alert.option?.strike,
+      optionExpiry: alert.option?.expiry,
+      optionPremium: alert.premiumAtAlert,
+      targetLevel:
+        nearestResistance?.price ??
+        nearestSupport?.price ??
+        null,
+      stopLevel: alert.option?.strike,
+      winRateAtTime: alert.winRate != null ? alert.winRate : null,
+      urgencyTier: alert.urgencyTier ?? null,
+      ignitionScore:
+        ign?.ignitionScore ??
+        ign?.score ??
+        master?.ignition?.ignitionScore ??
+        null,
+    },
+
+    indicators: {
+      priceAtAlert,
+      adx: fiveM?.adx ?? alert.indicators?.adx,
+      adxSlope: alert.indicators?.adxSlope,
+      adxStrength: fiveM?.strength,
+      macd: alert.indicators?.macd,
+      macdSlope: alert.indicators?.macdSlope,
+      macdExpandingBars: ignEngines?.momentum?.expandingBars,
+      rsi: alert.indicators?.rsi,
+      rsiVelocity: ignEngines?.momentum?.rsiVelocity,
+      stochRsiK: mom?.stochRSI?.k,
+      stochRsiD: mom?.stochRSI?.d,
+      cci: mom?.cci,
+      williamsR: mom?.williamsR,
+      vwapDist: alert.indicators?.vwapDist,
+      aboveVWAP: (parseFloat(alert.indicators?.vwapDist) || 0) > 0,
+      bbPctB: master?.bbPctB ?? alert.indicators?.bbB,
+      priceAccelRatio: ignEngines?.price?.ratio,
+      atr: mom?.atr,
+      atrPct:
+        mom?.atrPct != null
+          ? parseFloat(String(mom.atrPct).replace(/%/g, "")) || null
+          : null,
+      volumeRatio: alert.volume?.ratio,
+      volumeSignal: alert.volume?.signal,
+      volumeExpanding: vol?.expanding,
+      volumeExpandingBars: vol?.expandingStreak,
+      tfAlignScore: tf?.alignmentScore,
+      dailyTrend: tf?.daily?.trend,
+      fourHTrend: tf?.fourHour?.trend,
+      oneHTrend: tf?.oneHour?.trend,
+      bullCount: tf?.bullCount,
+      bearCount: tf?.bearCount,
+    },
+
+    ignition: {
+      score: ign?.ignitionScore ?? ign?.score ?? null,
+      status: ign?.status,
+      direction: ign?.direction,
+      priceEngineScore: ignEngines?.price?.score,
+      momentumEngineScore: ignEngines?.momentum?.score,
+      volumeEngineScore: ignEngines?.volume?.score,
+      allEnginesFiring: !!(
+        ignEngines?.price?.score >= 75 &&
+        ignEngines?.momentum?.score >= 75 &&
+        ignEngines?.volume?.score >= 75
+      ),
+    },
+
+    levels: {
+      interactionType: li?.interactionType,
+      interactionLevel: li?.level?.label,
+      interactionPrice: li?.level?.price,
+      interactionConfidence: li?.confidence,
+      nearestResistance: nearestResistance?.price,
+      nearestResistanceLabel: nearestResistance?.label,
+      nearestSupport: nearestSupport?.price,
+      nearestSupportLabel: nearestSupport?.label,
+      distToResistance: lv?.rewardToResistance,
+      distToSupport: lv?.riskToSupport,
+      riskRewardRatio: lv?.riskRewardRatio,
+      pivotPP: pz?.pp,
+      pivotR1: pz?.r1,
+      pivotS1: pz?.s1,
+    },
+
+    market: {
+      regime: master?.regime?.primary,
+      vixLevel: master?.marketContext?.vix ?? null,
+      spyChangePct: master?.marketContext?.spyChange ?? null,
+      sectorMomentum: sec?.sectorMomentum,
+      sectorPerformance: sec?.sectorPerformance,
+      marketBreadth: sec?.marketBreadth,
+      gexRegime: gex?.gexRegime,
+      gexFlipNearby: gex?.tradingImplication?.flipWarning != null,
+      flowBias: flow?.smartMoneyBias,
+      unusualActivity: Array.isArray(flow?.unusualActivity)
+        ? flow.unusualActivity.length > 0
+        : false,
+      putCallRatio: flow?.volumePCR,
+      marketProfilePosition: mp?.pricePosition,
+      aboveVAH: mp?.pricePosition === "ABOVE_VALUE_AREA",
+      pocPrice: mp?.poc,
+    },
+
+    outcome: {
+      filled: false,
+      priceAtClose: null,
+      premiumAtClose: null,
+      stockMovePct: null,
+      estimatedOptionReturn: null,
+      hitTarget: null,
+      hitStop: null,
+      maxGain: null,
+      maxLoss: null,
+      holdMinutes: null,
+      exitReason: null,
+      correct: null,
+    },
+  };
+}
+
+async function recordAlertSnapshot(alert, master) {
+  const store = getMemoryStore();
+  if (!alert?.id) {
+    console.warn("recordAlertSnapshot: missing alert.id");
+    return null;
+  }
+  const snapshot = buildAlertSnapshotPayload(alert, master);
+  snapshot.id = alert.id;
+
+  await store.setJSON(`snapshot_${alert.id}`, snapshot);
+
+  const todayKey = `snapshots_${snapshot.date.replace(/\//g, "_")}`;
+  let todayList = (await store.get(todayKey, { type: "json" })) || [];
+  if (!Array.isArray(todayList)) todayList = [];
+  if (!todayList.includes(alert.id)) {
+    todayList.push(alert.id);
+    await store.setJSON(todayKey, todayList);
+  }
+
+  return snapshot;
+}
+
 async function getMemoryContext(ticker = null) {
   const store = getMemoryStore();
 
@@ -297,4 +517,8 @@ module.exports = {
   getMemoryContext,
   updateTickerStats,
   buildInsights,
+  getMemoryStore,
+  getSessionMinute,
+  buildAlertSnapshotPayload,
+  recordAlertSnapshot,
 };

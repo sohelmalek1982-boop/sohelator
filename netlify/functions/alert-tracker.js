@@ -1,6 +1,8 @@
 const fetch = require("node-fetch");
 const { getStore } = require("@netlify/blobs");
 const { getAlertCurrentPnl } = require("./lib/optionsData");
+const { getMemoryStore } = require("./lib/memory");
+const { forecastSetup } = require("./lib/forecast");
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -169,56 +171,85 @@ exports.handler = async (event) => {
     alerts.map((a) => getAlertCurrentPnl(a).catch(() => null))
   );
 
-  const enriched = alerts.map((alert, idx) => {
-    const alertPrice =
-      alert.underlyingAtAlert ??
-      alert.indicators?.price ??
-      alert.price ??
-      0;
-    const q = quotes[alert.ticker];
-    const currentPrice = parseFloat(
-      q?.last ?? q?.close ?? alert.currentUnderlying ?? 0
-    );
-    let underlyingPnlPct = null;
-    if (alertPrice > 0 && currentPrice > 0) {
-      underlyingPnlPct =
-        ((currentPrice - alertPrice) / alertPrice) * 100;
-    }
-    const isPut =
-      alert.direction === "put" ||
-      (alert.option?.optType || "").toLowerCase() === "put";
-    const signedMove = isPut ? -underlyingPnlPct : underlyingPnlPct;
-    const delta = parseFloat(alert.indicators?.delta) || 0.45;
-    let estimatedOptionPnlPct =
-      underlyingPnlPct != null
-        ? signedMove * Math.abs(delta) * 2
-        : null;
-    if (estimatedOptionPnlPct != null) {
-      estimatedOptionPnlPct = Math.max(
-        -100,
-        Math.min(500, estimatedOptionPnlPct)
+  let patternsAll = null;
+  let memStore = null;
+  try {
+    memStore = getMemoryStore();
+    patternsAll = await memStore.get("patterns_all_time", {
+      type: "json",
+    });
+  } catch (e) {
+    console.error("alert-tracker patterns", e);
+  }
+
+  const enriched = await Promise.all(
+    alerts.map(async (alert, idx) => {
+      const alertPrice =
+        alert.underlyingAtAlert ??
+        alert.indicators?.price ??
+        alert.price ??
+        0;
+      const q = quotes[alert.ticker];
+      const currentPrice = parseFloat(
+        q?.last ?? q?.close ?? alert.currentUnderlying ?? 0
       );
-    }
+      let underlyingPnlPct = null;
+      if (alertPrice > 0 && currentPrice > 0) {
+        underlyingPnlPct =
+          ((currentPrice - alertPrice) / alertPrice) * 100;
+      }
+      const isPut =
+        alert.direction === "put" ||
+        (alert.option?.optType || "").toLowerCase() === "put";
+      const signedMove = isPut ? -underlyingPnlPct : underlyingPnlPct;
+      const delta = parseFloat(alert.indicators?.delta) || 0.45;
+      let estimatedOptionPnlPct =
+        underlyingPnlPct != null
+          ? signedMove * Math.abs(delta) * 2
+          : null;
+      if (estimatedOptionPnlPct != null) {
+        estimatedOptionPnlPct = Math.max(
+          -100,
+          Math.min(500, estimatedOptionPnlPct)
+        );
+      }
 
-    const live = optionPnls[idx];
-    const optionPnlPct =
-      live && live.realPnlPct != null ? live.realPnlPct : null;
-    const pnlForRec =
-      optionPnlPct != null ? optionPnlPct : estimatedOptionPnlPct ?? underlyingPnlPct ?? 0;
+      const live = optionPnls[idx];
+      const optionPnlPct =
+        live && live.realPnlPct != null ? live.realPnlPct : null;
+      const pnlForRec =
+        optionPnlPct != null ? optionPnlPct : estimatedOptionPnlPct ?? underlyingPnlPct ?? 0;
 
-    const rec = getRecommendedAction(alert, pnlForRec);
-    return {
-      ...alert,
-      currentUnderlying: currentPrice || null,
-      underlyingPnlPct,
-      estimatedOptionPnlPct,
-      liveOptionQuote: live,
-      realOptionPnlPct: optionPnlPct,
-      recommendedAction: rec.action,
-      recommendedMeta: rec,
-      lastUpdated: Date.now(),
-    };
-  });
+      const rec = getRecommendedAction(alert, pnlForRec);
+
+      let forecastData = null;
+      try {
+        if (alert.id && patternsAll && memStore) {
+          const snap = await memStore.get(`snapshot_${alert.id}`, {
+            type: "json",
+          });
+          if (snap) {
+            forecastData = await forecastSetup(snap, patternsAll);
+          }
+        }
+      } catch (e) {
+        console.error("forecast attach", alert.ticker, e);
+      }
+
+      return {
+        ...alert,
+        currentUnderlying: currentPrice || null,
+        underlyingPnlPct,
+        estimatedOptionPnlPct,
+        liveOptionQuote: live,
+        realOptionPnlPct: optionPnlPct,
+        recommendedAction: rec.action,
+        recommendedMeta: rec,
+        forecastData,
+        lastUpdated: Date.now(),
+      };
+    })
+  );
 
   return {
     statusCode: 200,

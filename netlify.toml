@@ -139,6 +139,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/memory-data"
+  to = "/.netlify/functions/memory-data"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
