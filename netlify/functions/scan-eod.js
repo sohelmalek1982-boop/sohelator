@@ -1,7 +1,8 @@
 const fetch = require("node-fetch");
 const { getStore } = require("@netlify/blobs");
 const { schedule } = require("@netlify/functions");
-const { withSohelContext } = require("./lib/sohelContext");
+const { withSohelContext, buildTradingContext } = require("./lib/sohelContext");
+const { getMemoryContext } = require("./lib/memory");
 
 function tradierBase() {
   return (process.env.TRADIER_ENV || "production").toLowerCase() === "sandbox"
@@ -158,6 +159,10 @@ async function runEod() {
 
   const spyQ = quotes["SPY"];
   const qqqQ = quotes["QQQ"];
+  const spyLast =
+    spyQ != null
+      ? parseFloat(spyQ.last ?? spyQ.close ?? 0)
+      : 0;
   const spyDayChange = spyQ
     ? parseFloat(spyQ.change_percentage ?? spyQ.percent_change ?? 0)
     : 0;
@@ -234,9 +239,29 @@ async function runEod() {
   const model = process.env.ANTHROPIC_MODEL_PREMARKET || "claude-opus-4-6";
   const key = process.env.ANTHROPIC_API_KEY;
   let eodAnalysis = "";
+  let memEod = {
+    insights: [],
+    allTickerStats: [],
+    allPatternStats: [],
+    behavioralStats: null,
+  };
+  try {
+    memEod = await getMemoryContext();
+  } catch (e) {
+    console.error("eod memory", e);
+  }
+  const eodContext = buildTradingContext(null, "SPY", spyLast, memEod);
+
   if (key) {
     const system = withSohelContext(
-      `You are Sohel's trading system analyst. It's 4pm — market just closed. Review today's performance honestly. Sohel targets 65%+ win rate to scale; below 55% consistently means tweak signals. Be honest and actionable. If Friday, include WEEKEND HOLD ASSESSMENT for any open positions mentioned in data. Conversational debrief.`
+      `Market just closed. Review today honestly.
+What worked, what didn't, and most 
+importantly — what does Sohel need to 
+do differently tomorrow?
+Grade today: A/B/C/D.
+Be direct. He needs the truth not 
+a participation trophy.`,
+      eodContext
     );
     const user = `Market closed. Performance review:
 

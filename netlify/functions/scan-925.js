@@ -1,7 +1,8 @@
 const fetch = require("node-fetch");
 const { getStore } = require("@netlify/blobs");
 const { schedule } = require("@netlify/functions");
-const { withSohelContext } = require("./lib/sohelContext");
+const { withSohelContext, buildTradingContext } = require("./lib/sohelContext");
+const { getMemoryContext } = require("./lib/memory");
 const { tradierGet, normList } = require("./lib/tradierClient");
 const { checkEarnings } = require("./lib/earnings");
 const { getMasterAnalysis } = require("./lib/masterAnalysis");
@@ -342,32 +343,38 @@ async function run925() {
     process.env.ANTHROPIC_MODEL_PREMARKET || "claude-opus-4-6";
   const key = process.env.ANTHROPIC_API_KEY;
   let analysis = "Configure ANTHROPIC_API_KEY.";
+  let mem925 = {
+    insights: [],
+    allTickerStats: [],
+    allPatternStats: [],
+    behavioralStats: null,
+  };
+  try {
+    mem925 = await getMemoryContext();
+  } catch (e) {
+    console.error("scan-925 memory", e);
+  }
+  const leadMaster =
+    masterSnapshots.find((m) => m.ok && m.data)?.data || null;
+  const leadTicker = masterTickers[0] || "SPY";
+  const leadPrice =
+    leadMaster?.price != null ? leadMaster.price : spyLast;
+  const morningContext = buildTradingContext(
+    leadMaster,
+    leadTicker,
+    leadPrice,
+    mem925
+  );
+
   if (key) {
     const system = withSohelContext(
-      `You are Sohel's trading partner. It's 9:25am — 5 minutes before the open.
-Give him a sharp, scannable morning brief.
-
-His rules: options only, swing 1-3 days, calls above VWAP with ADX>25, puts below VWAP, stop -40-50%, target +80-150%, never earnings.
-
-FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
-
-MARKET: [1 sentence on today's environment]
-
-#1 PLAY: [TICKER] [CALLS/PUTS]
-Why: [1 sentence — specific reason]
-Target entry: [strike range and expiry]
-Watch for: [what confirms the entry at open]
-
-#2 WATCH: [TICKER] [direction]
-[1 sentence why]
-
-AVOID: [ticker(s)] — [one reason]
-
-RISK TODAY: [biggest thing that could hurt you]
-
-GAME PLAN: [1 sentence — what to do at 9:30]
-
-Keep it SHORT. Sohel reads this on his phone in 20 seconds before the bell.`
+      `It's 9:25am. Market opens in 5 minutes.
+Give Sohel his morning brief.
+Format: MARKET / #1 PLAY / #2 WATCH /
+AVOID / RISK / GAME PLAN.
+Maximum 150 words. He reads this on 
+his phone before the bell.`,
+      morningContext
     );
 
     const user = `Morning. Market opens in 5 minutes.

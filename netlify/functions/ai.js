@@ -1,4 +1,7 @@
 const fetch = require("node-fetch");
+const { withSohelContext, buildTradingContext } = require("./lib/sohelContext");
+const { getMasterAnalysis } = require("./lib/masterAnalysis");
+const { getMemoryContext } = require("./lib/memory");
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -28,6 +31,8 @@ exports.handler = async (event) => {
 
   const ticker = (body.ticker || "TICKER").toUpperCase();
   const ind = body.indicators || {};
+  const priceFromBody =
+    body.price != null ? parseFloat(body.price) : NaN;
 
   const userBlock = `Current indicators for ${ticker}:
 ADX: ${ind.adx} (slope vs 6 bars ago: ${ind.adxSlope})
@@ -48,7 +53,10 @@ Give me:
 Respond ONLY with valid JSON (no markdown), shape:
 {"verdict":"BULLS IN CONTROL","summary":"...","watch":"..."}`;
 
-  const system = `You are interpreting trading indicators for Sohel's options dashboard. He trades options with 1–3 day holds. Give him a plain English overall reading in 2–3 sentences in the summary field. Tell him what the indicators collectively mean for his trade right now. Be direct — should he hold, enter, or exit? Never use jargon without explaining it.`;
+  const systemPrompt = `You are interpreting trading indicators for Sohel's options dashboard. He trades options with 1–3 day holds. Give him a plain English overall reading in 2–3 sentences in the summary field. Tell him what the indicators collectively mean for his trade right now. Be direct — should he hold, enter, or exit? Never use jargon without explaining it.
+
+The user message contains live indicator values. Respond ONLY with valid JSON (no markdown), shape:
+{"verdict":"BULLS IN CONTROL","summary":"...","watch":"..."}`;
 
   if (!key) {
     return {
@@ -66,6 +74,27 @@ Respond ONLY with valid JSON (no markdown), shape:
   }
 
   try {
+    let master = null;
+    let memory = null;
+    try {
+      master = await getMasterAnalysis(ticker);
+    } catch (e) {
+      console.error("ai getMasterAnalysis", e);
+    }
+    try {
+      memory = await getMemoryContext(ticker);
+    } catch (e) {
+      console.error("ai getMemoryContext", e);
+    }
+    let price = 0;
+    if (isFinite(priceFromBody) && !isNaN(priceFromBody)) {
+      price = priceFromBody;
+    } else if (master?.price != null && isFinite(master.price)) {
+      price = master.price;
+    }
+    const extra = buildTradingContext(master, ticker, price, memory);
+    const system = withSohelContext(systemPrompt, extra);
+
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {

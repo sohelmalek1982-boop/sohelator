@@ -1,7 +1,12 @@
 const fetch = require("node-fetch");
 const { getStore } = require("@netlify/blobs");
 const { sendPushToAll } = require("./lib/pushAll");
-const { withSohelContext } = require("./lib/sohelContext");
+const {
+  withSohelContext,
+  buildTradingContext,
+  parseClaudeResponse,
+  normalizeIgnitionForContext,
+} = require("./lib/sohelContext");
 const { calculateRegime } = require("./lib/marketRegime");
 const { getMemoryContext } = require("./lib/memory");
 const { predictSetup, calculateRetestEntry } = require("./lib/predictive");
@@ -482,13 +487,45 @@ async function serperQueries(apiKey) {
   return found;
 }
 
-async function claudeAnalyze(setup, memorySnippet) {
+async function claudeAnalyze(
+  setup,
+  memorySnippet,
+  master,
+  ticker,
+  priceNum,
+  memory,
+  scannerIgnition
+) {
   const key = process.env.ANTHROPIC_API_KEY;
   const model =
     process.env.ANTHROPIC_MODEL_SCANNER || "claude-haiku-4-5-20251001";
-  if (!key) return "AI key not configured.";
+  if (!key) {
+    return {
+      text: "AI key not configured.",
+      parsed: parseClaudeResponse(""),
+    };
+  }
+  const mergedMaster =
+    master != null
+      ? {
+          ...master,
+          ignition:
+            normalizeIgnitionForContext(scannerIgnition) || master.ignition,
+        }
+      : normalizeIgnitionForContext(scannerIgnition)
+        ? { ignition: normalizeIgnitionForContext(scannerIgnition) }
+        : null;
+  const context = buildTradingContext(
+    mergedMaster,
+    ticker,
+    priceNum,
+    memory
+  );
   const system = withSohelContext(
-    "Trading signal analyzer. Maximum 2 sentences. Sentence 1: name the setup type and key condition. Sentence 2: exact option to buy and why. No fluff."
+    `Analyze this options setup and tell Sohel exactly what to do right now.
+Be specific. Give entry, stop, target.
+Maximum 4 sentences.`,
+    context
   );
   const macdN = parseFloat(setup.macd);
   const user =
@@ -515,7 +552,7 @@ async function claudeAnalyze(setup, memorySnippet) {
     setup.mid +
     " Δ" +
     setup.delta +
-    (memorySnippet ? "\n\n" + memorySnippet : "");
+    (memorySnippet ? "\n\nNOTES:\n" + memorySnippet : "");
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -535,7 +572,8 @@ async function claudeAnalyze(setup, memorySnippet) {
     data.content?.[0]?.text ||
     data.error?.message ||
     "No AI response.";
-  return String(text).trim();
+  const trimmed = String(text).trim();
+  return { text: trimmed, parsed: parseClaudeResponse(trimmed) };
 }
 
 async function sendTelegram(text) {
@@ -1095,7 +1133,7 @@ async function runScan() {
     const memorySnippet = memParts.join("\n\n");
 
     console.log("calling Claude...", s.ticker);
-    const aiAnalysis = await claudeAnalyze(
+    const aiResult = await claudeAnalyze(
       {
         ticker: s.ticker,
         price: s.price.toFixed(2),
@@ -1114,8 +1152,15 @@ async function runScan() {
         stage: s.stage,
         stageLabel: s.stageLabel,
       },
-      memorySnippet
+      memorySnippet,
+      master,
+      s.ticker,
+      s.price,
+      memory,
+      s.ignition
     );
+    const aiAnalysis = aiResult.text;
+    const aiAnalysisParsed = aiResult.parsed;
     console.log("Claude response received", s.ticker);
 
     const indicators = {
@@ -1184,6 +1229,7 @@ async function runScan() {
       indicators,
       macdDir,
       ignition: s.ignition || null,
+      aiAnalysisParsed: aiAnalysisParsed || null,
       timestamp: Date.now(),
     };
 
@@ -1210,6 +1256,7 @@ async function runScan() {
       masterAnalysis: pending.masterAnalysis,
       volume: volAtAlert,
       aiAnalysis,
+      aiAnalysisParsed: pending.aiAnalysisParsed,
       ignition: pending.ignition,
       timestamp: Date.now(),
       outcome: null,

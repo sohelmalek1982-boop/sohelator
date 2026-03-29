@@ -40,6 +40,9 @@
 [functions."ai"]
   timeout = 45
 
+[functions."ai-test"]
+  timeout = 120
+
 [[redirects]]
   from = "/api/ticker-intel"
   to = "/.netlify/functions/ticker-intel"
@@ -128,6 +131,11 @@
 [[redirects]]
   from = "/api/ai"
   to = "/.netlify/functions/ai"
+  status = 200
+
+[[redirects]]
+  from = "/api/ai-test"
+  to = "/.netlify/functions/ai-test"
   status = 200
 
 [[redirects]]

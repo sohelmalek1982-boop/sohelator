@@ -1,7 +1,8 @@
 const fetch = require("node-fetch");
 const { getStore } = require("@netlify/blobs");
 const { schedule } = require("@netlify/functions");
-const { withSohelContext } = require("./lib/sohelContext");
+const { withSohelContext, buildTradingContext } = require("./lib/sohelContext");
+const { getMemoryContext } = require("./lib/memory");
 const { getMasterAnalysis } = require("./lib/masterAnalysis");
 
 function tradierBase() {
@@ -434,9 +435,36 @@ async function run955() {
     process.env.ANTHROPIC_MODEL_PREMARKET || "claude-opus-4-6";
   const key = process.env.ANTHROPIC_API_KEY;
   let claudeOverall = "";
+  let mem955 = {
+    insights: [],
+    allTickerStats: [],
+    allPatternStats: [],
+    behavioralStats: null,
+  };
+  try {
+    mem955 = await getMemoryContext();
+  } catch (e) {
+    console.error("scan-955 memory", e);
+  }
+  const firstConf = confirmedTickers[0];
+  const m955 = firstConf ? masterBySymbol[firstConf.symbol] : null;
+  const p955 = firstConf?.currentPrice ?? spyNow;
+  const openingContext = buildTradingContext(
+    m955,
+    firstConf?.symbol || "SPY",
+    p955,
+    mem955
+  );
+
   if (key) {
     const system = withSohelContext(
-      `You are Sohel's trading partner. It's 9:55am — opening range is set. Give clear entry calls or tell him to wait. Calls need above VWAP + MACD positive + OR breakout + volume. Puts need below VWAP + MACD negative + OR breakdown. 7–14 DTE. Stop -40%. Target +80–150%. If Friday, label each setup SWING HOLD vs DAY ONLY for weekend. Be direct. Bullet points.`
+      `It's 9:55am. Opening range is set.
+Tell Sohel exactly what confirmed and 
+what to do. For each confirmed setup:
+exact option, exact entry, stop, target.
+For each failed setup: why it failed.
+Maximum 200 words total.`,
+      openingContext
     );
     const user = `Opening range is set. Here's what confirmed:
 

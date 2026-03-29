@@ -112,7 +112,8 @@ async function runWeekendBuild() {
   if (key) {
     const system = withSohelContext(
       `You are Sohel's swing options strategist. Weekly prep for Monday open.
-Output 5–7 crisp sentences: what to watch next week, how to size risk, and which themes matter for 1–3 day option swings.`
+Output 5–7 crisp sentences: what to watch next week, how to size risk, and which themes matter for 1–3 day option swings.`,
+      ""
     );
     const user = `Week ahead of ${weekOf} (Monday).
 

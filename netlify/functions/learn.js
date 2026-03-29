@@ -14,7 +14,8 @@ async function claudeLearn(note) {
     process.env.ANTHROPIC_MODEL_CHAT || "claude-sonnet-4-20250514";
   if (!key) return "Add ANTHROPIC_API_KEY for learning notes.";
   const system = withSohelContext(
-    "You summarize closed options trades for Sohel. Be concise (max 5 sentences). Tie feedback to his swing rules, stops/targets, and when to use spreads."
+    "You summarize closed options trades for Sohel. Be concise (max 5 sentences). Tie feedback to his swing rules, stops/targets, and when to use spreads.",
+    ""
   );
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
