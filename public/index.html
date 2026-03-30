@@ -644,11 +644,16 @@
 
     .hero-stat-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 10px;
       margin-top: 16px;
       position: relative;
       z-index: 1;
+    }
+    @media (max-width: 520px) {
+      .hero-stat-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
     }
     .hero-stat-vol-full {
       margin-top: 10px;
@@ -691,6 +696,11 @@
     }
     .hero-stat-hint.warn { color: var(--yellow); }
     .hero-stat-hint.muted-h { color: var(--muted); }
+    .hero-stat-val--cvd {
+      font-size: 1.05rem !important;
+      letter-spacing: 0.04em;
+      text-shadow: none;
+    }
 
     .regime-wrap { border-radius: var(--radius-command); }
     .section-in-card { margin-top: 0; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(0, 242, 255, 0.2); text-shadow: none; }
@@ -1501,6 +1511,11 @@
               <div class="hero-stat-label">TF align</div>
               <div class="hero-stat-val" id="stTf">—</div>
               <div class="hero-stat-hint muted-h" id="stTfHint">—</div>
+            </div>
+            <div class="hero-stat">
+              <div class="hero-stat-label">CVD</div>
+              <div class="hero-stat-val hero-stat-val--cvd" id="heroCvdVal">—</div>
+              <div class="hero-stat-hint muted-h" id="heroCvdHint">—</div>
             </div>
           </div>
           <div class="hero-stat hero-stat-vol-full">
@@ -4640,6 +4655,44 @@
           stVol.style.color = "var(--cyan)";
           stVolHint.textContent = "—";
           stVolHint.className = "hero-stat-hint muted-h";
+        }
+      }
+
+      const heroCvdVal = document.getElementById("heroCvdVal");
+      const heroCvdHint = document.getElementById("heroCvdHint");
+      if (heroCvdVal && heroCvdHint) {
+        heroCvdHint.style.color = "";
+        if (!state.marketOpen) {
+          heroCvdVal.textContent = "—";
+          heroCvdVal.style.color = "var(--muted)";
+          heroCvdHint.textContent = "Closed";
+          heroCvdHint.className = "hero-stat-hint muted-h";
+        } else if (va && va.cvdSummary) {
+          const cv = va.cvdSummary;
+          const tr = cv.cvdTrend;
+          heroCvdVal.textContent =
+            tr === "RISING" ? "↑ RISE" : tr === "FALLING" ? "↓ FALL" : "→ FLAT";
+          heroCvdVal.style.color =
+            tr === "RISING" ? "var(--green)" : tr === "FALLING" ? "var(--red)" : "var(--yellow)";
+          const dv = cv.divergence;
+          if (dv && dv.divergence && dv.divergence !== "NONE") {
+            heroCvdHint.textContent = "DIV · " + dv.divergence;
+            heroCvdHint.className = "hero-stat-hint";
+            if (dv.divergence === "BEARISH") {
+              heroCvdHint.className += " warn";
+              heroCvdHint.style.color = "";
+            } else {
+              heroCvdHint.style.color = "var(--green)";
+            }
+          } else {
+            heroCvdHint.textContent = "No div";
+            heroCvdHint.className = "hero-stat-hint muted-h";
+          }
+        } else {
+          heroCvdVal.textContent = "—";
+          heroCvdVal.style.color = "var(--cyan)";
+          heroCvdHint.textContent = "—";
+          heroCvdHint.className = "hero-stat-hint muted-h";
         }
       }
 
