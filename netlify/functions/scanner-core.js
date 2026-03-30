@@ -1038,6 +1038,21 @@ async function runScan() {
           }
           adjRank = Math.max(0, Math.min(100, Math.round(adjRank)));
 
+          // CVD divergence adjustment
+          if (volAnalysis && volAnalysis.cvdSummary) {
+            const cvd = volAnalysis.cvdSummary;
+            if (cvd.divergence.divergence === "BEARISH") {
+              if (cvd.divergence.strength === "STRONG") adjRank -= 15;
+              else if (cvd.divergence.strength === "MODERATE") adjRank -= 8;
+              else adjRank -= 4;
+            } else if (cvd.divergence.divergence === "BULLISH") {
+              if (cvd.divergence.strength === "STRONG") adjRank += 10;
+              else if (cvd.divergence.strength === "MODERATE") adjRank += 5;
+              else adjRank += 2;
+            }
+            adjRank = Math.max(0, Math.min(100, Math.round(adjRank)));
+          }
+
           const macdPrevIgn = calcMACD(closes.slice(0, -1)).hist;
           const macdPrev2Ign =
             closes.length >= 3 ? calcMACD(closes.slice(0, -2)).hist : macdPrevIgn;
@@ -1107,6 +1122,7 @@ async function runScan() {
             adxSlope,
             macdSlope,
             volAnalysis,
+            cvdSummary: volAnalysis?.cvdSummary || null,
             ignition,
           });
         } catch {

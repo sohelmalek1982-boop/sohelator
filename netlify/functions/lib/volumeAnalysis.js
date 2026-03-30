@@ -45,6 +45,72 @@ function filterSessionCandles(norm) {
 }
 
 /**
+ * Cumulative Volume Delta — approximate from candle OHLCV.
+ * buyRatio = (close - low) / (high - low) per candle.
+ * delta = volume * (2 * buyRatio - 1)  [range: -vol (all sellers) to +vol (all buyers)]
+ * Returns running cumulative sum across all candles.
+ */
+function calculateCVD(norm) {
+  const cvdArray = [];
+  let cumulative = 0;
+  for (const c of norm) {
+    const range = c.high - c.low;
+    const buyRatio = range > 0 ? (c.close - c.low) / range : 0.5;
+    const delta = c.volume * (2 * buyRatio - 1);
+    cumulative += delta;
+    cvdArray.push(cumulative);
+  }
+  return cvdArray;
+}
+
+/**
+ * Detect CVD divergence vs price over last 10 candles.
+ * BEARISH: price up + CVD down  = smart money distributing into green candles
+ * BULLISH: price down + CVD up  = smart money absorbing dips
+ */
+function detectCVDDivergence(norm, cvdArray) {
+  const lookback = Math.min(10, norm.length, cvdArray.length);
+  if (lookback < 2) {
+    return { divergence: "NONE", strength: "WEAK", signal: "CVD flat — no clear order flow edge.", cvdSlope: 0, priceSlope: 0 };
+  }
+  const fi = norm.length - lookback;
+  const li = norm.length - 1;
+
+  const priceTrend = norm[li].close - norm[fi].close;
+  const cvdTrend = cvdArray[li] - cvdArray[fi];
+
+  const sliceCvd = cvdArray.slice(-lookback);
+  const cvdRange = Math.max(...sliceCvd) - Math.min(...sliceCvd);
+  const cvdPct = cvdRange > 0 ? Math.abs(cvdTrend) / cvdRange : 0;
+
+  let divergence = "NONE";
+  let strength = "WEAK";
+  let signal;
+
+  if (priceTrend > 0 && cvdTrend < 0) {
+    divergence = "BEARISH";
+    strength = cvdPct > 0.4 ? "STRONG" : cvdPct > 0.2 ? "MODERATE" : "WEAK";
+    signal = (strength === "STRONG" || strength === "MODERATE")
+      ? "⚠️ CVD bearish divergence — buyers faking, sellers in control. Avoid calls."
+      : "⚠️ Mild CVD divergence — price strength not confirmed by volume delta.";
+  } else if (priceTrend < 0 && cvdTrend > 0) {
+    divergence = "BULLISH";
+    strength = cvdPct > 0.4 ? "STRONG" : cvdPct > 0.2 ? "MODERATE" : "WEAK";
+    signal = (strength === "STRONG" || strength === "MODERATE")
+      ? "✅ CVD bullish divergence — sellers exhausted, buyers absorbing. Puts risky."
+      : "✅ Mild CVD accumulation — watch for reversal.";
+  } else {
+    signal = cvdTrend > 0
+      ? "CVD confirming price move — buyers in control."
+      : cvdTrend < 0
+        ? "CVD confirming downside — sellers in control."
+        : "CVD flat — no clear order flow edge.";
+  }
+
+  return { divergence, strength, signal, cvdSlope: cvdTrend, priceSlope: priceTrend };
+}
+
+/**
  * @param {object[]} candles - raw OHLCV (5m), may include `time` / `t`
  * @param {object} _quote - reserved
  */
@@ -270,6 +336,34 @@ function analyzeVolume(candles, _quote) {
     });
   }
 
+  // ── CVD ──────────────────────────────────────────────────────────────────
+  const cvdArray = calculateCVD(norm);
+  const cvdDivResult = detectCVDDivergence(norm, cvdArray);
+  const cvdCurrent = cvdArray.length > 0 ? Math.round(cvdArray[cvdArray.length - 1]) : 0;
+
+  const cvdLookback = Math.min(10, cvdArray.length);
+  const cvdRecent = cvdArray.slice(-cvdLookback);
+  const cvdRecentRange = Math.max(...cvdRecent) - Math.min(...cvdRecent);
+  const cvdRecentDelta = cvdRecent[cvdRecent.length - 1] - cvdRecent[0];
+  const cvdTrendStrength = cvdRecentRange > 0 ? cvdRecentDelta / cvdRecentRange : 0;
+  const cvdTrend = cvdTrendStrength > 0.1 ? "RISING" : cvdTrendStrength < -0.1 ? "FALLING" : "FLAT";
+
+  const cvdInterpretation = cvdDivResult.divergence !== "NONE"
+    ? cvdDivResult.signal
+    : (cvdTrend === "RISING"
+        ? "CVD confirming price move — buyers in control."
+        : cvdTrend === "FALLING"
+          ? "CVD confirming downside — sellers in control."
+          : "CVD flat — no clear order flow edge.");
+
+  const cvdSummary = {
+    cvdArray,
+    cvdCurrent,
+    cvdTrend,
+    divergence: cvdDivResult,
+    interpretation: cvdInterpretation,
+  };
+
   return {
     currentVolume: lastCandle.volume,
     /** @deprecated use avgVolumeRecent — kept for older clients */
@@ -320,6 +414,8 @@ function analyzeVolume(candles, _quote) {
       vwapCrossVolume,
       aboveVWAP
     ),
+
+    cvdSummary,
   };
 }
 
@@ -461,4 +557,4 @@ function buildVolumeInterpretation(
   };
 }
 
-module.exports = { analyzeVolume, normalizeCandles };
+module.exports = { analyzeVolume, normalizeCandles, calculateCVD, detectCVDDivergence };

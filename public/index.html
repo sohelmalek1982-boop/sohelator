@@ -1572,6 +1572,14 @@
               <span id="volBarSignal" style="font-weight:700"></span>
             </div>
             <div id="volBarsContainer" style="display:flex;align-items:flex-end;gap:3px;height:50px"></div>
+            <div id="cvdRow" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #0f1820">
+              <div style="font-family:'Space Mono',monospace;font-size:7px;color:var(--muted);letter-spacing:.5px;margin-bottom:5px">ORDER FLOW — CVD</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                <span style="font-family:'Space Mono',monospace;font-size:10px;font-weight:700" id="cvdTrendLabel">—</span>
+                <span style="font-family:'DM Sans',sans-serif;font-size:11px;color:var(--muted);flex:1;text-align:right" id="cvdSignalText">—</span>
+              </div>
+              <div id="cvdDivAlert" style="display:none;margin-top:6px;padding:6px 10px;border-radius:4px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.3px"></div>
+            </div>
           </div>
         </div>
 
@@ -3479,6 +3487,69 @@
       </div>`;
     }
 
+    function indCVDCardHtml(va) {
+      if (!va || !va.cvdSummary) return "";
+      const cvd = va.cvdSummary;
+      const div = cvd.divergence;
+      const trend = cvd.cvdTrend;
+      const cur = cvd.cvdCurrent;
+
+      // Format CVD current value
+      const absCur = Math.abs(cur);
+      const curStr = (cur >= 0 ? "+" : "-") + (absCur >= 1e6 ? (absCur / 1e6).toFixed(2) + "M" : absCur >= 1e3 ? (absCur / 1e3).toFixed(1) + "K" : String(absCur));
+      const curColor = cur >= 0 ? "var(--green)" : "var(--red)";
+
+      const trendArrow = trend === "RISING" ? "↑ Rising" : trend === "FALLING" ? "↓ Falling" : "→ Flat";
+      const trendColor = trend === "RISING" ? "var(--green)" : trend === "FALLING" ? "var(--red)" : "var(--yellow)";
+
+      let pillText, pillCls;
+      if (div.divergence === "BEARISH" && div.strength === "STRONG") { pillText = "⚠️ BEARISH DIV"; pillCls = "bear"; }
+      else if (div.divergence === "BEARISH") { pillText = "BEARISH DIV"; pillCls = "warn"; }
+      else if (div.divergence === "BULLISH" && div.strength === "STRONG") { pillText = "✅ BULLISH DIV"; pillCls = "bull"; }
+      else if (div.divergence === "BULLISH") { pillText = "BULLISH DIV"; pillCls = "bull"; }
+      else if (trend === "RISING") { pillText = "CONFIRMING"; pillCls = "bull"; }
+      else if (trend === "FALLING") { pillText = "CONFIRMING"; pillCls = "bear"; }
+      else { pillText = "NEUTRAL"; pillCls = "neutral"; }
+
+      let watchText;
+      if (div.divergence === "BEARISH") {
+        watchText = "Price gaining while CVD falls = smart money selling into strength. Don't chase calls — they're distributing into your buy orders.";
+      } else if (div.divergence === "BULLISH") {
+        watchText = "Price falling while CVD rises = smart money buying dips. Puts may be a trap — real buyers absorbing every down move.";
+      } else if (trend === "RISING") {
+        watchText = "CVD confirms buyers are in control. If CVD starts flattening while price rises, that's your first warning of fading conviction.";
+      } else if (trend === "FALLING") {
+        watchText = "CVD confirms sellers in control. Watch for CVD to flatten/reverse before calling a bottom.";
+      } else {
+        watchText = "No clear order flow bias. Wait for CVD to trend in one direction before sizing up.";
+      }
+
+      const dirLine = `CVD ${trendArrow} — current cumulative delta: ${curStr}`;
+
+      // Bar: map CVD trend to a 0-100 position (50 = flat, 100 = strongly rising, 0 = strongly falling)
+      const barPct = trend === "RISING" ? 75 : trend === "FALLING" ? 25 : 50;
+      const barTone = trend === "RISING" ? "green" : trend === "FALLING" ? "red" : "vol-cyan";
+
+      return `<div class="ind-card">
+        <div class="ind-card-head">
+          <div>
+            <div class="ind-mono-7">CUMULATIVE VOLUME DELTA (CVD)</div>
+            <div class="ind-val-big" style="color:${curColor}">${esc(curStr)}</div>
+          </div>
+          <span class="ind-pill ${pillCls}">${esc(pillText)}</span>
+        </div>
+        <div class="ind-dir" style="color:${trendColor}">${esc(dirLine)}</div>
+        <div class="ind-bar-wrap">
+          <div class="ind-bar-labels"><span>All Sellers</span><span>All Buyers</span></div>
+          <div class="ind-bar-track2"><div class="ind-bar-fill2 ${barTone}" style="width:${barPct}%"></div></div>
+        </div>
+        <p class="ind-dm"><strong>What it measures:</strong> CVD tracks whether buyers or sellers are in control bar-by-bar, exposing hidden order flow that price alone can't show. Rising = net buying pressure. Falling = net selling pressure.</p>
+        <p class="ind-dm"><strong>Right now:</strong> ${esc(cvd.interpretation)}</p>
+        ${div.divergence !== "NONE" ? `<div class="ind-action ${div.divergence === "BEARISH" ? "bear" : "bull"}">${esc(div.signal)}</div>` : ""}
+        <div class="ind-watch"><strong>Watch:</strong> ${esc(watchText)}</div>
+      </div>`;
+    }
+
     function indCardHtml(o) {
       return `<div class="ind-card">
         <div class="ind-card-head">
@@ -3968,6 +4039,7 @@
           watch: vwWatch,
         }),
         indVolumeCardHtml(state.volumeAnalysis, c5),
+        indCVDCardHtml(state.volumeAnalysis),
         indCardHtml({
           name: "BOLLINGER %B",
           val: (bbB * 100).toFixed(0) + "%",
@@ -4402,6 +4474,45 @@
           vn.style.display = "none";
           vn.textContent = "";
         }
+      }
+
+      // ── CVD Row in ignition card ────────────────────────────────────────
+      const cvdRow = document.getElementById("cvdRow");
+      const cvdTrendLabel = document.getElementById("cvdTrendLabel");
+      const cvdSignalText = document.getElementById("cvdSignalText");
+      const cvdDivAlert = document.getElementById("cvdDivAlert");
+      const cvdData = state.volumeAnalysis && state.volumeAnalysis.cvdSummary;
+      if (cvdRow && cvdData) {
+        cvdRow.style.display = "block";
+        const trend = cvdData.cvdTrend;
+        const div = cvdData.divergence;
+        if (cvdTrendLabel) {
+          cvdTrendLabel.textContent =
+            trend === "RISING" ? "↑ RISING" : trend === "FALLING" ? "↓ FALLING" : "→ FLAT";
+          cvdTrendLabel.style.color =
+            trend === "RISING" ? "var(--green)" : trend === "FALLING" ? "var(--red)" : "var(--yellow)";
+        }
+        if (cvdSignalText) cvdSignalText.textContent = cvdData.interpretation;
+        if (cvdDivAlert) {
+          if (div && div.divergence !== "NONE") {
+            cvdDivAlert.style.display = "block";
+            cvdDivAlert.textContent = div.signal;
+            if (div.divergence === "BEARISH") {
+              cvdDivAlert.style.background = "rgba(255,59,92,0.12)";
+              cvdDivAlert.style.border = "1px solid rgba(255,59,92,0.4)";
+              cvdDivAlert.style.color = "var(--red)";
+            } else {
+              cvdDivAlert.style.background = "rgba(0,255,135,0.1)";
+              cvdDivAlert.style.border = "1px solid rgba(0,255,135,0.35)";
+              cvdDivAlert.style.color = "var(--green)";
+            }
+          } else {
+            cvdDivAlert.style.display = "none";
+            cvdDivAlert.textContent = "";
+          }
+        }
+      } else if (cvdRow) {
+        cvdRow.style.display = "none";
       }
 
       const d15 = tfDir(c15.map((x) => x.c));
