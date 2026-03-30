@@ -254,6 +254,7 @@ function detectIntradayStage(ctx, regimeThresholds = {}) {
     ema21,
     bullOk,
     bearOk,
+    skipAdxChopGate,
   } = ctx;
   const rsiNum = Number(rsi14);
   const aboveVWAP = vwapDist > 0;
@@ -261,7 +262,7 @@ function detectIntradayStage(ctx, regimeThresholds = {}) {
   const minAdxLine =
     regimeThresholds.minADX != null ? regimeThresholds.minADX : 20;
 
-  if (adxVal < minAdxLine) {
+  if (!skipAdxChopGate && adxVal < minAdxLine) {
     return {
       stage: "chop",
       stageLabel: "CHOP",
@@ -314,8 +315,8 @@ function detectIntradayStage(ctx, regimeThresholds = {}) {
     bearOk &&
     !macdPos &&
     !aboveVWAP &&
-    rsiNum >= 30 &&
-    rsiNum <= 50
+    rsiNum >= 22 &&
+    rsiNum <= 52
   ) {
     return {
       stage: "bear",
@@ -996,6 +997,7 @@ async function runScan() {
           if (adxVal > 25) bear += 25;
           if (macdHist < 0) bear += 20;
           if (rsi14 >= 30 && rsi14 <= 50) bear += 20;
+          else if (rsi14 < 30 && macdHist < 0 && vwapDist < 0) bear += 18;
           if (vwapDist < 0) bear += 20;
           if (bbB < 0.5) bear += 10;
           if (ema8 < ema21) bear += 5;
@@ -1034,6 +1036,12 @@ async function runScan() {
             effMinAdx = Math.max(18, effMinAdx - 3);
           }
 
+          const flushDown =
+            typeof change === "number" &&
+            change <= -2.5 &&
+            macdHist < 0 &&
+            vwapDist < -0.05;
+
           const stageInfo = detectIntradayStage(
             {
               adxVal,
@@ -1052,6 +1060,7 @@ async function runScan() {
               ema21,
               bullOk,
               bearOk,
+              skipAdxChopGate: flushDown,
             },
             { ...th, minADX: effMinAdx }
           );

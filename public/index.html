@@ -3436,11 +3436,34 @@
     }
 
     function computeSignal(adxVal, macdH, price, vwap, rsiVal, bbB) {
-      if (adxVal < 20) return { key: "WAIT", detail: "chop" };
+      const belowVwap = vwap != null && price != null && price < vwap;
+      const macdNeg = macdH != null && macdH < 0;
+      const bbLo = bbB != null && bbB < 0.5;
+      /** ADX lags: big dumps often stay ADX&lt;20 while RSI is already oversold — old logic never fired puts. */
+      if (adxVal < 20) {
+        if (
+          macdNeg &&
+          belowVwap &&
+          rsiVal != null &&
+          rsiVal < 38 &&
+          bbB != null &&
+          bbB < 0.35
+        ) {
+          return { key: "BUY PUTS", detail: "puts" };
+        }
+        return { key: "WAIT", detail: "chop" };
+      }
       if (macdH > 0 && price > vwap && rsiVal >= 50 && rsiVal <= 70 && bbB > 0.5)
         return { key: "BUY CALLS", detail: "calls" };
-      if (macdH < 0 && price < vwap && rsiVal >= 30 && rsiVal <= 50 && bbB < 0.5)
+      if (
+        macdNeg &&
+        belowVwap &&
+        rsiVal != null &&
+        ((rsiVal >= 25 && rsiVal <= 52) || (rsiVal < 25 && bbB != null && bbB < 0.2)) &&
+        bbLo
+      ) {
         return { key: "BUY PUTS", detail: "puts" };
+      }
       return { key: "WATCH", detail: "watch" };
     }
 
