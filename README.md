@@ -28,6 +28,27 @@ Optional model overrides: `ANTHROPIC_MODEL_SCANNER`, `ANTHROPIC_MODEL_CHAT`, `AN
 
 Volume/range tape boosts (scanner rank, ACT tier, SPY index-tape weighting in regime) apply only during **9:45–11:30** and **13:00–15:45** America/New_York. See `netlify/functions/lib/tapeTrustedWindow.js` (mirrored in the client).
 
+## Test scans off-hours
+
+`scan-925` / `scan-955` normally run only in short ET windows (see function code). To **fill Blobs and the SCAN tab tonight**:
+
+1. In Netlify → **Environment variables**, add **`SCAN_FORCE_SECRET`** = a long random string (keep it private).
+2. Redeploy (or wait for env to apply).
+3. From a terminal (replace host and secret):
+
+```bash
+curl -sS -X POST "https://YOUR_SITE.netlify.app/api/scan-925?force=YOUR_SECRET"
+curl -sS -X POST "https://YOUR_SITE.netlify.app/api/scan-955?force=YOUR_SECRET"
+```
+
+Or header: `-H "X-Scan-Force: YOUR_SECRET"` instead of `?force=`.
+
+4. Open **`/api/scan-data`** or the app **SCAN** tab — you should see `scan925` / `scan955` objects. **Force runs may still Telegram** like a real scan.
+
+**Without** `SCAN_FORCE_SECRET`, a POST still proves the function is wired: you get `{"skipped":true,...}` outside the morning window.
+
+**Scanner / trade alerts** use `POST /api/scan-now` (optional header `X-Scanner-Secret` if `SCANNER_TRIGGER_SECRET` is set). That path **skips when Tradier says the market is closed**, so alert firing is best verified **RTH** or the next scheduled `*/5` run.
+
 ## Local
 
 ```bash

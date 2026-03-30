@@ -9,6 +9,7 @@ const { getMasterAnalysis } = require("./lib/masterAnalysis");
 const { calculateGEX } = require("./lib/gex");
 const { calculateRegime } = require("./lib/marketRegime");
 const { recordJobOk, recordJobError } = require("./lib/jobHealth");
+const { isScanForceRequested } = require("./lib/scanForce");
 
 const ETF_BLOCK = new Set([
   "SPY", "QQQ", "DIA", "IWM", "XLK", "XLE", "XLF", "XBI", "XLV", "ARKK",
@@ -143,13 +144,21 @@ function nyHM() {
   };
 }
 
-async function run925() {
-  const { h, m } = nyHM();
-  if (h !== 9 || m < 20 || m > 35) {
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ skipped: true, reason: "Outside scan window" }),
-    };
+async function run925(event) {
+  const forced = isScanForceRequested(event);
+  if (!forced) {
+    const { h, m } = nyHM();
+    if (h !== 9 || m < 20 || m > 35) {
+      return {
+        statusCode: 200,
+        headers: { ...cors, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          skipped: true,
+          reason:
+            "Outside scan window (9:20–9:35 AM ET). Set SCAN_FORCE_SECRET and POST ?force=<secret> to test.",
+        }),
+      };
+    }
   }
 
   const now = new Date();
@@ -557,8 +566,8 @@ function escapeHtml(s) {
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, X-Scan-Force",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
 async function httpHandler(event) {
@@ -578,7 +587,7 @@ async function httpHandler(event) {
       body: JSON.stringify(data || null),
     };
   }
-  return run925().catch(async (e) => {
+  return run925(event).catch(async (e) => {
     console.error(e);
     await recordJobError("scan-925", e.message);
     return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
