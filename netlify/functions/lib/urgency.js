@@ -42,6 +42,17 @@ function calculateUrgency(setup, regime, memory) {
     reasons.push(`IV cheap at ${ivNum.toFixed(0)}%`);
   }
 
+  const liqTier = option?.liquidity?.tier;
+  if (liqTier === "A") {
+    urgencyScore += 12;
+    reasons.push("Option liquidity tier A — tradeable spread + OI");
+  } else if (liqTier === "B") {
+    urgencyScore += 7;
+    reasons.push("Option liquidity tier B");
+  } else if (liqTier === "C") {
+    urgencyScore += 3;
+  }
+
   const adxNum = parseFloat(indicators?.adx);
   if (!isNaN(adxNum) && adxNum > 30) {
     urgencyScore += 8;

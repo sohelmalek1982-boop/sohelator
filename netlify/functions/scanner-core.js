@@ -15,8 +15,13 @@ const { recommendSize } = require("./lib/sizing");
 const { getMasterAnalysis } = require("./lib/masterAnalysis");
 const { analyzeVolume } = require("./lib/volumeAnalysis");
 const { calculateIgnition } = require("./lib/ignition");
+const { calculateIntradayLevels, detectLevelInteraction } = require("./lib/levels");
 const { isEquitySessionDay } = require("./lib/marketCalendar");
 const { recordJobOk } = require("./lib/jobHealth");
+const {
+  pickBestLiquidLeg,
+  buildCandidatePool,
+} = require("./lib/optionLiquidity");
 
 const BASE_WATCH = [
   "NVDA", "TSLA", "SPY", "QQQ", "AAPL", "AMD", "MSFT", "META", "GOOGL",
@@ -147,6 +152,24 @@ function vwapDistPct(candles, price) {
   }
   const vwap = pv / vv;
   return ((price - vwap) / vwap) * 100;
+}
+
+/** Build N-bar candles from 5-min array (e.g. n=3 → 15-min, n=12 → 1H). */
+function buildNBarCandles(fiveMin, n) {
+  const out = [];
+  for (let i = 0; i < fiveMin.length; i += n) {
+    const g = fiveMin.slice(i, i + n);
+    if (!g.length) continue;
+    out.push({
+      time: g[0].time,
+      open: g[0].open,
+      high: Math.max(...g.map((c) => c.high)),
+      low: Math.min(...g.map((c) => c.low)),
+      close: g[g.length - 1].close,
+      volume: g.reduce((s, c) => s + (c.vol || 0), 0),
+    });
+  }
+  return out;
 }
 
 function threeSameDir(closes) {
@@ -699,8 +722,16 @@ async function fetchOptionLeg(sym, underlying, setupType, price) {
   const otm = optType === "call"
     ? pool.filter((o) => parseFloat(o.strike) > atm).sort((a, b) => parseFloat(a.strike) - parseFloat(b.strike))[0]
     : pool.filter((o) => parseFloat(o.strike) < atm).sort((a, b) => parseFloat(b.strike) - parseFloat(a.strike))[0];
-  const leg = otm || atmLeg || pool[0];
-  if (!leg)
+
+  const candidates = buildCandidatePool(pool, strikes, atm, atmLeg, otm);
+  let { leg, liquidity, skipAlert } = pickBestLiquidLeg(candidates, price);
+  if (skipAlert && pool.length > candidates.length) {
+    const retry = pickBestLiquidLeg(pool, price);
+    leg = retry.leg;
+    liquidity = retry.liquidity;
+    skipAlert = retry.skipAlert;
+  }
+  if (!leg || skipAlert) {
     return {
       strike: "—",
       expiry: pick,
@@ -709,7 +740,10 @@ async function fetchOptionLeg(sym, underlying, setupType, price) {
       iv: 0,
       occ: "",
       optType,
+      liquidity: liquidity || null,
+      skipAlert: true,
     };
+  }
   const mid = midOpt(leg);
   const iv = ivOpt(leg);
   const del =
@@ -724,6 +758,8 @@ async function fetchOptionLeg(sym, underlying, setupType, price) {
     iv: iv.toFixed(0),
     occ: leg.symbol,
     optType,
+    liquidity,
+    skipAlert: false,
   };
 }
 
@@ -1038,6 +1074,46 @@ async function runScan() {
           }
           adjRank = Math.max(0, Math.min(100, Math.round(adjRank)));
 
+          // ── Level interaction: intraday + daily levels ─────────────────
+          // Build 15-min candles from the 5-min array for multi-TF check
+          const candles15 = buildNBarCandles(candles, 3);
+          const candlesForLevels5 = candles.map((c) => ({
+            time: c.time,
+            high: c.high, low: c.low, close: c.close,
+            open: c.open, volume: c.vol || 0,
+          }));
+          const intradayLevels = calculateIntradayLevels(candlesForLevels5, price);
+          // Use last 4 candles for interaction detection (5-min)
+          const recentFor5 = candlesForLevels5.slice(-4);
+          const recentFor15 = candles15.slice(-4).map((c) => ({ ...c, volume: c.volume || 0 }));
+          const volRatioForLevel = volAnalysis ? volAnalysis.currentVolRatio : 1;
+          const levelInt5  = detectLevelInteraction(recentFor5,  intradayLevels, volRatioForLevel);
+          const levelInt15 = detectLevelInteraction(recentFor15, intradayLevels, volRatioForLevel);
+
+          // Multi-TF confirmation: if same event type on both 5-min and 15-min = HIGH CONVICTION
+          const levelIntConfirmed =
+            levelInt5 && levelInt15 &&
+            levelInt5.type === levelInt15.type &&
+            Math.abs(levelInt5.levelPrice - levelInt15.levelPrice) / levelInt5.levelPrice < 0.003;
+
+          // Use the best single signal (15-min outranks 5-min for major levels)
+          const topLevelInt = levelInt15 || levelInt5;
+
+          // Apply to adjRank
+          if (topLevelInt && topLevelInt.scoreImpact) {
+            const impact = levelIntConfirmed ? Math.round(topLevelInt.scoreImpact * 1.5) : topLevelInt.scoreImpact;
+            adjRank += impact;
+          }
+          adjRank = Math.max(0, Math.min(100, Math.round(adjRank)));
+
+          // Update setupType to surface level events
+          if (topLevelInt && topLevelInt.isActionable) {
+            const levelTag = levelIntConfirmed
+              ? `${topLevelInt.type} (5M+15M)` : topLevelInt.type;
+            setupType = setupType ? setupType + " + " + levelTag : levelTag;
+            if (topLevelInt.isHighConviction && !rank) rank = Math.max(rank, 85);
+          }
+
           // CVD divergence adjustment
           if (volAnalysis && volAnalysis.cvdSummary) {
             const cvd = volAnalysis.cvdSummary;
@@ -1123,6 +1199,9 @@ async function runScan() {
             macdSlope,
             volAnalysis,
             cvdSummary: volAnalysis?.cvdSummary || null,
+            levelInteraction: topLevelInt || null,
+            levelInteractionConfirmed: levelIntConfirmed || false,
+            intradayLevels: intradayLevels.slice(0, 10),
             ignition,
           });
         } catch {
@@ -1180,6 +1259,14 @@ async function runScan() {
       revType,
       s.price
     );
+    if (opt.skipAlert) {
+      console.log(
+        "skip alert: illiquid option chain",
+        s.ticker,
+        opt.liquidity || "no leg"
+      );
+      continue;
+    }
     const macdDir = s.macdHist >= 0 ? "bullish" : "bearish";
     const finalScore =
       master?.confidence != null ? master.confidence : s.score;
@@ -1325,6 +1412,7 @@ async function runScan() {
         iv: opt.iv,
         occ: opt.occ,
         optType: opt.optType,
+        liquidity: opt.liquidity || null,
       },
       indicators,
       macdDir,
@@ -1386,6 +1474,26 @@ async function runScan() {
       ? `🔊 VOL: ${s.volAnalysis.currentVolRatio}x avg — ${s.volAnalysis.priceVolumeSignal}`
       : `📊 VOL: ${s.volAnalysis?.currentVolRatio ?? "—"}x avg`;
 
+    const liq = opt.liquidity;
+    const liqLine = liq
+      ? `💧 LIQ ${liq.tier}: spr ${liq.spreadPct}% · OI ${liq.oi.toLocaleString()} · vol ${liq.volume}`
+      : null;
+
+    const regimeLine =
+      regime?.riskRegime != null
+        ? `🌐 Tape: ${String(regime.riskRegime).toUpperCase().replace(/_/g, " ")} · ${String(regime.primary || "").replace(/_/g, " ")}`
+        : null;
+
+    const cvdLine = s.cvdSummary?.divergence?.divergence !== "NONE"
+      ? `⚡ CVD: ${s.cvdSummary.divergence.signal}`
+      : null;
+
+    const levelLine = s.levelInteraction?.isActionable
+      ? `${s.levelInteractionConfirmed ? "🎯🎯" : "🎯"} LEVEL: ${s.levelInteraction.signal}${s.levelInteractionConfirmed ? " ← 5M+15M CONFIRMED" : ""}`
+      : s.levelInteraction?.type === "TESTING"
+        ? `👀 LEVEL: ${s.levelInteraction.signal}`
+        : null;
+
     const holdType = holdTypeLabel;
     const ignLine =
       s.ignition?.status === "LAUNCH"
@@ -1423,6 +1531,10 @@ async function runScan() {
       "\n" +
       volLine +
       "\n" +
+      (regimeLine ? regimeLine + "\n" : "") +
+      (liqLine ? liqLine + "\n" : "") +
+      (cvdLine   ? cvdLine   + "\n" : "") +
+      (levelLine ? escapeHtml(levelLine) + "\n" : "") +
       "🎯 <b>Play: " +
       escapeHtml(String(opt.strike)) +
       " @ $" +
@@ -1472,7 +1584,18 @@ async function runScan() {
       escapeHtml(String(opt.delta)) +
       " IV " +
       opt.iv +
-      "%</p>" +
+      "%" +
+      (opt.liquidity
+        ? "</p><p><strong>Liquidity:</strong> tier " +
+          escapeHtml(String(opt.liquidity.tier)) +
+          " · spread " +
+          opt.liquidity.spreadPct +
+          "% · OI " +
+          opt.liquidity.oi +
+          " · vol " +
+          opt.liquidity.volume
+        : "") +
+      "</p>" +
       "<p><em>" +
       escapeHtml(aiAnalysis) +
       "</em></p>";
