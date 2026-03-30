@@ -1,3 +1,5 @@
+const { isTrustedTapeWindowEt } = require("./tapeTrustedWindow");
+
 const REGIMES = {
   TRENDING_BULL: "trending_bull",
   TRENDING_BEAR: "trending_bear",
@@ -61,9 +63,12 @@ function calculateRegime(marketData) {
 
   const volX = Number(spyVolRatio) || 1;
   const rangeR = Number(indexRangeRatio) || 1;
-  let indexTape = "FLAT";
-  if (volX >= 2 && rangeR >= 1.2) indexTape = "HOT";
-  else if (volX >= 1.55 || rangeR >= 1.28) indexTape = "WARM";
+  let indexTapeRaw = "FLAT";
+  if (volX >= 2 && rangeR >= 1.2) indexTapeRaw = "HOT";
+  else if (volX >= 1.55 || rangeR >= 1.28) indexTapeRaw = "WARM";
+
+  const tapeTrustedWindow = isTrustedTapeWindowEt();
+  const indexTape = tapeTrustedWindow ? indexTapeRaw : "FLAT";
 
   const thresholds = {
     minADX:
@@ -108,22 +113,44 @@ function calculateRegime(marketData) {
     spyVolRatio: volX,
     indexRangeRatio: rangeR,
     thresholds,
-    description: getRegimeDescription(primaryRegime, vix, spyChange, indexTape),
+    description: getRegimeDescription(
+      primaryRegime,
+      vix,
+      spyChange,
+      indexTape,
+      tapeTrustedWindow,
+      indexTapeRaw
+    ),
     tradingAdvice: getRegimeTradingAdvice(primaryRegime, thresholds),
     putCallRatio,
     spyRsi,
     spyVwapDist,
+    tapeTrustedWindow,
+    indexTapeRaw,
   };
 }
 
-function getRegimeDescription(regime, vix, spyChange, indexTape = "FLAT") {
+function getRegimeDescription(
+  regime,
+  vix,
+  spyChange,
+  indexTape = "FLAT",
+  tapeTrustedWindow = true,
+  indexTapeRaw = "FLAT"
+) {
   const chg = Number(spyChange) || 0;
-  const tapeNote =
-    indexTape === "HOT"
-      ? " SPY participation hot (vol + range expanding vs recent bars)."
-      : indexTape === "WARM"
-        ? " SPY tape building — watch for follow-through."
+  let tapeNote = "";
+  if (!tapeTrustedWindow) {
+    tapeNote =
+      indexTapeRaw === "HOT" || indexTapeRaw === "WARM"
+        ? ` Raw SPY tape ${indexTapeRaw} — not weighted outside trusted hours (9:45–11:30 & 1:00–3:45 ET).`
         : "";
+  } else if (indexTape === "HOT") {
+    tapeNote =
+      " SPY participation hot (vol + range expanding vs recent bars).";
+  } else if (indexTape === "WARM") {
+    tapeNote = " SPY tape building — watch for follow-through.";
+  }
   const descriptions = {
     trending_bull: `Strong bull trend. SPY ${chg >= 0 ? "+" : ""}${chg.toFixed(1)}%. Bulls in control. Good day for calls.${tapeNote}`,
     trending_bear: `Strong bear trend. Market selling off. Good day for puts on weak stocks.${tapeNote}`,

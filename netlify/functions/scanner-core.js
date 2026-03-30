@@ -22,6 +22,7 @@ const {
   pickBestLiquidLeg,
   buildCandidatePool,
 } = require("./lib/optionLiquidity");
+const { isTrustedTapeWindowEt } = require("./lib/tapeTrustedWindow");
 
 const BASE_WATCH = [
   "NVDA", "TSLA", "SPY", "QQQ", "AAPL", "AMD", "MSFT", "META", "GOOGL",
@@ -1164,14 +1165,18 @@ async function runScan() {
           let tapeTier = "FLAT";
           if (tapeVolX >= 2 && tapeRangeRatio >= 1.2) tapeTier = "HOT";
           else if (tapeVolX >= 1.55 || tapeRangeRatio >= 1.28) tapeTier = "WARM";
-          if (tapeTier === "HOT") adjRank += 5;
-          else if (tapeTier === "WARM") adjRank += 3;
+          const tapeTrusted = isTrustedTapeWindowEt();
+          if (tapeTrusted) {
+            if (tapeTier === "HOT") adjRank += 5;
+            else if (tapeTier === "WARM") adjRank += 3;
+          }
           adjRank = Math.max(0, Math.min(100, Math.round(adjRank)));
 
           const tapeActivation = {
             volX: +tapeVolX.toFixed(2),
             rangeRatio: +tapeRangeRatio.toFixed(2),
             tier: tapeTier,
+            trustedWindow: tapeTrusted,
           };
 
           const macdPrevIgn = calcMACD(closes.slice(0, -1)).hist;
@@ -1523,7 +1528,10 @@ async function runScan() {
     const tapeActLine =
       s.tapeActivation &&
       (s.tapeActivation.tier !== "FLAT" || s.tapeActivation.volX >= 1.35)
-        ? `📈 Tape: ${s.tapeActivation.volX}× last bar vs avg · range ${s.tapeActivation.rangeRatio}× · ${s.tapeActivation.tier}`
+        ? `📈 Tape: ${s.tapeActivation.volX}× last bar vs avg · range ${s.tapeActivation.rangeRatio}× · ${s.tapeActivation.tier}` +
+          (s.tapeActivation.trustedWindow === false
+            ? " · off trusted window (9:45–11:30, 1:00–3:45 ET)"
+            : "")
         : null;
 
     const liq = opt.liquidity;
@@ -1536,7 +1544,11 @@ async function runScan() {
         ? `🌐 Tape: ${String(regime.riskRegime).toUpperCase().replace(/_/g, " ")} · ${String(regime.primary || "").replace(/_/g, " ")}` +
           (regime.indexTape && regime.indexTape !== "FLAT"
             ? ` · SPY vol ${regime.spyVolRatio != null ? regime.spyVolRatio.toFixed(2) : "—"}× · ${regime.indexTape}`
-            : "")
+            : regime.tapeTrustedWindow === false &&
+                regime.indexTapeRaw &&
+                regime.indexTapeRaw !== "FLAT"
+              ? ` · SPY raw ${regime.indexTapeRaw} (off-window)`
+              : "")
         : null;
 
     const cvdLine = s.cvdSummary?.divergence?.divergence !== "NONE"
@@ -1658,7 +1670,10 @@ async function runScan() {
           "× last bar vs avg · range " +
           s.tapeActivation.rangeRatio +
           "× · " +
-          escapeHtml(String(s.tapeActivation.tier))
+          escapeHtml(String(s.tapeActivation.tier)) +
+          (s.tapeActivation.trustedWindow === false
+            ? " · off trusted window (9:45–11:30, 1:00–3:45 ET)"
+            : "")
         : "") +
       "</p>" +
       "<p><em>" +
