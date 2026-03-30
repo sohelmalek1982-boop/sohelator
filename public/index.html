@@ -171,7 +171,7 @@
     .btn-go-mob { min-height: 44px; padding: 0 14px; font-size: 13px; }
     .pnl-strip {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.85fr);
       height: var(--pnl-strip-h);
       margin-top: 8px;
       border-top: 1px solid var(--border);
@@ -218,6 +218,10 @@
     .pnl-val.vix-mid { color: var(--yellow); }
     .pnl-val.vix-hi { color: var(--red); }
     .pnl-val.pnl-val--strip { font-size: 15px; letter-spacing: 0.02em; line-height: 1.15; }
+    .pnl-cell--conf .pnl-val--strip { font-size: 22px; letter-spacing: 0.03em; }
+    .pnl-cell--sig .pnl-val--strip { font-size: 15px; }
+    body.parked-mode .pnl-cell--conf .pnl-val--strip { font-size: 26px !important; }
+    body.parked-mode .pnl-cell--sig .pnl-val--strip { font-size: 17px !important; }
     .topbar-pills { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .pill-mkt {
       display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: var(--radius-pill);
@@ -1547,12 +1551,22 @@
         <button type="button" class="btn-go btn-go-mob" id="goBtn">GO</button>
       </div>
     </div>
-    <div class="pnl-strip" id="pnlStrip" aria-label="Market snapshot">
-      <div class="pnl-cell"><div class="pnl-lab">REGIME</div><div class="pnl-val pnl-val--strip" id="stripRegime">—</div><div class="pnl-sub" id="stripRegimeSub"></div></div>
-      <div class="pnl-cell"><div class="pnl-lab">SPY</div><div class="pnl-val" id="stripSpy">—</div><div class="pnl-sub" id="stripSpySub"></div></div>
-      <div class="pnl-cell"><div class="pnl-lab">QQQ</div><div class="pnl-val" id="stripQqq">—</div><div class="pnl-sub" id="stripQqqSub"></div></div>
-      <div class="pnl-cell"><div class="pnl-lab">ALERTS</div><div class="pnl-val" id="pnlTrackAlerts">—</div><div class="pnl-sub" id="pnlTrackAlertsSub"></div></div>
-      <div class="pnl-cell"><div class="pnl-lab">VIX</div><div class="pnl-val" id="pnlVix">—</div></div>
+    <div class="pnl-strip" id="pnlStrip" aria-label="Tape command">
+      <div class="pnl-cell pnl-cell--conf">
+        <div class="pnl-lab">CONF</div>
+        <div class="pnl-val pnl-val--strip" id="stripScore">—</div>
+        <div class="pnl-sub" id="stripScoreSub">tap GO</div>
+      </div>
+      <div class="pnl-cell pnl-cell--sig">
+        <div class="pnl-lab">SIGNAL</div>
+        <div class="pnl-val pnl-val--strip" id="stripTapeSig">—</div>
+        <div class="pnl-sub font-mono" id="stripTapeSub">—</div>
+      </div>
+      <div class="pnl-cell">
+        <div class="pnl-lab">ALERTS</div>
+        <div class="pnl-val" id="pnlTrackAlerts">—</div>
+        <div class="pnl-sub" id="pnlTrackAlertsSub"></div>
+      </div>
     </div>
   </header>
 
@@ -1945,6 +1959,9 @@
       lastScanMeta: null,
       bannerTicker: null,
       scanData: null,
+      /** Live / fallback index snapshot (SPY·QQQ·VIX) — not shown in header; SCAN & logic can use. */
+      indexQuotes: null,
+      scanMarketContext: null,
       scanAlertCountToday: null,
       scanContentHash: "",
       scanUpdatedAt: null,
@@ -2788,6 +2805,7 @@
         }
         renderAlertTrackerPage();
         renderAlertTrackStrip();
+        updateCommandStrip();
         renderDynamicWatchlist();
         const dismissed = sessionStorage.getItem("sohel_tracker_banner_dismissed") === "1";
         const actionAlerts = state.alertTrackerList.filter((a) => {
@@ -2809,6 +2827,7 @@
       } catch {
         document.getElementById("alertTrackerWrap").innerHTML = '<span class="muted">Could not load alerts.</span>';
         renderAlertTrackStrip();
+        updateCommandStrip();
       }
     }
 
@@ -5001,6 +5020,7 @@
         void fetchResearchBrief(false, true);
       }
       if (state.page === 2) renderDynamicWatchlist();
+      updateCommandStrip();
     }
 
     function dteDays(exp) {
@@ -5151,85 +5171,32 @@
       if (sp) sp.className = "pill-session " + sess.cls;
     }
 
-    /** Morning-brief regime + GEX hint (paired with live SPY/QQQ/VIX in the strip). */
+    /** 9:25 scan market context — kept on state for SCAN / AI; not shown in header strip. */
     function updateStripFromScan() {
       const s925 = state.scanData?.scan925;
-      const mc = s925?.marketContext;
-      const el = document.getElementById("stripRegime");
-      const sub = document.getElementById("stripRegimeSub");
-      if (!el) return;
-      if (mc?.regime) {
-        const raw = String(mc.regime).replace(/_/g, " ");
-        const label = raw.length > 16 ? raw.slice(0, 14) + "…" : raw;
-        el.textContent = label.toUpperCase();
-        const r = String(mc.regime).toLowerCase();
-        el.className =
-          "pnl-val pnl-val--strip " +
-          (r.includes("chop") ? "pnl-warn" : r.includes("bear") || r.includes("risk") ? "pnl-neg" : "pnl-pos");
-      } else {
-        el.textContent = "—";
-        el.className = "pnl-val pnl-val--strip";
-      }
-      if (sub) {
-        const g = s925?.gexSpy;
-        if (g && g.gexRegime) sub.textContent = String(g.gexRegime).slice(0, 18);
-        else if (s925) sub.textContent = "9:25";
-        else sub.textContent = "";
-      }
+      state.scanMarketContext = s925?.marketContext || null;
     }
 
-    function stripCellMissing(el) {
-      if (!el) return true;
-      const t = String(el.textContent || "").trim();
-      return !t || t === "—";
-    }
-
-    /** When live quotes fail, fill SPY/QQQ/VIX from 9:25 scan context (only empty cells). */
+    /** If live index quotes fail, stash 9:25 % / VIX on state for internal use. */
     function applyIndexStripFallbackFromScan() {
       const mc = state.scanData?.scan925?.marketContext;
-      const elSpy = document.getElementById("stripSpy");
-      const elQq = document.getElementById("stripQqq");
-      const subSpy = document.getElementById("stripSpySub");
-      const subQq = document.getElementById("stripQqqSub");
-      const elVix = document.getElementById("pnlVix");
-      function fillIdx(el, sub, pct) {
-        if (!el || !stripCellMissing(el)) return;
-        if (pct == null || !isFinite(pct)) {
-          if (sub && mc) sub.textContent = "9:25";
-          return;
-        }
-        el.textContent = (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%";
-        el.className = "pnl-val " + (pct > 0.02 ? "pnl-pos" : pct < -0.02 ? "pnl-neg" : "");
-        if (sub) sub.textContent = "9:25";
+      if (!mc) return;
+      state.indexQuotes = state.indexQuotes || {};
+      const q = state.indexQuotes;
+      if (q.spy == null && mc.spyPct != null && isFinite(mc.spyPct)) {
+        q.spy = { pct: mc.spyPct, source: "9:25" };
       }
-      fillIdx(elSpy, subSpy, mc?.spyPct);
-      fillIdx(elQq, subQq, mc?.qqqPct);
-      if (elVix && stripCellMissing(elVix) && mc?.vix != null && isFinite(mc.vix)) {
-        elVix.textContent = mc.vix.toFixed(2);
-        elVix.className =
-          "pnl-val " + (mc.vix < 18 ? "vix-low" : mc.vix <= 25 ? "vix-mid" : "vix-hi");
+      if (q.qqq == null && mc.qqqPct != null && isFinite(mc.qqqPct)) {
+        q.qqq = { pct: mc.qqqPct, source: "9:25" };
+      }
+      if (q.vix == null && mc.vix != null && isFinite(mc.vix)) {
+        q.vix = mc.vix;
+        q.vixSource = "9:25";
       }
     }
 
+    /** Live SPY / QQQ / VIX — fetched on the same schedule as before; header strip shows CONF + SIGNAL instead. */
     async function refreshIndexStripQuotes() {
-      const elSpy = document.getElementById("stripSpy");
-      const elQq = document.getElementById("stripQqq");
-      const subSpy = document.getElementById("stripSpySub");
-      const subQq = document.getElementById("stripQqqSub");
-      const elVix = document.getElementById("pnlVix");
-      function setIdx(el, sub, pq) {
-        if (!el) return;
-        if (!pq || !isFinite(pq.pct)) {
-          el.textContent = "—";
-          el.className = "pnl-val";
-          if (sub) sub.textContent = "";
-          return;
-        }
-        const pct = pq.pct;
-        el.textContent = (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%";
-        el.className = "pnl-val " + (pct > 0.02 ? "pnl-pos" : pct < -0.02 ? "pnl-neg" : "");
-        if (sub) sub.textContent = "live";
-      }
       try {
         const vq = await api("/v1/markets/quotes", "GET", { symbols: "SPY,QQQ,VIX" });
         if (vq.error) throw new Error(String(vq.error));
@@ -5238,19 +5205,52 @@
         ql.forEach((q) => {
           if (q.symbol) by[String(q.symbol).toUpperCase()] = parseQuote(q);
         });
-        setIdx(elSpy, subSpy, by.SPY);
-        setIdx(elQq, subQq, by.QQQ);
         const vix = by.VIX?.last;
-        if (elVix && vix != null && isFinite(vix)) {
-          elVix.textContent = vix.toFixed(2);
-          elVix.className =
-            "pnl-val " + (vix < 18 ? "vix-low" : vix <= 25 ? "vix-mid" : "vix-hi");
-        } else if (elVix) {
-          elVix.textContent = "—";
-          elVix.className = "pnl-val";
-        }
+        state.indexQuotes = {
+          spy: by.SPY,
+          qqq: by.QQQ,
+          vix: vix != null && isFinite(vix) ? vix : null,
+          at: Date.now(),
+        };
       } catch (e) {
         applyIndexStripFallbackFromScan();
+      }
+    }
+
+    /** Top strip: confluence score + live signal / symbol + open alerts count. */
+    function updateCommandStrip() {
+      const sc = document.getElementById("stripScore");
+      const scSub = document.getElementById("stripScoreSub");
+      const sigEl = document.getElementById("stripTapeSig");
+      const tapeSub = document.getElementById("stripTapeSub");
+      const cf = state.confluence;
+      if (sc && scSub) {
+        if (cf && typeof cf.score === "number") {
+          sc.textContent = String(cf.score);
+          sc.className =
+            "pnl-val pnl-val--strip " +
+            (cf.tier === "HIGH" ? "pnl-pos" : cf.tier === "MED" ? "pnl-warn" : "");
+          scSub.textContent = cf.tier + " conf";
+        } else {
+          sc.textContent = "—";
+          sc.className = "pnl-val pnl-val--strip";
+          scSub.textContent = "tap GO";
+        }
+      }
+      if (sigEl && tapeSub) {
+        const sym = (state.ticker || "").toUpperCase() || "—";
+        const raw = (state.signal && String(state.signal)) || "—";
+        const sig =
+          raw.length > 16 ? raw.slice(0, 14) + "…" : raw;
+        sigEl.textContent = sig;
+        sigEl.className =
+          "pnl-val pnl-val--strip " +
+          (String(raw).toUpperCase().includes("CALL")
+            ? "pnl-pos"
+            : String(raw).toUpperCase().includes("PUT")
+              ? "pnl-neg"
+              : "");
+        tapeSub.textContent = sym;
       }
     }
 
@@ -5272,6 +5272,7 @@
       await refreshIndexStripQuotes();
       updateStripFromScan();
       applyIndexStripFallbackFromScan();
+      updateCommandStrip();
     }
 
     async function loadPositions() {
@@ -6509,6 +6510,7 @@
       }
       updateStripFromScan();
       applyIndexStripFallbackFromScan();
+      updateCommandStrip();
     }
 
     async function pollAlerts() {
@@ -6767,6 +6769,7 @@
       refreshIndexStripQuotes().then(() => {
         updateStripFromScan();
         applyIndexStripFallbackFromScan();
+        updateCommandStrip();
       });
     }, 30000);
     setInterval(() => { loadBalances(); loadPositions(); loadOrders(); }, 60000);
@@ -6793,6 +6796,7 @@
     loadLearnings();
     initPushAndSw();
 
+    updateCommandStrip();
     syncTabPageVisibility();
   </script>
 </body>
