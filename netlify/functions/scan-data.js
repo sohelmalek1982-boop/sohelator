@@ -38,6 +38,7 @@ function emptyScanPayload(extra = {}) {
     eodLatest: null,
     runningStats: null,
     jobHealth: {},
+    lastScan: null,
     marketClock: null,
     lastUpdated: Date.now(),
     blobsConfigured: false,
@@ -92,14 +93,20 @@ exports.handler = async (event) => {
       siteID,
       token,
     });
+    const scannerStore = getStore({
+      name: "scanner",
+      siteID,
+      token,
+    });
 
-    const [scan925, scan955, eodLatest, runningStats, jobHealth] =
+    const [scan925, scan955, eodLatest, runningStats, jobHealth, lastScan] =
       await Promise.all([
         store.get("scan_925_latest", { type: "json" }),
         store.get("scan_955_latest", { type: "json" }),
         learningStore.get("eod_latest", { type: "json" }),
         learningStore.get("running_stats", { type: "json" }),
         getJobHealth(),
+        scannerStore.get("last_scan", { type: "json" }),
       ]);
 
     return {
@@ -111,6 +118,7 @@ exports.handler = async (event) => {
         eodLatest,
         runningStats,
         jobHealth,
+        lastScan,
         marketClock,
         lastUpdated: Date.now(),
         blobsConfigured: true,

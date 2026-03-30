@@ -26,6 +26,10 @@ Scheduled functions run in **UTC** (e.g. `scanner` every 5 min **13:00–21:59 U
 
 Optional model overrides: `ANTHROPIC_MODEL_SCANNER`, `ANTHROPIC_MODEL_CHAT`, `ANTHROPIC_MODEL_RESEARCH`, `ANTHROPIC_MODEL_LEARN`.
 
+## Scanner behavior (chop vs alerts)
+
+Stage logic uses a **relaxed ADX floor** versus raw regime thresholds (and a bit more slack when **last 5m volume** is elevated), so names are not all discarded as CHOP when the tape is quiet but volume spikes. **Alerts still require alert-eligible stages** (bull/bear/setup/fading with P&amp;L rule); pure chop never Telegrams. **`last_scan.scanDiagnostics`** in Blobs explains how many symbols were skipped on the ADX gate.
+
 ## Trusted tape windows
 
 Volume/range tape boosts (scanner rank, ACT tier, SPY index-tape weighting in regime) apply only during **9:45–11:30** and **13:00–15:45** America/New_York. See `netlify/functions/lib/tapeTrustedWindow.js` (mirrored in the client).

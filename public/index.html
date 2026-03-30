@@ -6094,8 +6094,28 @@
         state.scanAlertCountToday = alerts.length;
         alerts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         if (!alerts.length) {
+          const diag = state.lastScanMeta && state.lastScanMeta.scanDiagnostics;
+          let extra = "";
+          if (diag && (diag.skippedAdxChop > 0 || diag.skippedStageNoAlert > 0)) {
+            extra =
+              '<br/><span class="muted" style="font-size:0.72rem;line-height:1.45;display:inline-block;margin-top:8px;">Last scanner pass: ' +
+              (diag.skippedAdxChop > 0
+                ? diag.skippedAdxChop +
+                  " name(s) under the ADX trend gate (regime " +
+                  (diag.regimeMinAdx != null ? diag.regimeMinAdx : "—") +
+                  ", scanner used " +
+                  (diag.relaxedMinAdx != null ? diag.relaxedMinAdx : "—") +
+                  "+ with extra slack if 5m vol was hot). "
+                : "") +
+              "Short-term volume can spike while ADX stays low — that is still chop until trend confirms. " +
+              (diag.skippedStageNoAlert > 0
+                ? diag.skippedStageNoAlert + " other skip(s) (stage not alert-eligible). "
+                : "") +
+              "</span>";
+          }
           host.innerHTML =
-            '<span class="muted">No signals fired yet today.<br/>Scanner watches the market on schedule.</span>';
+            '<span class="muted">No signals fired yet today.<br/>Scanner watches the market on schedule.</span>' +
+            extra;
           return;
         }
         const open = scanIsMarketOpenNY();
@@ -6321,6 +6341,16 @@
           return;
         }
         state.scanData = d;
+        if (d.lastScan) {
+          const prev = state.lastScanMeta;
+          if (
+            !prev ||
+            !prev.timestamp ||
+            (d.lastScan.timestamp || 0) >= (prev.timestamp || 0)
+          ) {
+            state.lastScanMeta = d.lastScan;
+          }
+        }
         const sig = JSON.stringify({
           t: d.scan925?.timestamp,
           e: d.eodLatest?.timestamp,

@@ -920,6 +920,17 @@ async function runScan() {
   const start = new Date(end.getTime() - 2 * 86400000);
   const ymd = (d) => d.toISOString().slice(0, 10);
 
+  const regimeMinAdx = th.minADX ?? 20;
+  /** Loosen ADX gate vs regime (chop-prone days were filtering 100% before trend logic). */
+  const relaxedMinAdx = Math.max(18, regimeMinAdx - 5);
+  const scanDiagnostics = {
+    regimeMinAdx,
+    relaxedMinAdx,
+    skippedAdxChop: 0,
+    skippedStageNoAlert: 0,
+    symbolsInUniverse: capped.length,
+  };
+
   const analyzed = [];
   const batchSize = 6;
   for (let i = 0; i < capped.length; i += batchSize) {
@@ -1017,6 +1028,12 @@ async function runScan() {
               : macdHist;
           const macdSlope = macdHist - macdHistPast;
 
+          const quickVolX = volAvg > 0 ? lastVol / volAvg : 1;
+          let effMinAdx = relaxedMinAdx;
+          if (quickVolX >= 1.65) {
+            effMinAdx = Math.max(18, effMinAdx - 3);
+          }
+
           const stageInfo = detectIntradayStage(
             {
               adxVal,
@@ -1036,10 +1053,17 @@ async function runScan() {
               bullOk,
               bearOk,
             },
-            th
+            { ...th, minADX: effMinAdx }
           );
 
-          if (!shouldSendStageAlert(stageInfo.stage, symbol, pnlMap)) return;
+          if (!shouldSendStageAlert(stageInfo.stage, symbol, pnlMap)) {
+            if (stageInfo.stage === "chop" && stageInfo.action === "NO EDGE") {
+              scanDiagnostics.skippedAdxChop++;
+            } else {
+              scanDiagnostics.skippedStageNoAlert++;
+            }
+            return;
+          }
 
           let setupType = "";
           let rank = 0;
@@ -1745,6 +1769,10 @@ async function runScan() {
       scannerScore: c.score,
     })),
     alertsSent: alertCount,
+    scanDiagnostics: {
+      ...scanDiagnostics,
+      candidatesAnalyzed: analyzed.length,
+    },
   });
 
   await recordJobOk("scanner", {
@@ -1757,6 +1785,10 @@ async function runScan() {
     tickersScanned: tickerList.length,
     setupsFound: confirmedSetups.length,
     alertsSent: alertCount,
+    scanDiagnostics: {
+      ...scanDiagnostics,
+      candidatesAnalyzed: analyzed.length,
+    },
   };
 }
 
