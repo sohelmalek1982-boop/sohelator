@@ -1257,7 +1257,7 @@
     .mini-gauge { height: 6px; background: rgba(0, 0, 0, 0.45); border-radius: 3px; margin-top: 6px; position: relative; overflow: hidden; border: 0.5px solid var(--border); }
     .mini-gauge > i { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--cyan); border-radius: 1px; box-shadow: 0 0 10px rgba(0, 242, 255, 0.55); }
 
-    /* Parked / “BIG UI” — larger tap targets (use when stopped, not while driving) */
+    /* BIG GLANCE — larger prices, scores, and tap targets for quick reading */
     body.parked-mode {
       --topbar-h: 140px;
       --nav-float-h: 80px;
@@ -1282,9 +1282,49 @@
     body.parked-mode .command-ticker { font-size: 2.95rem !important; }
     body.parked-mode .command-price { font-size: 1.78rem !important; }
     body.parked-mode .hero-cta { font-size: 1.14rem !important; padding: 18px 22px !important; min-height: 56px; }
-    body.parked-mode .play-radar-play { font-size: 0.98rem; }
+    body.parked-mode .play-radar-play { font-size: 1.02rem; line-height: 1.45; }
     body.parked-mode .pill { font-size: 1rem; padding: 12px 18px; }
     body.parked-mode .page { padding-bottom: 32px; }
+    body.parked-mode .hero-confluence {
+      padding: 14px 14px;
+      border-width: 1.5px;
+    }
+    body.parked-mode .hero-conf-num {
+      font-size: 1.5rem !important;
+      letter-spacing: 0.02em;
+    }
+    body.parked-mode .hero-conf-tier {
+      font-size: 15px !important;
+      padding: 5px 12px !important;
+    }
+    body.parked-mode .hero-conf-line {
+      font-size: 0.88rem !important;
+      line-height: 1.5 !important;
+    }
+    body.parked-mode .hero-conf-pill {
+      font-size: 10px !important;
+      padding: 6px 10px !important;
+    }
+    body.parked-mode .hero-sig-meta {
+      font-size: 0.95rem !important;
+      font-weight: 700;
+      letter-spacing: 0.14em !important;
+    }
+    body.parked-mode .hero-stat-val {
+      font-size: 1.55rem !important;
+    }
+    body.parked-mode .hero-stat-val--cvd {
+      font-size: 1.35rem !important;
+    }
+    body.parked-mode .hero-stat-label {
+      font-size: 10px !important;
+    }
+    body.parked-mode .hero-stat-hint {
+      font-size: 11px !important;
+    }
+    body.parked-mode .command-chg {
+      font-size: 18px !important;
+    }
 
     .play-radar-tools {
       display: flex;
@@ -1295,7 +1335,12 @@
       padding-top: 10px;
       border-top: 0.5px solid var(--border);
     }
+    .play-radar-tools--single {
+      justify-content: stretch;
+    }
     .btn-tool {
+      display: inline-flex;
+      align-items: center;
       font-family: var(--font-ui);
       font-size: 0.72rem;
       font-weight: 700;
@@ -1316,16 +1361,13 @@
       color: var(--green);
       box-shadow: var(--glow-lime);
     }
-    .tool-auto-speak {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.68rem;
-      color: var(--muted);
-      cursor: pointer;
-      user-select: none;
+    .btn-tool--glance {
+      flex: 1;
+      min-height: 48px;
+      font-size: 0.78rem;
+      letter-spacing: 0.1em;
+      justify-content: center;
     }
-    .tool-auto-speak input { width: 16px; height: 16px; accent-color: var(--cyan); }
 
     /* —— Indicators tab (interpreted) —— */
     .inds-tab-wrap { --ind-green: #00ff87; --ind-red: #ff3b5c; --ind-yellow: #ffd700; --ind-muted: #4a6070; --ind-cyan: #00e5ff; }
@@ -1537,10 +1579,8 @@
           </div>
           <div class="play-radar-play" id="playRadarPlay">Enter a ticker and tap GO — we’ll show if a setup is live and how to trade it.</div>
           <div class="play-radar-exec" id="playRadarExec"><strong>Execute</strong><span id="playRadarExecBody">—</span></div>
-          <div class="play-radar-tools" role="group" aria-label="Parked helpers">
-            <button type="button" class="btn-tool" id="btnSpeakBrief" title="Read summary aloud (Bluetooth / speaker)">🔊 Brief</button>
-            <button type="button" class="btn-tool" id="btnParkedMode" aria-pressed="false" title="Larger buttons and type">BIG UI</button>
-            <label class="tool-auto-speak"><input type="checkbox" id="chkAutoSpeak" /> Read aloud after GO</label>
+          <div class="play-radar-tools play-radar-tools--single" role="group" aria-label="Display size">
+            <button type="button" class="btn-tool btn-tool--glance" id="btnParkedMode" aria-pressed="false" title="Larger prices, scores, and buttons — tap again to return">BIG GLANCE</button>
           </div>
         </div>
         <div class="card hero command-hero wait" id="heroCard">
@@ -1919,7 +1959,7 @@
       /** Set from Tradier clock — INDICATORS tab uses for placeholder when closed. */
       marketOpen: true,
       fiveMinCandles: [],
-      /** @type {{ score: number, tier: string, line: string, speakLine: string } | null} */
+      /** @type {{ score: number, tier: string, line: string } | null} */
       confluence: null,
       ignition: null,
       ignitionHistory: [],
@@ -3463,20 +3503,10 @@
         (hints.length ? hints.slice(0, 4).join(" · ") : "Mixed tape") +
         (tier === "HIGH" ? " — high conviction tape." : tier === "MED" ? " — mixed edge." : " — wait for alignment.");
 
-      const speakLine =
-        "Confluence " +
-        score +
-        ", " +
-        tier +
-        ". " +
-        hints.slice(0, 2).join(", ") +
-        ".";
-
       return {
         score,
         tier,
         line,
-        speakLine,
         volLabel: volRegime.label,
         sessionLabel: sessionLabel || "—",
       };
@@ -4907,7 +4937,6 @@
         score: conf.score,
         tier: conf.tier,
         line: conf.line,
-        speakLine: conf.speakLine,
       };
       const hWrap = document.getElementById("heroConfluenceWrap");
       const hTier = document.getElementById("heroConfTier");
@@ -4954,9 +4983,6 @@
 
       if (triggeredByGo) {
         buzz(12);
-        try {
-          if (localStorage.getItem("sohel_autoSpeak") === "1") speakTradeBrief();
-        } catch (e) { /* noop */ }
       }
 
       await renderInterpretedIndicatorsPage({
@@ -6584,33 +6610,6 @@
       } catch (e) { /* noop */ }
     }
 
-    function speakTradeBrief() {
-      if (!("speechSynthesis" in window)) {
-        toast("Read-aloud not supported here", "info");
-        return;
-      }
-      try {
-        window.speechSynthesis.cancel();
-      } catch (e) { /* noop */ }
-      const sym = (state.ticker || "").toUpperCase();
-      const play = document.getElementById("playRadarPlay")?.textContent?.trim() || "";
-      const exec = document.getElementById("playRadarExecBody")?.textContent?.trim() || "";
-      const sig = document.getElementById("signalText")?.textContent?.trim() || "";
-      const price = document.getElementById("heroPrice")?.textContent?.trim() || "";
-      const parts = [
-        "SOHELATOR. " + sym + ".",
-        play,
-        "Signal: " + sig + ".",
-        state.confluence && state.confluence.speakLine ? state.confluence.speakLine : "",
-        price && price !== "—" ? "Last about " + price + "." : "",
-        exec && exec !== "—" ? "Execute: " + exec + "." : "",
-      ].filter(Boolean);
-      const u = new SpeechSynthesisUtterance(parts.join(" "));
-      u.rate = 0.92;
-      u.onerror = () => toast("Speech failed", "error");
-      window.speechSynthesis.speak(u);
-    }
-
     function applyParkedMode(on) {
       document.body.classList.toggle("parked-mode", on);
       const b = document.getElementById("btnParkedMode");
@@ -6644,17 +6643,6 @@
     }
 
     if (localStorage.getItem("sohel_parkedMode") === "1") applyParkedMode(true);
-    const chkAutoSpeakEl = document.getElementById("chkAutoSpeak");
-    if (chkAutoSpeakEl) {
-      chkAutoSpeakEl.checked = localStorage.getItem("sohel_autoSpeak") === "1";
-      chkAutoSpeakEl.addEventListener("change", (e) => {
-        try {
-          localStorage.setItem("sohel_autoSpeak", e.target.checked ? "1" : "0");
-        } catch (err) { /* noop */ }
-      });
-    }
-    const btnSpeakBrief = document.getElementById("btnSpeakBrief");
-    if (btnSpeakBrief) btnSpeakBrief.addEventListener("click", speakTradeBrief);
     const btnParkedMode = document.getElementById("btnParkedMode");
     if (btnParkedMode) {
       btnParkedMode.addEventListener("click", () => {
