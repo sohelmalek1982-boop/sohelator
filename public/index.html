@@ -1463,7 +1463,7 @@
             <button type="button" class="btn-tool" id="btnParkedMode" aria-pressed="false" title="Larger buttons and type">BIG UI</button>
             <label class="tool-auto-speak"><input type="checkbox" id="chkAutoSpeak" /> Read aloud after GO</label>
           </div>
-          <p class="safety-hint">Stop in a safe place before trading. Don’t use the screen while the truck is moving — pull over, then GO / 🔊 / orders.</p>
+          <p class="safety-hint">Park before you trade. Don’t use this screen while driving — pull over first, then GO, 🔊, or orders.</p>
         </div>
         <div class="card hero command-hero wait" id="heroCard">
           <div class="command-hero-top">
@@ -1479,7 +1479,7 @@
           <div class="hero-signal-row">
             <button type="button" class="hero-cta watch" id="heroActionBtn" disabled>
               <span class="hero-cta-dot" id="heroCtaDot">○</span>
-              <span id="heroActionLabel">LOADING…</span>
+              <span id="heroActionLabel">—</span>
             </button>
             <div class="win-rate-badge" id="winRateBadge" title="Win rate (placeholder)">
               <span class="wr-v" id="winRateBadgeText">WIN RATE<br/>—</span>
@@ -1532,7 +1532,7 @@
               <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted)">IGNITION SCORE</div>
             </div>
           </div>
-          <div style="padding:0 16px 14px;font-family:'DM Sans',sans-serif;font-size:14px;line-height:1.7;color:var(--text-muted)" id="ignDesc">Load 5m data…</div>
+          <div style="padding:0 16px 14px;font-family:'DM Sans',sans-serif;font-size:14px;line-height:1.7;color:var(--text-muted)" id="ignDesc">—</div>
           <div style="margin:0 16px 14px;padding:10px 14px;border-radius:8px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.5px" id="ignAction"></div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:#0f1820;border-top:1px solid #0f1820">
             <div style="background:#060e14;padding:12px 10px" id="engPrice">
@@ -1585,7 +1585,7 @@
 
         <h2 class="section">Market intelligence</h2>
         <div class="intel-grid mega-intel" id="signalIntelGrid">
-          <div class="intel-card" id="intelGexCard"><h5>GAMMA EXPOSURE</h5><span class="muted">Load ticker…</span></div>
+          <div class="intel-card" id="intelGexCard"><h5>GAMMA EXPOSURE</h5><span class="muted">—</span></div>
           <div class="intel-card" id="intelFlowCard"><h5>OPTIONS FLOW</h5><span class="muted">—</span></div>
           <div class="intel-card" id="intelProfileCard"><h5>MARKET PROFILE</h5><span class="muted">—</span></div>
           <div class="intel-card" id="intelLevelsCard"><h5>KEY LEVELS</h5><span class="muted">—</span></div>
@@ -1593,16 +1593,15 @@
 
         <div class="card" id="researchBriefCard" style="margin-top:14px;border-color:rgba(0,229,255,0.22);">
           <h2 class="section section-in-card">Research brief</h2>
-          <p class="muted" style="font-size:0.72rem;margin-bottom:10px;line-height:1.45;">One structured AI pass over tape + memory (bull / bear / risk / verdict). Cached per symbol per NY day — inspired by multi-agent research, without a separate Python stack.</p>
+          <p class="muted" style="font-size:0.72rem;margin-bottom:10px;line-height:1.45;">One structured AI pass over tape + memory (bull / bear / risk / verdict). Cached per symbol per NY day — runs when you tap GO; use refresh only if you want a new synthesis.</p>
           <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-            <button type="button" class="big-btn call" id="btnResearchBrief" style="margin-top:0;padding:10px 14px;font-size:0.85rem;">Generate brief</button>
             <button type="button" class="big-btn watch" id="btnResearchBriefForce" style="margin-top:0;padding:10px 14px;font-size:0.75rem;">Refresh (new run)</button>
           </div>
           <div id="researchBriefWrap" style="display:none;margin-top:14px;"></div>
         </div>
 
         <h2 class="section">Tape pulse</h2>
-        <div class="card signal-snapshot-card" id="signalSnapshotCard"><span class="muted" style="font-size:0.8rem;">Loading indicators…</span></div>
+        <div class="card signal-snapshot-card" id="signalSnapshotCard"><span class="muted" style="font-size:0.8rem;">—</span></div>
 
         <h2 class="section" style="margin-top:14px;">Timeframes</h2>
         <div class="tf-strip" id="tfStrip"></div>
@@ -1626,7 +1625,7 @@
             <div class="ind-overall-card" id="indOverallCard">
               <div class="ind-mono-7">OVERALL READING</div>
               <div class="ind-verdict chop ind-bebas" id="indOverallVerdict">—</div>
-              <p class="ind-dm" id="indOverallSummary">Loading…</p>
+              <p class="ind-dm" id="indOverallSummary">—</p>
               <div class="ind-watch-line" id="indOverallWatch"></div>
             </div>
             <div class="ind-mono-7" style="margin: 16px 0 8px;">INDICATORS</div>
@@ -2181,9 +2180,8 @@
       );
     }
 
-    async function fetchResearchBrief(refresh) {
+    async function fetchResearchBrief(refresh, quiet) {
       const wrap = document.getElementById("researchBriefWrap");
-      const btn = document.getElementById("btnResearchBrief");
       const btnF = document.getElementById("btnResearchBriefForce");
       const sym = (state.ticker || "").toUpperCase().trim();
       if (!sym) {
@@ -2191,15 +2189,10 @@
         return;
       }
       const setBusy = (on) => {
-        [btn, btnF].forEach((x) => {
-          if (!x) return;
-          x.disabled = on;
-        });
+        if (btnF) btnF.disabled = on;
       };
-      const labelGo = "Generate brief";
       const labelForce = "Refresh (new run)";
       setBusy(true);
-      if (btn) btn.textContent = "…";
       if (btnF) btnF.textContent = "…";
       if (wrap) {
         wrap.style.display = "block";
@@ -2221,7 +2214,7 @@
           return;
         }
         wrap.innerHTML = renderResearchBriefHtml(j);
-        toast(j.cached ? "Loaded cached brief." : "Research brief ready.", "success");
+        if (!quiet) toast(j.cached ? "Loaded cached brief." : "Research brief ready.", "success");
       } catch {
         if (wrap) {
           wrap.innerHTML =
@@ -2230,7 +2223,6 @@
         toast("Could not reach research brief.", "error");
       } finally {
         setBusy(false);
-        if (btn) btn.textContent = labelGo;
         if (btnF) btnF.textContent = labelForce;
       }
     }
@@ -3085,6 +3077,9 @@
 
       badge.textContent = badgeText;
       badge.className = "play-radar-badge " + badgeCls;
+      if (!state.marketOpen) {
+        play += " Session is closed — snapshot from last regular hours.";
+      }
       playEl.textContent = play;
       execBody.textContent = entry;
     }
@@ -4334,6 +4329,11 @@
     function renderSignalSnapshotBars(adxVal, macdH, rsiVal, bbB, vwapDist) {
       const card = document.getElementById("signalSnapshotCard");
       if (!card) return;
+      if (!state.marketOpen) {
+        card.innerHTML =
+          '<span class="muted" style="font-size:0.8rem;">—</span><span class="muted" style="font-size:0.72rem;display:block;margin-top:6px;">Session closed — no live tape pulse.</span>';
+        return;
+      }
       if (![adxVal, macdH, rsiVal, bbB, vwapDist].every((x) => typeof x === "number" && isFinite(x))) {
         card.innerHTML = "<span class=\"muted\" style=\"font-size:0.8rem;\">Not enough intraday data for tape pulse.</span>";
         return;
@@ -4417,6 +4417,12 @@
         state.ignition = ign;
         renderIgnition(ign);
         pushIgnitionHistoryClient(ign, sym);
+        if (!state.marketOpen) {
+          const dEl = document.getElementById("ignDesc");
+          if (dEl && ign && ign.description) {
+            dEl.textContent = ign.description + " — After hours: last session snapshot.";
+          }
+        }
       } else {
         state.ignition = null;
         const igDesc = document.getElementById("ignDesc");
@@ -4513,6 +4519,24 @@
         }
       } else if (cvdRow) {
         cvdRow.style.display = "none";
+      }
+      if (!state.marketOpen) {
+        const cr = document.getElementById("cvdRow");
+        const cvdTrendLabel = document.getElementById("cvdTrendLabel");
+        const cvdSignalText = document.getElementById("cvdSignalText");
+        const cvdDivAlert = document.getElementById("cvdDivAlert");
+        if (cr) {
+          cr.style.display = "block";
+          if (cvdTrendLabel) {
+            cvdTrendLabel.textContent = "—";
+            cvdTrendLabel.style.color = "var(--muted)";
+          }
+          if (cvdSignalText) cvdSignalText.textContent = "Market closed — no live order flow.";
+          if (cvdDivAlert) {
+            cvdDivAlert.style.display = "none";
+            cvdDivAlert.textContent = "";
+          }
+        }
       }
 
       const d15 = tfDir(c15.map((x) => x.c));
@@ -4660,6 +4684,9 @@
         price,
         sig,
       });
+      if (triggeredByGo && sym) {
+        void fetchResearchBrief(false, true);
+      }
       if (state.page === 2) renderDynamicWatchlist();
     }
 
@@ -6319,7 +6346,10 @@
       if (b && p && x) {
         b.textContent = "…";
         b.className = "play-radar-badge watch";
-        p.textContent = "Loading tape for " + state.ticker.toUpperCase() + "…";
+        const symU = state.ticker.toUpperCase();
+        p.textContent = state.marketOpen
+          ? "Loading tape for " + symU + "…"
+          : "Fetching last session for " + symU + "…";
         x.textContent = "—";
       }
       loadMarketData();
@@ -6436,11 +6466,7 @@
       setPage(5);
     });
 
-    const btnResearchBrief = document.getElementById("btnResearchBrief");
     const btnResearchBriefForce = document.getElementById("btnResearchBriefForce");
-    if (btnResearchBrief) {
-      btnResearchBrief.addEventListener("click", () => fetchResearchBrief(false));
-    }
     if (btnResearchBriefForce) {
       btnResearchBriefForce.addEventListener("click", () => fetchResearchBrief(true));
     }
