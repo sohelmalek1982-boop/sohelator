@@ -104,7 +104,9 @@ function buildClaudeContext(
       `4H: ${tf.fourHour?.trend} | 1H: ${tf.oneHour?.trend}`
     );
     lines.push(
-      `15M: ${tf.fifteenMin?.trend} | 5M: ${tf.fiveMin?.trend}`
+      `15M: ${tf.fifteenMin?.trend} | 5M: ${tf.fiveMin?.trend}${
+        tf.oneMin ? ` | 1M: ${tf.oneMin.trend}` : ""
+      }`
     );
     lines.push(
       `Weighted alignment: ${tf.alignmentScore}/100 (${tf.confluenceLevel})`

@@ -126,7 +126,10 @@ async function getFullTimeframeAnalysis(symbol) {
     .toISOString()
     .split("T")[0];
 
-  const [dailyData, fiveMinData] = await Promise.all([
+  // 1-min data: last 2 days to get today's intraday with enough bars
+  const twoDaysAgo = new Date(today - 2 * 86400000).toISOString().split("T")[0];
+
+  const [dailyData, fiveMinData, oneMinData] = await Promise.all([
     tradierGet("/v1/markets/history", {
       symbol,
       interval: "daily",
@@ -140,13 +143,24 @@ async function getFullTimeframeAnalysis(symbol) {
       end: endStr,
       session_filter: "open",
     }),
+    tradierGet("/v1/markets/timesales", {
+      symbol,
+      interval: "1min",
+      start: twoDaysAgo,
+      end: endStr,
+      session_filter: "open",
+    }).catch(() => null), // 1-min is best-effort, don't fail the whole call
   ]);
 
   const daily = parseHistoryDays(dailyData.history?.day);
   const fiveMin = parseTimesales(fiveMinData.series?.data);
+  const oneMin = oneMinData ? parseTimesales(oneMinData.series?.data) : [];
   const hourly = buildNCandles(fiveMin, 12);
   const fourHour = buildNCandles(hourly, 4);
   const fifteenMin = buildNCandles(fiveMin, 3);
+
+  const oneMinAnalysis =
+    oneMin.length >= 5 ? analyzeTimeframe(oneMin, "1M") : null;
 
   const analyses = {
     daily: analyzeTimeframe(daily, "daily"),
@@ -154,30 +168,30 @@ async function getFullTimeframeAnalysis(symbol) {
     oneHour: analyzeTimeframe(hourly, "1H"),
     fifteenMin: analyzeTimeframe(fifteenMin, "15M"),
     fiveMin: analyzeTimeframe(fiveMin, "5M"),
+    oneMin: oneMinAnalysis,
   };
 
-  const bullCount = Object.values(analyses).filter(
-    (a) => a.trend === "BULL"
-  ).length;
-  const bearCount = Object.values(analyses).filter(
-    (a) => a.trend === "BEAR"
-  ).length;
+  const tfFrames = Object.values(analyses).filter(Boolean);
+  const bullCount = tfFrames.filter((a) => a.trend === "BULL").length;
+  const bearCount = tfFrames.filter((a) => a.trend === "BEAR").length;
 
   const weightedBull =
     (analyses.daily.trend === "BULL" ? 3 : 0) +
     (analyses.fourHour.trend === "BULL" ? 2 : 0) +
     (analyses.oneHour.trend === "BULL" ? 1.5 : 0) +
     (analyses.fifteenMin.trend === "BULL" ? 1 : 0) +
-    (analyses.fiveMin.trend === "BULL" ? 0.5 : 0);
+    (analyses.fiveMin.trend === "BULL" ? 0.5 : 0) +
+    (oneMinAnalysis?.trend === "BULL" ? 0.25 : 0);
 
   const weightedBear =
     (analyses.daily.trend === "BEAR" ? 3 : 0) +
     (analyses.fourHour.trend === "BEAR" ? 2 : 0) +
     (analyses.oneHour.trend === "BEAR" ? 1.5 : 0) +
     (analyses.fifteenMin.trend === "BEAR" ? 1 : 0) +
-    (analyses.fiveMin.trend === "BEAR" ? 0.5 : 0);
+    (analyses.fiveMin.trend === "BEAR" ? 0.5 : 0) +
+    (oneMinAnalysis?.trend === "BEAR" ? 0.25 : 0);
 
-  const maxWeight = 8;
+  const maxWeight = oneMinAnalysis ? 8.25 : 8;
   const alignmentScore =
     weightedBull > weightedBear
       ? Math.round((weightedBull / maxWeight) * 100)
@@ -188,6 +202,7 @@ async function getFullTimeframeAnalysis(symbol) {
     rawDaily: daily,
     rawHourly: hourly,
     rawFiveMin: fiveMin,
+    rawOneMin: oneMin,
     bullCount,
     bearCount,
     weightedBull,
