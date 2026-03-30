@@ -18,6 +18,8 @@ function calculateRegime(marketData) {
     spyVwapDist = 0,
     putCallRatio = null,
     spyVolRatio = 1,
+    /** Last 6 vs prior 6 bar range expansion on SPY (same idea as per-ticker tape). */
+    indexRangeRatio = 1,
   } = marketData;
 
   const vixRegime =
@@ -57,6 +59,12 @@ function calculateRegime(marketData) {
   else if (vixRegime === "low_vol") primaryRegime = REGIMES.LOW_VOL_GRIND;
   else primaryRegime = REGIMES.RISK_ON;
 
+  const volX = Number(spyVolRatio) || 1;
+  const rangeR = Number(indexRangeRatio) || 1;
+  let indexTape = "FLAT";
+  if (volX >= 2 && rangeR >= 1.2) indexTape = "HOT";
+  else if (volX >= 1.55 || rangeR >= 1.28) indexTape = "WARM";
+
   const thresholds = {
     minADX:
       primaryRegime === REGIMES.LOW_VOL_GRIND
@@ -87,7 +95,8 @@ function calculateRegime(marketData) {
           ? 0.5
           : 1.0,
     confidenceBoost:
-      riskRegime === "risk_on" ? 8 : riskRegime === "risk_off" ? -8 : 0,
+      (riskRegime === "risk_on" ? 8 : riskRegime === "risk_off" ? -8 : 0) +
+      (indexTape === "HOT" ? 4 : indexTape === "WARM" ? 2 : 0),
   };
 
   return {
@@ -95,26 +104,34 @@ function calculateRegime(marketData) {
     vixRegime,
     trendRegime,
     riskRegime,
+    indexTape,
+    spyVolRatio: volX,
+    indexRangeRatio: rangeR,
     thresholds,
-    description: getRegimeDescription(primaryRegime, vix, spyChange),
+    description: getRegimeDescription(primaryRegime, vix, spyChange, indexTape),
     tradingAdvice: getRegimeTradingAdvice(primaryRegime, thresholds),
     putCallRatio,
-    spyVolRatio,
     spyRsi,
     spyVwapDist,
   };
 }
 
-function getRegimeDescription(regime, vix, spyChange) {
+function getRegimeDescription(regime, vix, spyChange, indexTape = "FLAT") {
   const chg = Number(spyChange) || 0;
+  const tapeNote =
+    indexTape === "HOT"
+      ? " SPY participation hot (vol + range expanding vs recent bars)."
+      : indexTape === "WARM"
+        ? " SPY tape building — watch for follow-through."
+        : "";
   const descriptions = {
-    trending_bull: `Strong bull trend. SPY ${chg >= 0 ? "+" : ""}${chg.toFixed(1)}%. Bulls in control. Good day for calls.`,
-    trending_bear: `Strong bear trend. Market selling off. Good day for puts on weak stocks.`,
-    choppy: `Choppy market. No clear direction. Be very selective — only A+ setups.`,
-    volatile: `High volatility (VIX ${Number(vix).toFixed(1)}). Use spreads only. Reduce size. Expect whipsaws.`,
-    low_vol_grind: `Low volatility grind. Premium cheap. Trend plays working well.`,
-    risk_off: `Risk-off session. Defensive. Puts on weak names. Avoid momentum longs.`,
-    risk_on: `Risk-on session. Momentum working. Favor calls on strong names.`,
+    trending_bull: `Strong bull trend. SPY ${chg >= 0 ? "+" : ""}${chg.toFixed(1)}%. Bulls in control. Good day for calls.${tapeNote}`,
+    trending_bear: `Strong bear trend. Market selling off. Good day for puts on weak stocks.${tapeNote}`,
+    choppy: `Choppy market. No clear direction. Be very selective — only A+ setups.${tapeNote}`,
+    volatile: `High volatility (VIX ${Number(vix).toFixed(1)}). Use spreads only. Reduce size. Expect whipsaws.${tapeNote}`,
+    low_vol_grind: `Low volatility grind. Premium cheap. Trend plays working well.${tapeNote}`,
+    risk_off: `Risk-off session. Defensive. Puts on weak names. Avoid momentum longs.${tapeNote}`,
+    risk_on: `Risk-on session. Momentum working. Favor calls on strong names.${tapeNote}`,
   };
   return descriptions[regime] || "Mixed conditions.";
 }

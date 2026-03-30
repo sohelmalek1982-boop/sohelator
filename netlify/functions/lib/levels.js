@@ -1,3 +1,275 @@
+// ── Intraday helpers ──────────────────────────────────────────────────────────
+
+/** Filter 5-min candles to the current NY session day (same approach as volumeAnalysis). */
+function _sessionCandlesIntraday(candles) {
+  if (!candles || !candles.length) return [];
+  function msOf(c) {
+    const t = c.time || c.t || c.timestamp;
+    if (t == null) return null;
+    const n = typeof t === "number" ? (t < 1e12 ? t * 1000 : t) : Date.parse(String(t));
+    return Number.isFinite(n) ? n : null;
+  }
+  function nyDay(ms) {
+    return new Date(ms).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  }
+  const lastMs = msOf(candles[candles.length - 1]);
+  if (!lastMs) return candles;
+  const today = nyDay(lastMs);
+  return candles.filter((c) => { const ms = msOf(c); return ms != null && nyDay(ms) === today; });
+}
+
+/** Build hourly candles from 5-min by grouping 12 consecutive bars. */
+function _buildHourly(fiveMinCandles) {
+  const out = [];
+  for (let i = 0; i < fiveMinCandles.length; i += 12) {
+    const g = fiveMinCandles.slice(i, i + 12);
+    if (!g.length) continue;
+    out.push({
+      time: g[0].time,
+      open: g[0].open,
+      high: Math.max(...g.map((c) => c.high)),
+      low: Math.min(...g.map((c) => c.low)),
+      close: g[g.length - 1].close,
+      volume: g.reduce((s, c) => s + (c.volume || c.vol || 0), 0),
+    });
+  }
+  return out;
+}
+
+/** 3-candle pivot swing detection. Returns [{price, type: 'high'|'low', idx}] newest-first. */
+function _detectSwings(candles) {
+  const swings = [];
+  for (let i = candles.length - 2; i >= 1; i--) {
+    const prev = candles[i - 1], cur = candles[i], next = candles[i + 1];
+    if (cur.high > prev.high && cur.high > next.high) {
+      swings.push({ price: cur.high, type: "high", idx: i });
+    } else if (cur.low < prev.low && cur.low < next.low) {
+      swings.push({ price: cur.low, type: "low", idx: i });
+    }
+    if (swings.length >= 6) break;
+  }
+  return swings;
+}
+
+/**
+ * Calculate intraday key levels from 5-min candle data.
+ * Returns array of level objects compatible with calculateKeyLevels() output.
+ */
+function calculateIntradayLevels(fiveMinCandles, currentPrice) {
+  const session = _sessionCandlesIntraday(fiveMinCandles);
+  if (session.length < 3) return [];
+  const price = +currentPrice || 0;
+  const levels = [];
+
+  // ── Opening Range (first 30 min = first 6 × 5-min bars, 9:30–10:00 ET) ──
+  const orBars = session.slice(0, Math.min(6, session.length));
+  if (orBars.length >= 2) {
+    const orH = Math.max(...orBars.map((c) => c.high));
+    const orL = Math.min(...orBars.map((c) => c.low));
+    levels.push({ price: orH, type: price >= orH ? "support" : "resistance", label: "Opening Range High", strength: "major", timeframe: "intraday" });
+    levels.push({ price: orL, type: price <= orL ? "resistance" : "support",  label: "Opening Range Low",  strength: "major", timeframe: "intraday" });
+  }
+
+  // ── Previous Hour High / Low ──────────────────────────────────────────────
+  const hourly = _buildHourly(session);
+  if (hourly.length >= 2) {
+    const ph = hourly[hourly.length - 2];
+    levels.push({ price: ph.high, type: price >= ph.high ? "support" : "resistance", label: "Prev Hour High", strength: "moderate", timeframe: "intraday" });
+    levels.push({ price: ph.low,  type: price <= ph.low  ? "resistance" : "support",  label: "Prev Hour Low",  strength: "moderate", timeframe: "intraday" });
+  }
+
+  // ── Current Hour High / Low (intrabar reference) ──────────────────────────
+  if (hourly.length >= 1) {
+    const ch = hourly[hourly.length - 1];
+    levels.push({ price: ch.high, type: "resistance", label: "Current Hour High", strength: "minor", timeframe: "intraday" });
+    levels.push({ price: ch.low,  type: "support",    label: "Current Hour Low",  strength: "minor", timeframe: "intraday" });
+  }
+
+  // ── Intraday Swing Highs / Lows (5-min pivots) ───────────────────────────
+  const swings = _detectSwings(session);
+  const seen = new Set();
+  swings.slice(0, 4).forEach((s) => {
+    const key = s.price.toFixed(2);
+    if (seen.has(key)) return;
+    seen.add(key);
+    levels.push({
+      price: s.price,
+      type: s.type === "high" ? (price >= s.price ? "support" : "resistance") : (price <= s.price ? "resistance" : "support"),
+      label: s.type === "high" ? "Intraday Swing High" : "Intraday Swing Low",
+      strength: "minor",
+      timeframe: "intraday",
+    });
+  });
+
+  // ── Session High / Low (whole day so far) ────────────────────────────────
+  const sessionH = Math.max(...session.map((c) => c.high));
+  const sessionL = Math.min(...session.map((c) => c.low));
+  levels.push({ price: sessionH, type: "resistance", label: "Session High", strength: "moderate", timeframe: "intraday" });
+  levels.push({ price: sessionL, type: "support",    label: "Session Low",  strength: "moderate", timeframe: "intraday" });
+
+  return levels.map((l) => ({
+    ...l,
+    distancePct: (((l.price - price) / price) * 100).toFixed(2),
+    distanceAbs: Math.abs(l.price - price),
+  }));
+}
+
+/**
+ * Detect level interactions on recent candles against a combined set of levels.
+ *
+ * @param {object[]} recentCandles - last 3-5 candles (OHLCV, most recent last)
+ * @param {object[]} allLevels     - combined daily + intraday levels array
+ * @param {number}   volRatio      - currentVolRatio from analyzeVolume (1.0 = avg)
+ * @returns {object|null}
+ */
+function detectLevelInteraction(recentCandles, allLevels, volRatio) {
+  if (!recentCandles || recentCandles.length < 2 || !allLevels || !allLevels.length) return null;
+
+  const cur  = recentCandles[recentCandles.length - 1];
+  const prev = recentCandles[recentCandles.length - 2];
+  const price = cur.close;
+  const volOk = (volRatio || 1) >= 1.25;
+
+  const results = [];
+
+  for (const lvl of allLevels) {
+    const lp = lvl.price;
+    if (!lp || lp <= 0) continue;
+
+    // Tolerances: 0.15 % for clean break, 0.05 % for wick touch
+    const closeAbove = price   > lp * 1.0015;
+    const closeBelow = price   < lp * 0.9985;
+    const prevAbove  = prev.close > lp * 1.001;
+    const prevBelow  = prev.close < lp * 0.999;
+    const highOver   = cur.high   > lp * 1.0005;
+    const lowUnder   = cur.low    < lp * 0.9995;
+    const distPct    = ((price - lp) / lp) * 100;
+    const absDist    = Math.abs(distPct);
+
+    let type = null;
+
+    if (closeAbove && prevBelow) {
+      // Closed above a level it was previously below → breakout / reclaim
+      type = volOk ? "BREAKOUT" : "WEAK_BREAKOUT";
+    } else if (closeBelow && prevAbove) {
+      // Closed below a level it was previously above → breakdown / lose
+      type = volOk ? "BREAKDOWN" : "WEAK_BREAKDOWN";
+    } else if (highOver && closeBelow && !prevAbove) {
+      // Wick above resistance, close back below → rejection
+      type = "REJECTION";
+    } else if (lowUnder && closeAbove && !prevBelow) {
+      // Wick below support, close back above → bounce
+      type = "BOUNCE";
+    } else if (absDist < 0.25) {
+      // Very close to a level, no clean cross yet
+      type = "TESTING";
+    } else if (absDist < 0.5) {
+      type = "APPROACHING";
+    }
+
+    if (!type) continue;
+
+    results.push({
+      type,
+      levelPrice: lp,
+      levelLabel: lvl.label,
+      levelStrength: lvl.strength || "minor",
+      levelType: lvl.type,
+      levelTimeframe: lvl.timeframe || "daily",
+      distancePct: distPct.toFixed(3),
+      volConfirmed: volOk,
+    });
+  }
+
+  if (!results.length) return null;
+
+  // Priority order: actionable events first
+  const ORDER = ["BREAKOUT", "BREAKDOWN", "REJECTION", "BOUNCE", "WEAK_BREAKOUT", "WEAK_BREAKDOWN", "TESTING", "APPROACHING"];
+  // Within same type, prefer: major > moderate > minor; daily > intraday
+  const strengthRank = { major: 0, moderate: 1, minor: 2 };
+  results.sort((a, b) => {
+    const oa = ORDER.indexOf(a.type); const ob = ORDER.indexOf(b.type);
+    if (oa !== ob) return oa - ob;
+    const sa = strengthRank[a.levelStrength] ?? 3;
+    const sb = strengthRank[b.levelStrength] ?? 3;
+    return sa - sb;
+  });
+
+  const top = results[0];
+
+  let signal, action, scoreImpact, direction;
+  const isMajor = top.levelStrength === "major";
+
+  switch (top.type) {
+    case "BREAKOUT":
+      signal    = `🚀 BREAKOUT above ${top.levelLabel} ($${(+top.levelPrice).toFixed(2)}) — volume confirmed`;
+      action    = "CALL ENTRY — resistance broken with conviction";
+      scoreImpact = isMajor ? 25 : 15;
+      direction   = "BULL";
+      break;
+    case "WEAK_BREAKOUT":
+      signal    = `📈 Weak breakout above ${top.levelLabel} ($${(+top.levelPrice).toFixed(2)}) — needs volume`;
+      action    = "WATCH — breakout not confirmed by volume yet";
+      scoreImpact = 8;
+      direction   = "BULL";
+      break;
+    case "BREAKDOWN":
+      signal    = `🔴 BREAKDOWN below ${top.levelLabel} ($${(+top.levelPrice).toFixed(2)}) — volume confirmed`;
+      action    = "PUT ENTRY — support lost with conviction";
+      scoreImpact = isMajor ? 25 : 15;
+      direction   = "BEAR";
+      break;
+    case "WEAK_BREAKDOWN":
+      signal    = `📉 Weak breakdown below ${top.levelLabel} ($${(+top.levelPrice).toFixed(2)}) — needs volume`;
+      action    = "WATCH — breakdown not confirmed by volume yet";
+      scoreImpact = 6;
+      direction   = "BEAR";
+      break;
+    case "REJECTION":
+      signal    = `⚠️ REJECTION at ${top.levelLabel} ($${(+top.levelPrice).toFixed(2)}) — wicked above, closed back below`;
+      action    = "PUT SETUP — failed breakout, smart money selling the rip";
+      scoreImpact = isMajor ? 20 : 10;
+      direction   = "BEAR";
+      break;
+    case "BOUNCE":
+      signal    = `✅ BOUNCE off ${top.levelLabel} ($${(+top.levelPrice).toFixed(2)}) — support held, wick reclaimed`;
+      action    = "CALL SETUP — support bounce, buyers stepped in";
+      scoreImpact = isMajor ? 20 : 10;
+      direction   = "BULL";
+      break;
+    case "TESTING":
+      signal    = `👀 TESTING ${top.levelLabel} ($${(+top.levelPrice).toFixed(2)}) — at the level, reaction imminent`;
+      action    = "GET READY — watch next candle for breakout or rejection";
+      scoreImpact = 5;
+      direction   = "WATCH";
+      break;
+    case "APPROACHING":
+      signal    = `📊 Approaching ${top.levelLabel} ($${(+top.levelPrice).toFixed(2)}) — ${Math.abs(+top.distancePct).toFixed(2)}% away`;
+      action    = "PREPARE — level reaction incoming, have order ready";
+      scoreImpact = 0;
+      direction   = "WATCH";
+      break;
+    default:
+      signal = ""; action = ""; scoreImpact = 0; direction = "NEUTRAL";
+  }
+
+  const isActionable = ["BREAKOUT", "BREAKDOWN", "REJECTION", "BOUNCE"].includes(top.type);
+  const isHighConviction = isActionable && isMajor && top.volConfirmed;
+
+  return {
+    ...top,
+    signal,
+    action,
+    scoreImpact,
+    direction,
+    isActionable,
+    isHighConviction,
+    allInteractions: results.slice(0, 4),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function buildLevelsSummary(resistance, support, rrRatio, _price) {
   const lines = [];
   if (resistance) {
@@ -195,4 +467,4 @@ function calculateKeyLevels(dailyCandles, hourlyCandles, currentPrice) {
   };
 }
 
-module.exports = { calculateKeyLevels, buildLevelsSummary };
+module.exports = { calculateKeyLevels, buildLevelsSummary, calculateIntradayLevels, detectLevelInteraction };

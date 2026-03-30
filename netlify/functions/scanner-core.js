@@ -439,6 +439,8 @@ async function fetchRegimeMarketData() {
   let spyAdx = 20;
   let spyRsi = 50;
   let spyVwapDist = 0;
+  let spyVolRatio = 1;
+  let indexRangeRatio = 1;
   if (candles.length >= 20) {
     const closes = candles.map((c) => c.close);
     const adxCandles = candles.map((c) => ({
@@ -460,6 +462,20 @@ async function fetchRegimeMarketData() {
       spyLast
     );
   }
+  if (candles.length >= 12) {
+    const volAvg =
+      candles.slice(-21, -1).reduce((a, c) => a + c.vol, 0) / 20 || 1;
+    const lastVol = candles[candles.length - 1].vol;
+    spyVolRatio = volAvg > 0 ? lastVol / volAvg : 1;
+    const n = 6;
+    const recent = candles.slice(-n);
+    const prior = candles.slice(-2 * n, -n);
+    const br = (c) => c.high - c.low;
+    const r1 = recent.reduce((s, c) => s + br(c), 0) / n;
+    const r0 =
+      prior.reduce((s, c) => s + br(c), 0) / Math.max(prior.length, 1);
+    indexRangeRatio = r0 > 1e-9 ? r1 / r0 : 1;
+  }
   return {
     vix,
     spyChange,
@@ -468,7 +484,8 @@ async function fetchRegimeMarketData() {
     spyRsi,
     spyVwapDist,
     putCallRatio: null,
-    spyVolRatio: 1,
+    spyVolRatio,
+    indexRangeRatio,
   };
 }
 
@@ -999,24 +1016,27 @@ async function runScan() {
               : macdHist;
           const macdSlope = macdHist - macdHistPast;
 
-          const stageInfo = detectIntradayStage({
-            adxVal,
-            adxSlope,
-            macdHist,
-            macdSlope,
-            rsi14,
-            vwapDist,
-            bbB,
-            bull,
-            bear,
-            breakout,
-            reversal,
-            rsi2,
-            ema8,
-            ema21,
-            bullOk,
-            bearOk,
-          });
+          const stageInfo = detectIntradayStage(
+            {
+              adxVal,
+              adxSlope,
+              macdHist,
+              macdSlope,
+              rsi14,
+              vwapDist,
+              bbB,
+              bull,
+              bear,
+              breakout,
+              reversal,
+              rsi2,
+              ema8,
+              ema21,
+              bullOk,
+              bearOk,
+            },
+            th
+          );
 
           if (!shouldSendStageAlert(stageInfo.stage, symbol, pnlMap)) return;
 
@@ -1513,7 +1533,10 @@ async function runScan() {
 
     const regimeLine =
       regime?.riskRegime != null
-        ? `🌐 Tape: ${String(regime.riskRegime).toUpperCase().replace(/_/g, " ")} · ${String(regime.primary || "").replace(/_/g, " ")}`
+        ? `🌐 Tape: ${String(regime.riskRegime).toUpperCase().replace(/_/g, " ")} · ${String(regime.primary || "").replace(/_/g, " ")}` +
+          (regime.indexTape && regime.indexTape !== "FLAT"
+            ? ` · SPY vol ${regime.spyVolRatio != null ? regime.spyVolRatio.toFixed(2) : "—"}× · ${regime.indexTape}`
+            : "")
         : null;
 
     const cvdLine = s.cvdSummary?.divergence?.divergence !== "NONE"
