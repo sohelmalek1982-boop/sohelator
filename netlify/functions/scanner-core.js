@@ -1129,6 +1129,31 @@ async function runScan() {
             adjRank = Math.max(0, Math.min(100, Math.round(adjRank)));
           }
 
+          const tapeVolX = volAvg > 0 ? lastVol / volAvg : 1;
+          let tapeRangeRatio = 1;
+          if (candles.length >= 12) {
+            const n = 6;
+            const recent = candles.slice(-n);
+            const prior = candles.slice(-2 * n, -n);
+            const br = (c) => c.high - c.low;
+            const r1 = recent.reduce((s, c) => s + br(c), 0) / n;
+            const r0 =
+              prior.reduce((s, c) => s + br(c), 0) / Math.max(prior.length, 1);
+            tapeRangeRatio = r0 > 1e-9 ? r1 / r0 : 1;
+          }
+          let tapeTier = "FLAT";
+          if (tapeVolX >= 2 && tapeRangeRatio >= 1.2) tapeTier = "HOT";
+          else if (tapeVolX >= 1.55 || tapeRangeRatio >= 1.28) tapeTier = "WARM";
+          if (tapeTier === "HOT") adjRank += 5;
+          else if (tapeTier === "WARM") adjRank += 3;
+          adjRank = Math.max(0, Math.min(100, Math.round(adjRank)));
+
+          const tapeActivation = {
+            volX: +tapeVolX.toFixed(2),
+            rangeRatio: +tapeRangeRatio.toFixed(2),
+            tier: tapeTier,
+          };
+
           const macdPrevIgn = calcMACD(closes.slice(0, -1)).hist;
           const macdPrev2Ign =
             closes.length >= 3 ? calcMACD(closes.slice(0, -2)).hist : macdPrevIgn;
@@ -1203,6 +1228,7 @@ async function runScan() {
             levelInteractionConfirmed: levelIntConfirmed || false,
             intradayLevels: intradayLevels.slice(0, 10),
             ignition,
+            tapeActivation,
           });
         } catch {
           /* one symbol failed */
@@ -1474,6 +1500,12 @@ async function runScan() {
       ? `🔊 VOL: ${s.volAnalysis.currentVolRatio}x avg — ${s.volAnalysis.priceVolumeSignal}`
       : `📊 VOL: ${s.volAnalysis?.currentVolRatio ?? "—"}x avg`;
 
+    const tapeActLine =
+      s.tapeActivation &&
+      (s.tapeActivation.tier !== "FLAT" || s.tapeActivation.volX >= 1.35)
+        ? `📈 Tape: ${s.tapeActivation.volX}× last bar vs avg · range ${s.tapeActivation.rangeRatio}× · ${s.tapeActivation.tier}`
+        : null;
+
     const liq = opt.liquidity;
     const liqLine = liq
       ? `💧 LIQ ${liq.tier}: spr ${liq.spreadPct}% · OI ${liq.oi.toLocaleString()} · vol ${liq.volume}`
@@ -1531,6 +1563,7 @@ async function runScan() {
       "\n" +
       volLine +
       "\n" +
+      (tapeActLine ? tapeActLine + "\n" : "") +
       (regimeLine ? regimeLine + "\n" : "") +
       (liqLine ? liqLine + "\n" : "") +
       (cvdLine   ? cvdLine   + "\n" : "") +
@@ -1594,6 +1627,15 @@ async function runScan() {
           opt.liquidity.oi +
           " · vol " +
           opt.liquidity.volume
+        : "") +
+      (s.tapeActivation &&
+      (s.tapeActivation.tier !== "FLAT" || s.tapeActivation.volX >= 1.35)
+        ? "</p><p><strong>Tape:</strong> " +
+          s.tapeActivation.volX +
+          "× last bar vs avg · range " +
+          s.tapeActivation.rangeRatio +
+          "× · " +
+          escapeHtml(String(s.tapeActivation.tier))
         : "") +
       "</p>" +
       "<p><em>" +

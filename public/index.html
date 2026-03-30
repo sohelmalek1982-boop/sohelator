@@ -714,6 +714,19 @@
       color: var(--cyan);
       border-color: rgba(0, 229, 255, 0.35);
     }
+    .hero-conf-pill.actpill--hot {
+      color: var(--green);
+      border-color: rgba(0, 255, 136, 0.45);
+      background: rgba(0, 255, 136, 0.08);
+    }
+    .hero-conf-pill.actpill--warm {
+      color: var(--yellow);
+      border-color: rgba(255, 204, 0, 0.4);
+    }
+    .hero-conf-pill.actpill--cold {
+      color: var(--muted);
+      border-color: rgba(120, 130, 140, 0.3);
+    }
     .hero-conf-line {
       margin: 8px 0 0;
       font-size: 0.74rem;
@@ -1309,6 +1322,9 @@
       font-size: 10px !important;
       padding: 6px 10px !important;
     }
+    body.parked-mode #heroActLine {
+      font-size: 0.78rem !important;
+    }
     body.parked-mode .hero-sig-meta {
       font-size: 0.95rem !important;
       font-weight: 700;
@@ -1624,8 +1640,10 @@
               <span class="hero-conf-num" id="heroConfNum">—</span>
               <span class="hero-conf-pill volpill" id="heroVolRegPill">RANGE —</span>
               <span class="hero-conf-pill sesspill" id="heroSessPill">SESSION</span>
+              <span class="hero-conf-pill actpill" id="heroActPill">ACT —</span>
             </div>
             <p class="hero-conf-line" id="heroConfLine">Tap GO after entering a ticker — we score how many clues agree.</p>
+            <p class="hero-conf-line" id="heroActLine" style="margin-top:6px;font-size:0.7rem;opacity:0.92;"></p>
           </div>
           <div class="hero-stat-grid">
             <div class="hero-stat">
@@ -1978,6 +1996,8 @@
       fiveMinCandles: [],
       /** @type {{ score: number, tier: string, line: string } | null} */
       confluence: null,
+      /** @type {{ score: number, tier: string, line: string, volBarX: number, rangeR: number } | null} */
+      tapeActivation: null,
       ignition: null,
       ignitionHistory: [],
       _ignHistSym: null,
@@ -3531,6 +3551,83 @@
       };
     }
 
+    /**
+     * Tape "waking up": last-bar volume vs recent avg + range expansion + flow alignment.
+     * Uses only data we already load — highlights participation before obvious candles.
+     */
+    function computeTapeActivation(c5, va, sig, volReg, marketOpen) {
+      if (!marketOpen) {
+        return {
+          score: 0,
+          tier: "COLD",
+          line: "After hours",
+          volBarX: 1,
+          rangeR: volReg?.ratio ?? 1,
+        };
+      }
+      if (!c5 || c5.length < 10) {
+        return {
+          score: 0,
+          tier: "COLD",
+          line: "Need more 5m bars",
+          volBarX: 1,
+          rangeR: 1,
+        };
+      }
+      const vols = c5.map((c) => +(c.v || c.volume || 0));
+      const lastV = vols[vols.length - 1];
+      const prevAvg =
+        vols.slice(-7, -1).reduce((a, b) => a + b, 0) / 6 || 1;
+      const volBarX = prevAvg > 0 ? lastV / prevAvg : 1;
+      const rangeR = volReg && volReg.ratio != null ? volReg.ratio : 1;
+
+      let pts = 0;
+      if (volBarX >= 2.2) pts += 38;
+      else if (volBarX >= 1.65) pts += 28;
+      else if (volBarX >= 1.35) pts += 18;
+      else if (volBarX >= 1.12) pts += 10;
+
+      if (rangeR >= 1.45) pts += 28;
+      else if (rangeR >= 1.28) pts += 20;
+      else if (rangeR >= 1.12) pts += 12;
+      else if (rangeR <= 0.82) pts -= 6;
+
+      const vr = va ? va.currentVolRatio || 1 : 1;
+      if (vr >= 2) pts += 14;
+      else if (vr >= 1.4) pts += 8;
+      else if (vr >= 1.1) pts += 4;
+
+      if (va && va.cvdSummary) {
+        const tr = va.cvdSummary.cvdTrend;
+        const div = va.cvdSummary.divergence && va.cvdSummary.divergence.divergence;
+        const bull = sig.detail === "calls";
+        const bear = sig.detail === "puts";
+        if (div === "NONE") {
+          if ((bull && tr === "RISING") || (bear && tr === "FALLING")) pts += 18;
+          else if (tr === "FLAT") pts += 4;
+        }
+      }
+
+      pts = Math.max(0, Math.min(100, Math.round(pts)));
+      let tier = "COLD";
+      if (pts >= 62) tier = "HOT";
+      else if (pts >= 36) tier = "WARM";
+
+      const bits = [];
+      if (volBarX >= 1.35) bits.push("last bar vol " + volBarX.toFixed(1) + "× recent");
+      if (rangeR >= 1.2) bits.push("range expanding");
+      else if (rangeR <= 0.85) bits.push("tight range");
+      if (vr >= 1.35) bits.push("session vol hot");
+      const line =
+        tier === "HOT"
+          ? "Tape waking — " + (bits.slice(0, 2).join(" · ") || "participation up")
+          : tier === "WARM"
+            ? "Building — " + (bits[0] || "watch next bars")
+            : "Quiet tape — wait for vol + range to expand";
+
+      return { score: pts, tier, line, volBarX, rangeR };
+    }
+
     function renderTfStrip(dirs) {
       const labels = ["5M", "15M", "1H", "4H", "DAY"];
       const el = document.getElementById("tfStrip");
@@ -4957,12 +5054,22 @@
         tier: conf.tier,
         line: conf.line,
       };
+      const tapeAct = computeTapeActivation(c5, va, sig, volReg, state.marketOpen);
+      state.tapeActivation = {
+        score: tapeAct.score,
+        tier: tapeAct.tier,
+        line: tapeAct.line,
+        volBarX: tapeAct.volBarX,
+        rangeR: tapeAct.rangeR,
+      };
       const hWrap = document.getElementById("heroConfluenceWrap");
       const hTier = document.getElementById("heroConfTier");
       const hNum = document.getElementById("heroConfNum");
       const hVolP = document.getElementById("heroVolRegPill");
       const hSess = document.getElementById("heroSessPill");
+      const hActP = document.getElementById("heroActPill");
       const hLine = document.getElementById("heroConfLine");
+      const hActLine = document.getElementById("heroActLine");
       if (hWrap && hTier && hNum && hVolP && hSess && hLine) {
         hWrap.style.display = "block";
         hTier.textContent = conf.tier + " · CONF";
@@ -4976,6 +5083,17 @@
         hSess.className =
           "hero-conf-pill sesspill" + (sessEt.cls === "power" ? " sesspill--power" : "");
         hLine.textContent = conf.line;
+        if (hActP) {
+          hActP.textContent =
+            tapeAct.tier + " · ACT " + tapeAct.score + "/100";
+          hActP.className =
+            "hero-conf-pill actpill actpill--" +
+            (tapeAct.tier === "HOT" ? "hot" : tapeAct.tier === "WARM" ? "warm" : "cold");
+        }
+        if (hActLine) {
+          hActLine.textContent = tapeAct.line;
+          hActLine.style.display = "block";
+        }
       }
 
       renderTfStrip(dirs);
