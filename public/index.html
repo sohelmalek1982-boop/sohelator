@@ -642,6 +642,82 @@
       text-transform: uppercase;
     }
 
+    .hero-confluence {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.28);
+      border: 1px solid rgba(0, 229, 255, 0.14);
+      position: relative;
+      z-index: 1;
+    }
+    .hero-conf-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 8px 10px;
+    }
+    .hero-conf-tier {
+      font-family: var(--font-bebas);
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      padding: 3px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .hero-conf-tier[data-tier="HIGH"] {
+      color: var(--green);
+      border-color: rgba(0, 255, 136, 0.45);
+      background: rgba(0, 255, 136, 0.08);
+    }
+    .hero-conf-tier[data-tier="MED"] {
+      color: var(--cyan);
+      border-color: rgba(0, 229, 255, 0.4);
+      background: rgba(0, 229, 255, 0.06);
+    }
+    .hero-conf-tier[data-tier="LOW"] {
+      color: var(--muted);
+      border-color: rgba(120, 130, 140, 0.35);
+    }
+    .hero-conf-num {
+      font-family: var(--font-data);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .hero-conf-pill {
+      font-family: var(--font-data);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--muted);
+    }
+    .hero-conf-pill.volpill--exp {
+      color: var(--green);
+      border-color: rgba(0, 255, 136, 0.35);
+      background: rgba(0, 255, 136, 0.06);
+    }
+    .hero-conf-pill.volpill--comp {
+      color: var(--yellow);
+      border-color: rgba(255, 204, 0, 0.35);
+    }
+    .hero-conf-pill.sesspill--power {
+      color: var(--cyan);
+      border-color: rgba(0, 229, 255, 0.35);
+    }
+    .hero-conf-line {
+      margin: 8px 0 0;
+      font-size: 0.74rem;
+      line-height: 1.45;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
     .hero-stat-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -1496,6 +1572,15 @@
             </div>
           </div>
           <div class="hero-sig-meta"><span id="signalText">WAIT</span></div>
+          <div class="hero-confluence" id="heroConfluenceWrap" style="display: none;">
+            <div class="hero-conf-row">
+              <span class="hero-conf-tier" id="heroConfTier" data-tier="">CONFLUENCE</span>
+              <span class="hero-conf-num" id="heroConfNum">—</span>
+              <span class="hero-conf-pill volpill" id="heroVolRegPill">RANGE —</span>
+              <span class="hero-conf-pill sesspill" id="heroSessPill">SESSION</span>
+            </div>
+            <p class="hero-conf-line" id="heroConfLine">Tap GO after entering a ticker — we score how many clues agree.</p>
+          </div>
           <div class="hero-stat-grid">
             <div class="hero-stat">
               <div class="hero-stat-label">Trend str</div>
@@ -1842,6 +1927,8 @@
       /** Set from Tradier clock — INDICATORS tab uses for placeholder when closed. */
       marketOpen: true,
       fiveMinCandles: [],
+      /** @type {{ score: number, tier: string, line: string, speakLine: string } | null} */
+      confluence: null,
       ignition: null,
       ignitionHistory: [],
       _ignHistSym: null,
@@ -3288,6 +3375,121 @@
       return { n: Math.max(ups, downs), label: Math.max(ups, downs) + "/5" };
     }
 
+    /** Recent 5m bar range vs prior window — expansion often precedes large moves. */
+    function computeVolatilityRegime(c5) {
+      if (!c5 || c5.length < 8) return { label: "—", expanding: null, ratio: 1 };
+      const n = Math.min(6, Math.floor(c5.length / 2));
+      const recent = c5.slice(-n);
+      const prior = c5.slice(-2 * n, -n);
+      if (prior.length < 2) return { label: "—", expanding: null, ratio: 1 };
+      const br = (c) => (+c.h || 0) - (+c.l || 0);
+      const r1 = recent.reduce((s, c) => s + br(c), 0) / recent.length;
+      const r0 = prior.reduce((s, c) => s + br(c), 0) / prior.length;
+      const ratio = r0 > 1e-9 ? r1 / r0 : 1;
+      if (ratio >= 1.3) return { label: "EXPANDING", expanding: true, ratio };
+      if (ratio <= 0.78) return { label: "COMPRESSED", expanding: false, ratio };
+      return { label: "NEUTRAL", expanding: null, ratio };
+    }
+
+    /**
+     * Single explainable score from pieces you already load (TF, trigger, VWAP, ADX, vol, CVD, range regime).
+     * Tuned to surface alignment + vol expansion — not a prediction guarantee.
+     */
+    function computeTapeConfluence(ctx) {
+      const {
+        sig,
+        tfAlign,
+        vwapDist,
+        adxVal,
+        volRatio,
+        cvdSummary,
+        marketOpen,
+        volRegime,
+        sessionLabel,
+      } = ctx;
+      const n = tfAlign && typeof tfAlign.n === "number" ? tfAlign.n : 0;
+      const tfPts = Math.round((n / 5) * 25);
+      let setupPts = 12;
+      if (sig.detail === "calls" || sig.detail === "puts") setupPts = 20;
+      else if (sig.detail === "chop") setupPts = 5;
+
+      const ad = Math.abs(vwapDist || 0);
+      const vwapPts = ad > 0.12 ? 15 : ad > 0.04 ? 10 : 5;
+
+      const adxPts =
+        adxVal >= 28 ? 15 : adxVal >= 22 ? 11 : adxVal >= 18 ? 7 : 4;
+
+      const vr = volRatio || 1;
+      const volPts = vr >= 1.8 ? 10 : vr >= 1.2 ? 7 : vr >= 0.85 ? 5 : 3;
+
+      let cvdPts = 3;
+      if (cvdSummary && cvdSummary.divergence) {
+        const div = cvdSummary.divergence.divergence;
+        const tr = cvdSummary.cvdTrend;
+        const bull = sig.detail === "calls";
+        const bear = sig.detail === "puts";
+        if (div === "NONE") {
+          if ((bull && tr === "RISING") || (bear && tr === "FALLING")) cvdPts = 10;
+          else if (tr === "FLAT") cvdPts = 6;
+          else cvdPts = 4;
+        } else {
+          cvdPts = 7;
+        }
+      }
+
+      let regPts = 5;
+      if (volRegime.expanding === true) regPts = 10;
+      else if (volRegime.expanding === false) regPts = 3;
+
+      const raw = tfPts + setupPts + vwapPts + adxPts + volPts + cvdPts + regPts;
+      const maxRaw = 105;
+      let score = Math.round((raw / maxRaw) * 100);
+      if (!marketOpen) score = Math.min(score, 40);
+
+      let tier = "LOW";
+      if (score >= 72) tier = "HIGH";
+      else if (score >= 48) tier = "MED";
+
+      const hints = [];
+      if (n >= 4) hints.push("timeframes aligned");
+      else if (n <= 2) hints.push("timeframes split");
+
+      if (sig.detail === "calls") hints.push("call trigger");
+      else if (sig.detail === "puts") hints.push("put trigger");
+      else if (sig.detail === "chop") hints.push("chop / no trigger");
+
+      if (volRegime.expanding === true) hints.push("5m range expanding");
+      else if (volRegime.expanding === false) hints.push("tight range");
+
+      if (cvdSummary && cvdSummary.divergence && cvdSummary.divergence.divergence !== "NONE") {
+        hints.push("CVD divergence");
+      }
+
+      if (!marketOpen) hints.push("after hours");
+
+      const line =
+        (hints.length ? hints.slice(0, 4).join(" · ") : "Mixed tape") +
+        (tier === "HIGH" ? " — high conviction tape." : tier === "MED" ? " — mixed edge." : " — wait for alignment.");
+
+      const speakLine =
+        "Confluence " +
+        score +
+        ", " +
+        tier +
+        ". " +
+        hints.slice(0, 2).join(", ") +
+        ".";
+
+      return {
+        score,
+        tier,
+        line,
+        speakLine,
+        volLabel: volRegime.label,
+        sessionLabel: sessionLabel || "—",
+      };
+    }
+
     function renderTfStrip(dirs) {
       const labels = ["5M", "15M", "1H", "4H", "DAY"];
       const el = document.getElementById("tfStrip");
@@ -4694,6 +4896,46 @@
           heroCvdHint.textContent = "—";
           heroCvdHint.className = "hero-stat-hint muted-h";
         }
+      }
+
+      const volReg = computeVolatilityRegime(c5);
+      const sessEt = getMarketSessionEt();
+      const conf = computeTapeConfluence({
+        sig,
+        tfAlign: state.tf.align,
+        vwapDist,
+        adxVal,
+        volRatio: va ? va.currentVolRatio : 1,
+        cvdSummary: va && va.cvdSummary,
+        marketOpen: state.marketOpen,
+        volRegime: volReg,
+        sessionLabel: sessEt.label,
+      });
+      state.confluence = {
+        score: conf.score,
+        tier: conf.tier,
+        line: conf.line,
+        speakLine: conf.speakLine,
+      };
+      const hWrap = document.getElementById("heroConfluenceWrap");
+      const hTier = document.getElementById("heroConfTier");
+      const hNum = document.getElementById("heroConfNum");
+      const hVolP = document.getElementById("heroVolRegPill");
+      const hSess = document.getElementById("heroSessPill");
+      const hLine = document.getElementById("heroConfLine");
+      if (hWrap && hTier && hNum && hVolP && hSess && hLine) {
+        hWrap.style.display = "block";
+        hTier.textContent = conf.tier + " · CONF";
+        hTier.setAttribute("data-tier", conf.tier);
+        hNum.textContent = conf.score + "/100";
+        hVolP.textContent = "RANGE " + conf.volLabel;
+        hVolP.className =
+          "hero-conf-pill volpill" +
+          (volReg.expanding === true ? " volpill--exp" : volReg.expanding === false ? " volpill--comp" : "");
+        hSess.textContent = sessEt.label;
+        hSess.className =
+          "hero-conf-pill sesspill" + (sessEt.cls === "power" ? " sesspill--power" : "");
+        hLine.textContent = conf.line;
       }
 
       renderTfStrip(dirs);
@@ -6367,6 +6609,7 @@
         "SOHELATOR. " + sym + ".",
         play,
         "Signal: " + sig + ".",
+        state.confluence && state.confluence.speakLine ? state.confluence.speakLine : "",
         price && price !== "—" ? "Last about " + price + "." : "",
         exec && exec !== "—" ? "Execute: " + exec + "." : "",
       ].filter(Boolean);
