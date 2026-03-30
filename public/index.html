@@ -6349,7 +6349,7 @@
 
     function formatJobHealthBrief(jh) {
       if (!jh || typeof jh !== "object") return "—";
-      const order = ["scanner", "scan-925", "scan-955", "scan-eod"];
+      const order = ["scanner", "scan-925", "scan-955", "scan-3am", "scan-eod"];
       const now = Date.now();
       const parts = [];
       for (const id of order) {

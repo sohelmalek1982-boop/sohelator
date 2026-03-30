@@ -31,6 +31,9 @@
 [functions."scan-weekend"]
   timeout = 60
 
+[functions."scan-3am"]
+  timeout = 120
+
 [functions."scan-now"]
   timeout = 60
 

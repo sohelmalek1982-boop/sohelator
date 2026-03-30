@@ -51,6 +51,12 @@ Or header: `-H "X-Scan-Force: YOUR_SECRET"` instead of `?force=`.
 
 **Scanner / trade alerts** use `POST /api/scan-now` (optional header `X-Scanner-Secret` if `SCANNER_TRIGGER_SECRET` is set). That path **skips when Tradier says the market is closed**, so alert firing is best verified **RTH** or the next scheduled `*/5` run.
 
+## 3:00 AM Eastern pipeline (`scan-3am`)
+
+A **scheduled** function runs **Mon–Fri at 08:00 UTC** (`0 8 * * 1-5`), which is about **3:00 AM Eastern Standard Time** (about **4:00 AM** during daylight saving). It **POSTs** to your own `/api/scan-925` and `/api/scan-955` with `X-Scan-Force`, so you must set **`SCAN_FORCE_SECRET`** and have a normal deploy **`URL`** (Netlify sets this on production).
+
+To move the run to ~3:00 AM local during **EDT**, change the cron in `netlify/functions/scan-3am.js` to `0 7 * * 1-5` (then you lose exact 3:00 AM in winter).
+
 ## Local
 
 ```bash
