@@ -13,4 +13,5 @@ async function handler() {
   }
 }
 
-exports.handler = schedule("*/5 9-16 * * 1-5", handler);
+// UTC — cover US RTH (~9:30–16:00 ET) year-round (was 9–16 UTC ≈ ends ~noon ET).
+exports.handler = schedule("*/5 13-21 * * 1-5", handler);

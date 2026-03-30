@@ -43,6 +43,9 @@ exports.handler = async (event) => {
       body: JSON.stringify({ error: "GET only" }),
     };
   }
+  const blobsConfigured = !!(
+    process.env.NETLIFY_SITE_ID && process.env.NETLIFY_TOKEN
+  );
   const [jobHealth, clock] = await Promise.all([
     getJobHealth(),
     tradierClock(),
@@ -52,6 +55,8 @@ exports.handler = async (event) => {
     headers,
     body: JSON.stringify({
       ok: true,
+      blobsConfigured,
+      tradierConfigured: !!process.env.TRADIER_TOKEN,
       jobHealth,
       marketClock: clock,
       at: Date.now(),

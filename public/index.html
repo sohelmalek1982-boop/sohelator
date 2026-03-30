@@ -1838,6 +1838,7 @@
 
       <!-- 5 SCAN — read-only intelligence feed -->
       <section class="page scan-tab-root" id="page-5">
+        <div id="scanBlobsBanner" class="card" style="display:none;margin-bottom:14px;border-color:var(--yellow);background:rgba(255,204,0,0.09);padding:12px 14px;font-size:0.82rem;line-height:1.55;color:var(--text);"></div>
         <div class="scan-status-bar" id="scanStatusBar" aria-label="Today status">
           <span class="sb-seg"><span id="scanMktDot" class="scan-dot-off" aria-hidden="true"></span><span id="scanMktPill">—</span></span>
           <span class="sb-seg">LAST SCAN <span class="sb-val" id="scanLastScan">—</span></span>
@@ -6185,6 +6186,10 @@
 
       if (metaEl) {
         const parts = [];
+        if (d && d.blobsConfigured === false) {
+          metaEl.textContent =
+            "NETLIFY_SITE_ID + NETLIFY_TOKEN required for scan-driven list — see SCAN tab banner.";
+        } else {
         if (mc.regime) parts.push("Regime " + String(mc.regime).replace(/_/g, " "));
         if (mc.vix != null && isFinite(mc.vix)) parts.push("VIX " + mc.vix.toFixed(2));
         if (mc.spyPct != null && isFinite(mc.spyPct))
@@ -6196,6 +6201,7 @@
         metaEl.textContent = parts.length
           ? parts.join(" · ")
           : "Pulls from 9:25 / 9:55 scans, tape context, and open alerts — full narrative stays on SCAN.";
+        }
       }
 
       const bySym = new Map();
@@ -6308,6 +6314,12 @@
       try {
         const r = await fetch("/api/scan-data");
         const d = await r.json();
+        if (!r.ok) {
+          state.scanData = Object.assign({}, d, { blobsConfigured: false });
+          renderScanDashboard(state.scanData);
+          renderDynamicWatchlist();
+          return;
+        }
         state.scanData = d;
         const sig = JSON.stringify({
           t: d.scan925?.timestamp,
@@ -6377,6 +6389,31 @@
       const run = d.runningStats;
       const m = state.lastScanMeta;
       const todayStr = scanNyLongDate();
+
+      const blobBanner = document.getElementById("scanBlobsBanner");
+      if (blobBanner) {
+        if (d.blobsConfigured === false) {
+          blobBanner.style.display = "block";
+          blobBanner.innerHTML =
+            "<strong>Backend storage not configured.</strong> " +
+            (d.blobsMessage
+              ? String(d.blobsMessage).replace(/</g, "&lt;")
+              : "Set NETLIFY_SITE_ID and NETLIFY_TOKEN on your Netlify site. Live quotes still work; morning brief, opening-range report, SCAN watchlist, and alert history all use Netlify Blobs.") +
+            (d.blobsError
+              ? '<br/><span class="muted" style="font-size:0.78rem;">' +
+                String(d.blobsError).replace(/</g, "&lt;") +
+                "</span>"
+              : "");
+        } else if (d.blobsError) {
+          blobBanner.style.display = "block";
+          blobBanner.innerHTML =
+            "<strong>Blobs read error.</strong> " +
+            String(d.blobsError).replace(/</g, "&lt;");
+        } else {
+          blobBanner.style.display = "none";
+          blobBanner.textContent = "";
+        }
+      }
 
       const jhEl = document.getElementById("scanJobHealth");
       if (jhEl) jhEl.textContent = formatJobHealthBrief(d.jobHealth);
@@ -6511,9 +6548,12 @@
           mbr0.style.display = "none";
           mbr0.textContent = "";
         }
-        if (mbBody)
+        if (mbBody) {
           mbBody.textContent =
-            "No pre-market blob yet — deploy scheduled scans or wait for 9:25am.";
+            d.blobsConfigured === false
+              ? "Fix NETLIFY_SITE_ID + NETLIFY_TOKEN (see yellow banner above), redeploy, then wait for the next 9:25 ET job — or trigger scan functions from Netlify."
+              : "No pre-market blob yet — wait for 9:25am ET (Mon–Fri) or check Netlify → Functions → scan-925 logs.";
+        }
         if (mbWatch) mbWatch.innerHTML = "";
       }
 
