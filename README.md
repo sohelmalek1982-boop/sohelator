@@ -19,6 +19,8 @@ Trading UI (`public/`) and Netlify serverless functions: scanners, Tradier-backe
 | `RESEND_API_KEY`, `ALERT_EMAIL`, `RESEND_FROM_EMAIL` | Alert email |
 | **`NETLIFY_SITE_ID`, `NETLIFY_TOKEN`** | **Required** for Netlify Blobs: 9:25/9:55/EOD reports, SCAN watchlist feed, alert dedup/history, job health. **Live quotes alone do not need these; everything above does.** Use this site’s **Site ID** and a personal access token with **Blobs** access. |
 | `SERPER_API_KEY` | Optional: scanner ticker discovery |
+| `SCAN_FORCE_SECRET` | Optional: `POST` scan-925 / scan-955 with `?force=<secret>` off-hours (see **Test scans off-hours**) |
+| `SCANNER_TRIGGER_SECRET` | Optional: required `X-Scanner-Secret` header for `POST /api/scan-now` when set |
 
 Scheduled functions run in **UTC** (e.g. `scanner` every 5 min **13:00–21:59 UTC** Mon–Fri to cover US RTH). 9:25 / 9:55 jobs use `14:30` / `14:55` UTC (correct at **EST**; one hour later local time during **EDT**).
 
