@@ -219,4 +219,14 @@
 [[redirects]]
   from = "/api/cheap-monitor"
   to = "/.netlify/functions/cheap-monitor"
-  st
+  status = 200
+
+[[redirects]]
+  from = "/api/trigger-expensive"
+  to = "/.netlify/functions/trigger-expensive"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
