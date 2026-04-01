@@ -912,15 +912,134 @@ window.calculateIgnition = calculateIgnition;
  * SOHELATOR blueprint — 3-tab layout (Prompt 9): HOME / ALERTS / OPEN TRADES,
  * regime + watchlist on HOME, full alert list newest-first on ALERTS (no dedupe),
  * outer fetch hook refreshes home + defers alert-cards after Prompt 4 render.
+ * SOHELATOR blueprint — remove NVDA hardcoding + after-hours hourly scans + news/catalyst detection (Prompt 12):
+ * HOME watchlist uses meta.universeSymbols (full liquid list) with per-symbol alert overlay; merges universe into broker wl.
  */
 (function initSohelatorThreeTabLayoutPrompt9() {
   var SCAN_HOOK = "/api/scan";
+  var SPY_LEVELS_SYM = "SPY";
+  var spyLevelsTimer = null;
 
   function esc(s) {
     if (s == null || s === "") return "";
     var d = document.createElement("div");
     d.textContent = String(s);
     return d.innerHTML;
+  }
+
+  function normList(x) {
+    if (x == null) return [];
+    return Array.isArray(x) ? x : [x];
+  }
+
+  function ymd(d) {
+    return d.toISOString().slice(0, 10);
+  }
+
+  function tradierApi(path, method, params) {
+    return fetch("/api/tradier", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        path: path,
+        method: method || "GET",
+        params: params || {},
+        body: {},
+      }),
+      cache: "no-store",
+    }).then(function (r) {
+      return r.json();
+    });
+  }
+
+  function classicPivots(h, l, c) {
+    var H = Number(h);
+    var L = Number(l);
+    var C = Number(c);
+    if (!isFinite(H) || !isFinite(L) || !isFinite(C)) return null;
+    var pp = (H + L + C) / 3;
+    return { pp: pp, r1: 2 * pp - L, s1: 2 * pp - H };
+  }
+
+  function fmtPx(x) {
+    if (x == null || !isFinite(Number(x))) return "—";
+    return "$" + Number(x).toFixed(2);
+  }
+
+  function firstQuote(data) {
+    var raw = data && data.quotes && (data.quotes.quote || data.quotes);
+    var arr = normList(raw);
+    return arr[0] || null;
+  }
+
+  function clearLevelHighlights() {
+    document.querySelectorAll(".sohel-level-cell").forEach(function (cell) {
+      cell.classList.remove("sohel-near-level");
+    });
+  }
+
+  function maybeHighlightLevel(last, levelPx, levelValId) {
+    if (!isFinite(last) || !isFinite(levelPx) || !levelValId) return;
+    var thr = Math.abs(last * 0.0015);
+    if (Math.abs(last - levelPx) > thr) return;
+    var el = document.getElementById(levelValId);
+    var cell = el && el.closest ? el.closest(".sohel-level-cell") : null;
+    if (cell) cell.classList.add("sohel-near-level");
+  }
+
+  function refreshSpyLevels() {
+    var sym = SPY_LEVELS_SYM;
+    tradierApi("/v1/markets/history", "GET", {
+      symbol: sym,
+      interval: "daily",
+      start: ymd(new Date(Date.now() - 420 * 86400000)),
+    })
+      .then(function (data) {
+        var days = normList(data && data.history && data.history.day);
+        if (!days.length) return Promise.reject(new Error("no daily"));
+        var prev = days.length >= 2 ? days[days.length - 2] : days[days.length - 1];
+        var piv = classicPivots(prev.high, prev.low, prev.close);
+        return tradierApi("/v1/markets/quotes", "GET", {
+          symbols: sym,
+          greeks: "false",
+        }).then(function (qd) {
+          var q = firstQuote(qd);
+          var last =
+            q &&
+            (parseFloat(q.last) ||
+              parseFloat(q.close) ||
+              parseFloat(q.bid) ||
+              NaN);
+          var setTxt = function (id, t) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = t;
+          };
+          clearLevelHighlights();
+          setTxt("home-level-price", isFinite(last) ? fmtPx(last) : "—");
+          if (piv) {
+            setTxt("home-level-pp", fmtPx(piv.pp));
+            setTxt("home-level-r1", fmtPx(piv.r1));
+            setTxt("home-level-s1", fmtPx(piv.s1));
+            if (isFinite(last)) {
+              maybeHighlightLevel(last, piv.r1, "home-level-r1");
+              maybeHighlightLevel(last, piv.pp, "home-level-pp");
+              maybeHighlightLevel(last, piv.s1, "home-level-s1");
+            }
+          }
+          var note = document.getElementById("home-level-note");
+          if (note && prev && prev.date) {
+            note.textContent =
+              "Prior bar " +
+              String(prev.date) +
+              " H/L/C → classic PP / R1 / S1 vs live " +
+              sym +
+              " quote.";
+          }
+        });
+      })
+      .catch(function () {
+        /* optional: SPY quote/history may fail if Tradier proxy idle */
+      });
   }
 
   function selectTab(tabId) {
@@ -1024,12 +1143,104 @@ window.calculateIgnition = calculateIgnition;
       "</p>" +
       metricsHtml;
 
+    var uni =
+      Array.isArray(meta.universeSymbols) && meta.universeSymbols.length
+        ? meta.universeSymbols
+        : null;
+
     if (wlMeta) {
       wlMeta.textContent =
-        (Array.isArray(j.alerts) ? j.alerts.length : 0) + " names · tap ALERTS for full cards";
+        (uni ? uni.length : Array.isArray(j.alerts) ? j.alerts.length : 0) +
+        " liquid names · tap ALERTS for full cards";
+    }
+
+    if (
+      typeof window.sohelMergeUniverseIntoWl === "function" &&
+      uni &&
+      uni.length
+    ) {
+      try {
+        window.sohelMergeUniverseIntoWl(uni);
+      } catch (e1) {
+        console.warn("Prompt12 merge wl", e1);
+      }
     }
 
     var alerts = Array.isArray(j.alerts) ? j.alerts : [];
+    var bySym = {};
+    alerts.forEach(function (a) {
+      var k = String(a.symbol || "")
+        .toUpperCase()
+        .replace(/[^A-Z0-9.-]/g, "")
+        .slice(0, 8);
+      if (!k) return;
+      if (
+        !bySym[k] ||
+        (Number(a.score) || 0) > (Number(bySym[k].score) || 0)
+      ) {
+        bySym[k] = a;
+      }
+    });
+
+    function tileHtml(symU, a) {
+      var sym = esc(symU || "—");
+      var rawSym = String(symU || "")
+        .toUpperCase()
+        .replace(/[^A-Z0-9.-]/g, "")
+        .slice(0, 8);
+      var sc = a && a.score != null ? Math.round(Number(a.score)) : "—";
+      var play = a ? esc(a.playTypeLabel || a.playType || "—") : "—";
+      var dir = a ? esc(a.direction || "—") : "—";
+      var txt = String(a && (a.aiVerdict || a.drivingText || "") ? a.aiVerdict || a.drivingText : "");
+      var cat = /HIGH-PROBABILITY CATALYST PLAY/i.test(txt);
+      var badge = cat
+        ? '<div class="sohel-wl-cat font-mono">CATALYST</div>'
+        : "";
+      var scoreLine = a ? "SCORE " + esc(String(sc)) : "NO SETUP";
+      return (
+        '<div class="sohel-wl-tile" data-symbol="' +
+        rawSym +
+        '"><div><span class="sohel-wl-sym">' +
+        sym +
+        "</span>" +
+        badge +
+        '<div class="sohel-wl-meta">' +
+        play +
+        " · " +
+        dir +
+        '</div></div><div class="sohel-wl-score">' +
+        scoreLine +
+        "</div></div>"
+      );
+    }
+
+    if (uni && uni.length) {
+      var sortedU = uni.slice().sort(function (a, b) {
+        var ra = String(a || "")
+          .toUpperCase()
+          .replace(/[^A-Z0-9.-]/g, "")
+          .slice(0, 8);
+        var rb = String(b || "")
+          .toUpperCase()
+          .replace(/[^A-Z0-9.-]/g, "")
+          .slice(0, 8);
+        var A = bySym[ra];
+        var B = bySym[rb];
+        var sa = A ? Number(A.score) || 0 : -1;
+        var sb = B ? Number(B.score) || 0 : -1;
+        if (sb !== sa) return sb - sa;
+        return String(a).localeCompare(String(b));
+      });
+      grid.innerHTML = sortedU.map(function (s) {
+        var key = String(s || "")
+          .toUpperCase()
+          .replace(/[^A-Z0-9.-]/g, "")
+          .slice(0, 8);
+        return tileHtml(s, bySym[key]);
+      }).join("");
+      return;
+    }
+
     if (!alerts.length) {
       grid.innerHTML =
         '<p class="muted" style="font-size:0.75rem;margin:0;">No setups passed gates — refresh after RTH.</p>';
@@ -1041,27 +1252,7 @@ window.calculateIgnition = calculateIgnition;
     });
     grid.innerHTML = sorted
       .map(function (a) {
-        var sym = esc(a.symbol || "—");
-        var rawSym = String(a.symbol || "")
-          .toUpperCase()
-          .replace(/[^A-Z0-9.-]/g, "")
-          .slice(0, 8);
-        var sc = a.score != null ? Math.round(Number(a.score)) : "—";
-        var play = esc(a.playTypeLabel || a.playType || "—");
-        var dir = esc(a.direction || "—");
-        return (
-          '<div class="sohel-wl-tile" data-symbol="' +
-          rawSym +
-          '"><div><span class="sohel-wl-sym">' +
-          sym +
-          '</span><div class="sohel-wl-meta">' +
-          play +
-          " · " +
-          dir +
-          '</div></div><div class="sohel-wl-score">SCORE ' +
-          esc(String(sc)) +
-          "</div></div>"
-        );
+        return tileHtml(a.symbol, a);
       })
       .join("");
   }
@@ -1077,7 +1268,14 @@ window.calculateIgnition = calculateIgnition;
       return;
     }
 
-    var order = alerts.slice().reverse();
+    var order = alerts.slice().sort(function (a, b) {
+      var ta =
+        Date.parse(a.ts || a.timestamp || a.createdAt || a.alertAt || "") || 0;
+      var tb =
+        Date.parse(b.ts || b.timestamp || b.createdAt || b.alertAt || "") || 0;
+      if (tb !== ta) return tb - ta;
+      return (Number(b.score) || 0) - (Number(a.score) || 0);
+    });
 
     host.innerHTML = order
       .map(function (a) {
@@ -1095,6 +1293,7 @@ window.calculateIgnition = calculateIgnition;
   function onScanJsonForTabs(res, j) {
     try {
       renderHomeFromScan(j);
+      refreshSpyLevels();
       setTimeout(function () {
         refillAlertsNewestFirst(j);
       }, 0);
@@ -1125,6 +1324,9 @@ window.calculateIgnition = calculateIgnition;
   function startP9() {
     bindTabBar();
     selectTab("home");
+    refreshSpyLevels();
+    if (spyLevelsTimer) clearInterval(spyLevelsTimer);
+    spyLevelsTimer = setInterval(refreshSpyLevels, 120000);
   }
 
   if (document.readyState === "loading") {
@@ -1299,3 +1501,6 @@ window.calculateIgnition = calculateIgnition;
     });
   };
 })();
+
+/* SOHELATOR blueprint — remove NVDA hardcoding + after-hours hourly scans + news/catalyst detection (Prompt 12):
+   dynamic HOME watchlist + window.sohelMergeUniverseIntoWl are implemented inside initSohelatorThreeTabLayoutPrompt9. */

@@ -1,6 +1,8 @@
 /**
  * SOHELATOR blueprint — live scanner: liquid universe → multi-TF data → scored setups
  * → historical similarity → rich dashboard alerts (+ optional driving string).
+ * SOHELATOR blueprint — remove NVDA hardcoding + after-hours hourly scans + news/catalyst detection (Prompt 12):
+ * POST body may include extraSymbols, prioritySymbols, catalystNewsSummary (from cheap-monitor news pass).
  */
 
 import {
@@ -201,21 +203,29 @@ export const handler = async (event) => {
     };
   }
 
-  let mode = "cheap";
+  let body = {};
   try {
-    const body = JSON.parse(event.body || "{}");
-    if (body.mode === "expensive" || body.mode === "cheap") {
-      mode = body.mode;
-    }
+    body = JSON.parse(event.body || "{}");
   } catch {
-    /* default */
+    body = {};
+  }
+
+  let mode = "cheap";
+  if (body.mode === "expensive" || body.mode === "cheap") {
+    mode = body.mode;
   }
 
   const requestedMode = mode;
   let scanMode = mode;
   let scanStatus = "ok";
   const nowEt = new Date();
-  if (requestedMode === "expensive" && !isEtGrokWindow(nowEt)) {
+  const allowCatalystGrokOutsideWindow =
+    body.allowCatalystGrokOutsideWindow === true;
+  if (
+    requestedMode === "expensive" &&
+    !isEtGrokWindow(nowEt) &&
+    !allowCatalystGrokOutsideWindow
+  ) {
     scanMode = "cheap";
     scanStatus = "outside_window";
   }
@@ -231,7 +241,27 @@ export const handler = async (event) => {
       console.warn("scan.js runBacktest(7) optional:", e?.message || e);
     }
 
-    const liquid = await getLiquidOptionsWatchlist(DEFAULT_UNIVERSE);
+    const extraSyms = Array.isArray(body.extraSymbols)
+      ? body.extraSymbols
+          .map((s) => String(s || "").trim().toUpperCase())
+          .filter(Boolean)
+      : [];
+    const mergedUniverse = [
+      ...new Set([...DEFAULT_UNIVERSE, ...extraSyms]),
+    ];
+    const prioritySyms = new Set(
+      Array.isArray(body.prioritySymbols)
+        ? body.prioritySymbols
+            .map((s) => String(s || "").trim().toUpperCase())
+            .filter(Boolean)
+        : []
+    );
+    const catalystNewsSummary =
+      typeof body.catalystNewsSummary === "string"
+        ? body.catalystNewsSummary.slice(0, 1500)
+        : "";
+
+    const liquid = await getLiquidOptionsWatchlist(mergedUniverse);
     const withQuotes = await Promise.all(
       liquid.map(async (symbol) => {
         const q = await getQuote(symbol);
@@ -241,7 +271,13 @@ export const handler = async (event) => {
     );
 
     const filtered = withQuotes.filter((x) => priceBucket(x.last, scanMode));
-    const take = filtered.slice(0, 12);
+    const sortedFiltered = filtered.slice().sort((a, b) => {
+      const pa = prioritySyms.has(a.symbol) ? 0 : 1;
+      const pb = prioritySyms.has(b.symbol) ? 0 : 1;
+      if (pa !== pb) return pa - pb;
+      return (Number(b.last) || 0) - (Number(a.last) || 0);
+    });
+    const take = sortedFiltered.slice(0, 12);
 
     const P = getOptimizedParams();
     const scalpH = Math.max(3, Math.round(num(P.scalpHorizonBars, 6)));
@@ -308,6 +344,21 @@ export const handler = async (event) => {
       /* GROK_API_KEY — Prompt 8: ET window + 2× expensive + cheap fallback */
       if (scanMode === "expensive" && process.env.GROK_API_KEY) {
         try {
+          const priorityHit = prioritySyms.has(setup.symbol);
+          const catBlock =
+            catalystNewsSummary
+              ? `
+
+Recent market headlines (catalyst context for the session):
+${catalystNewsSummary}
+${
+  priorityHit
+    ? `This symbol (${setup.symbol}) appeared in our universe ∩ headline scan. If a *fresh* catalyst in the text clearly supports a tactical trade in ${setup.symbol}, your NET VERDICT line MUST begin exactly: HIGH-PROBABILITY CATALYST PLAY —`
+    : `If a headline clearly ties a *fresh* catalyst to ${setup.symbol}, your NET VERDICT line MUST begin exactly: HIGH-PROBABILITY CATALYST PLAY —`
+}
+Otherwise use a normal conviction NET VERDICT (no catalyst prefix).`
+              : "";
+
           const aiPrompt = `You are SOHELATOR's aggressive co-pilot. Lead with system signal. Never veto unless score <40. End with single-line NET VERDICT.
 
 System setup (JSON):
@@ -325,6 +376,7 @@ ${JSON.stringify({
   projectedEv: setup.projectedEv,
   rulesAiVerdict: setup.aiVerdict,
 })}
+${catBlock}
 
 Respond with a few short lines, then exactly one line: NET VERDICT: <one line>`;
 
@@ -379,6 +431,8 @@ Respond with a few short lines, then exactly one line: NET VERDICT: <one line>`;
           minScore: P.minScore,
           evThreshold: P.evThreshold,
           grokHealth: grokHealthAgg,
+          universeSymbols: mergedUniverse.slice(0, 48),
+          priorityFromNews: Array.from(prioritySyms),
           backtest7d: backtest7
             ? {
                 ev: backtest7.ev,

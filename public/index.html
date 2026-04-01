@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>SOHELATOR</title>
-  <meta name="sohel-build" content="research-brief-ui-20260328" />
+  <meta name="sohel-build" content="neon-dash-3tab-20260329" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Chakra+Petch:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
@@ -371,6 +371,26 @@
       box-shadow: var(--glow-lime), 0 4px 16px rgba(0, 0, 0, 0.35);
     }
     .btn-go:active { transform: scale(0.98); opacity: 0.92; }
+
+    /* Full-height main when bottom nav hidden (3-tab dashboard) */
+    body.sohel-dash-v2 .main {
+      bottom: calc(8px + var(--safe-bot));
+    }
+    body.sohel-dash-v2 .bottomnav {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      border: 0 !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    body.sohel-dash-v2 .page {
+      padding-bottom: 100px;
+    }
 
     .main {
       position: absolute;
@@ -1870,8 +1890,118 @@
     .card:not(.sohel-regime-card) {
       background: #111111 !important;
       border-color: rgba(57, 255, 20, 0.22) !important;
-      box-shadow: 0 0 0 1px rgba(0, 240, 255, 0.08), 0 8px 32px rgba(0, 0, 0, 0.55);
-      animation: neon-pulse 4.5s ease-in-out infinite;
+      box-shadow: 0 0 0 1px rgba(0, 240, 255, 0.08), 0 8px 28px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Off-screen: tape / hero / ignition DOM still updated by main bundle */
+    .sohel-sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+      pointer-events: none !important;
+    }
+
+    .sohel-tabbar--mega {
+      gap: 10px !important;
+      margin-bottom: 16px !important;
+      padding: 6px 0 14px !important;
+    }
+    .sohel-tabbar--mega .sohel-tab {
+      flex: 1 1 0 !important;
+      min-height: 52px !important;
+      font-family: var(--font-bebas) !important;
+      font-size: 1.15rem !important;
+      letter-spacing: 0.12em !important;
+      border-width: 2px !important;
+      border-radius: 14px !important;
+    }
+
+    .neon-dash-card {
+      border-radius: 18px !important;
+      margin-bottom: 16px !important;
+    }
+
+    .sohel-regime-analysis {
+      border: 2px solid rgba(0, 240, 255, 0.4) !important;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.12), 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+      padding: 18px 18px 16px !important;
+    }
+
+    .sohel-price-vs-levels {
+      margin-top: 14px;
+    }
+    .sohel-spy-price-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      padding: 14px 16px;
+      background: rgba(0, 0, 0, 0.45);
+      border-radius: 14px;
+      border: 1px solid rgba(57, 255, 20, 0.25);
+    }
+    .sohel-spy-price {
+      font-size: 2.35rem;
+      line-height: 1;
+      color: var(--neon-lime);
+      text-shadow: 0 0 20px rgba(57, 255, 20, 0.35);
+    }
+    .sohel-level-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.14em;
+      color: rgba(224, 224, 224, 0.55);
+    }
+    .sohel-levels-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+    .sohel-level-cell {
+      text-align: center;
+      padding: 14px 8px;
+      border-radius: 14px;
+      background: #141414;
+      border: 2px solid rgba(255, 0, 255, 0.22);
+    }
+    .sohel-level-cell.sohel-level-r1 {
+      border-color: rgba(255, 149, 0, 0.45);
+    }
+    .sohel-level-cell.sohel-level-pp {
+      border-color: rgba(0, 240, 255, 0.45);
+    }
+    .sohel-level-cell.sohel-level-s1 {
+      border-color: rgba(57, 255, 20, 0.4);
+    }
+    .sohel-level-val {
+      display: block;
+      margin-top: 8px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #f4f4f4;
+    }
+    .sohel-level-hint {
+      margin-top: 12px;
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
+      color: rgba(224, 224, 224, 0.45);
+      line-height: 1.45;
+    }
+    .sohel-level-cell.sohel-near-level {
+      box-shadow: 0 0 22px rgba(255, 149, 0, 0.35), inset 0 0 12px rgba(255, 149, 0, 0.08);
+      animation: neon-pulse 2.2s ease-in-out 1;
+    }
+
+    .sohel-panel-title {
+      font-family: var(--font-bebas) !important;
+      letter-spacing: 0.06em !important;
+      font-size: 1.75rem !important;
     }
 
     .ap-drive-card {
@@ -1933,8 +2063,7 @@
     .sohel-regime-card {
       background: linear-gradient(160deg, #111111 0%, #0a0a0a 100%) !important;
       border: 2px solid rgba(0, 240, 255, 0.35) !important;
-      box-shadow: 0 0 20px rgba(0, 240, 255, 0.1), 0 0 40px rgba(255, 0, 255, 0.06);
-      animation: neon-pulse 5s ease-in-out infinite;
+      box-shadow: 0 0 16px rgba(0, 240, 255, 0.08), 0 8px 28px rgba(0, 0, 0, 0.45);
     }
     .sohel-regime-head.regime-flash {
       animation: regime-flash 0.85s ease-out;
@@ -1995,7 +2124,6 @@
     #system-status {
       border: 1px solid rgba(57, 255, 20, 0.35) !important;
       background: #111111 !important;
-      animation: neon-pulse 6s ease-in-out infinite;
     }
     #health-banner {
       border: 1px solid rgba(0, 240, 255, 0.3) !important;
@@ -2174,6 +2302,14 @@
       font-size: 1.1rem;
       color: #00ff87;
     }
+    /* SOHELATOR blueprint — remove NVDA hardcoding + after-hours hourly scans + news/catalyst detection (Prompt 12) */
+    .sohel-wl-cat {
+      font-size: 0.55rem;
+      letter-spacing: 0.12em;
+      color: #ff00ff;
+      text-shadow: 0 0 10px rgba(255, 0, 255, 0.45);
+      margin-top: 4px;
+    }
     #alerts-page #action-panel {
       margin-top: 0;
     }
@@ -2182,7 +2318,7 @@
     }
   </style>
 </head>
-<body class="term-app">
+<body class="term-app sohel-dash-v2">
   <header class="topbar">
     <div class="topbar-row topbar-row-main">
       <div class="logo-stack">
@@ -2195,8 +2331,8 @@
       <div class="topbar-right">
         <span class="pill-mkt closed" id="mktPill"><span class="dot closed" id="mktDot"></span><span id="mktText">—</span></span>
         <span class="pill-session closed" id="mktSessionPill"><span id="mktSessionText">—</span></span>
-        <span class="pill-ticker font-mono" id="activeTickerPill">NVDA</span>
-        <input id="tickerInput" class="ticker-input-mob" type="text" maxlength="8" placeholder="SYM" value="NVDA" autocomplete="off" />
+        <span class="pill-ticker font-mono" id="activeTickerPill">SPY</span>
+        <input id="tickerInput" class="ticker-input-mob" type="text" maxlength="8" placeholder="SYM" value="SPY" autocomplete="off" />
         <button type="button" class="btn-go btn-go-mob" id="goBtn">GO</button>
       </div>
     </div>
@@ -2235,21 +2371,45 @@
     <div class="pages" id="pages">
       <!-- 0 SIGNAL -->
       <section class="page page--active" id="page-0">
-        <!-- SOHELATOR blueprint — 3-tab layout (Prompt 9) -->
-        <nav class="sohel-tabbar" id="sohel-tabbar" role="tablist" aria-label="Main views">
+        <!-- SOHELATOR — clean 3-tab neon dashboard (HOME / ALERTS / OPEN TRADES) -->
+        <nav class="sohel-tabbar sohel-tabbar--mega" id="sohel-tabbar" role="tablist" aria-label="Main views">
           <button type="button" class="sohel-tab sohel-tab--active" role="tab" aria-selected="true" data-sohel-tab="home" id="tab-btn-home">HOME</button>
           <button type="button" class="sohel-tab" role="tab" aria-selected="false" data-sohel-tab="alerts" id="tab-btn-alerts">ALERTS</button>
           <button type="button" class="sohel-tab" role="tab" aria-selected="false" data-sohel-tab="trades" id="tab-btn-trades">OPEN TRADES</button>
         </nav>
 
+        <!-- SOHELATOR blueprint — remove NVDA hardcoding + after-hours hourly scans + news/catalyst detection (Prompt 12): regime + full liquid-universe watchlist grid (no default ticker bias) -->
         <div id="home-page" class="sohel-tab-page sohel-tab-page--active" role="tabpanel" aria-labelledby="tab-btn-home">
         <div class="sohel-home-stack">
-          <div class="sohel-regime-card card" id="home-regime-card">
+          <section class="sohel-regime-analysis card neon-dash-card" id="sohel-regime-analysis-card" aria-labelledby="home-regime-analysis-title">
             <div class="sohel-regime-head" id="home-regime-header">
-              <h2 class="sohel-regime-title">Today's regime</h2>
+              <h2 class="sohel-regime-title" id="home-regime-analysis-title">Today's regime analysis</h2>
               <span class="sohel-regime-pill font-mono" id="home-regime-pill">—</span>
             </div>
-            <p id="home-regime-body" class="sohel-regime-body">Live tape summary loads with the scanner — pull to refresh or wait for the next poll.</p>
+            <div class="sohel-price-vs-levels" id="home-regime-levels">
+              <div class="sohel-spy-price-row">
+                <span class="sohel-level-label font-mono">SPY LAST</span>
+                <span class="sohel-spy-price font-bebas" id="home-level-price">—</span>
+              </div>
+              <div class="sohel-levels-grid">
+                <div class="sohel-level-cell sohel-level-r1">
+                  <span class="sohel-level-label font-mono">R1</span>
+                  <span class="sohel-level-val font-mono" id="home-level-r1">—</span>
+                </div>
+                <div class="sohel-level-cell sohel-level-pp">
+                  <span class="sohel-level-label font-mono">PIVOT</span>
+                  <span class="sohel-level-val font-mono" id="home-level-pp">—</span>
+                </div>
+                <div class="sohel-level-cell sohel-level-s1">
+                  <span class="sohel-level-label font-mono">S1</span>
+                  <span class="sohel-level-val font-mono" id="home-level-s1">—</span>
+                </div>
+              </div>
+              <p class="sohel-level-hint font-mono" id="home-level-note">Classic pivots from prior full daily bar · vs live quote</p>
+            </div>
+          </section>
+          <div class="sohel-regime-card card neon-dash-card" id="home-regime-card">
+            <div id="home-regime-body" class="sohel-regime-body">Scanner summary loads on each poll — tape engine uses ticker + GO in the header.</div>
           </div>
           <div class="sohel-watchlist-section">
             <div class="sohel-watchlist-head">
@@ -2259,7 +2419,9 @@
             <div id="home-watchlist-grid" class="sohel-watchlist-grid" aria-live="polite"></div>
           </div>
         </div>
+        </div><!-- end #home-page -->
 
+        <div id="sohel-legacy-tape-bundle" class="sohel-sr-only" aria-hidden="true">
         <div class="play-radar-strip play-radar-in-page" id="playRadarStrip" aria-live="polite">
           <div class="row1">
             <span class="play-radar-label">Play radar</span>
@@ -2275,7 +2437,7 @@
         <div class="card hero command-hero wait" id="heroCard">
           <div class="command-hero-top">
             <div class="command-hero-left">
-              <div class="command-ticker font-bebas" id="heroSym">NVDA</div>
+              <div class="command-ticker font-bebas" id="heroSym">SPY</div>
             </div>
             <div class="command-hero-right font-mono">
               <div class="command-price" id="heroPrice">—</div>
@@ -2436,14 +2598,13 @@
             <div class="trio-card"><h4>Exit when</h4><p id="actExit">—</p></div>
             <div class="trio-card"><h4>Stay out if</h4><p id="actStay">—</p></div>
           </div>
-
-        </div><!-- SOHELATOR blueprint — 3-tab layout: end #home-page -->
+        </div><!-- end #sohel-legacy-tape-bundle -->
 
         <div id="alerts-page" class="sohel-tab-page" role="tabpanel" aria-labelledby="tab-btn-alerts" hidden>
         <!-- SOHELATOR blueprint — WHAT TO DO NOW Action Panel -->
-        <div id="action-panel" class="bg-black border border-lime-400 rounded-3xl p-6 mt-8">
-          <h2 class="text-3xl font-bold text-lime-400 mb-4 flex items-center gap-3">
-            🚀 ALL ALERTS
+        <div id="action-panel" class="bg-black border border-lime-400 rounded-3xl p-6 mt-0">
+          <h2 class="text-3xl font-bold text-lime-400 mb-4 flex items-center gap-3 sohel-panel-title">
+            ALL ALERTS
             <span id="panel-status" class="text-sm font-mono bg-zinc-900 px-3 py-1 rounded-full text-lime-300">LIVE</span>
           </h2>
           <div class="ap-refresh-row">
@@ -2456,9 +2617,9 @@
 
         <div id="open-trades-page" class="sohel-tab-page" role="tabpanel" aria-labelledby="tab-btn-trades" hidden>
         <!-- SOHELATOR blueprint — OPEN TRADES Management Panel (Prompt 5) -->
-        <div id="open-trades-panel" class="bg-black border border-amber-400 rounded-3xl p-6 mt-6">
-          <h2 class="text-3xl font-bold text-amber-400 mb-4 flex items-center gap-3">
-            📌 OPEN TRADES
+        <div id="open-trades-panel" class="bg-black border border-amber-400 rounded-3xl p-6 mt-0">
+          <h2 class="text-3xl font-bold text-amber-400 mb-4 flex items-center gap-3 sohel-panel-title">
+            OPEN TRADES
             <span id="open-status" class="text-sm font-mono bg-zinc-900 px-3 py-1 rounded-full text-amber-300">LIVE</span>
           </h2>
           <div id="open-trade-cards" class="space-y-6"></div>
@@ -2656,7 +2817,7 @@
 
     const state = {
       page: 0,
-      ticker: "NVDA",
+      ticker: "SPY",
       quote: null,
       candles5m: [],
       candles1m: [],
@@ -2676,7 +2837,8 @@
       orderQty: 1,
       orderType: "market",
       touch: { x0: 0, y0: 0, t: 0 },
-      wl: ["NVDA", "TSLA", "SPY", "QQQ", "AAPL"],
+      /* SOHELATOR blueprint — remove NVDA hardcoding + after-hours hourly scans + news/catalyst detection (Prompt 12): seed indices; ignition merges scan universe */
+      wl: ["SPY", "QQQ", "IWM", "DIA"],
       wlHist: {},
       subTab: "pos",
       liveFeed: [],
@@ -6435,6 +6597,23 @@
         });
       });
     }
+
+    /* SOHELATOR blueprint — remove NVDA hardcoding + after-hours hourly scans + news/catalyst detection (Prompt 12) */
+    window.sohelMergeUniverseIntoWl = function (syms) {
+      if (!Array.isArray(syms) || !syms.length) return;
+      const U = syms
+        .map((s) => String(s || "").trim().toUpperCase())
+        .filter(Boolean);
+      const seen = new Set(state.wl);
+      for (let i = 0; i < U.length; i++) {
+        if (!seen.has(U[i])) {
+          seen.add(U[i]);
+          state.wl.push(U[i]);
+        }
+      }
+      if (state.wl.length > 48) state.wl = state.wl.slice(0, 48);
+      loadWatchlist().catch(() => {});
+    };
 
     function openOrderModal(occ, underlying, optType, mid) {
       state.orderModal = { occ, underlying, optType, mid: mid || 0 };
