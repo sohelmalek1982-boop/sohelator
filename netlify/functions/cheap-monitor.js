@@ -1,6 +1,8 @@
 /**
  * SOHELATOR blueprint — cheap 5-min monitor + wake-up (Prompt 7)
  * SOHELATOR blueprint — remove NVDA hardcoding + after-hours hourly scans + news/catalyst detection (Prompt 12)
+ * SOHELATOR blueprint — ALL alerts to Telegram (user wants to review everything) (Prompt 19):
+ *   POST /api/scan with suppressTelegram:true; this function relays every alert score≥65 (deduped) using the same body format as scan.js.
  *
  * Schedule: netlify.toml — cron every five minutes — this function gates:
  *   • Weekday RTH 8:00–16:00 ET: every run → cheap scan + wild wakeup (score ≥85, vol ≥3×, text catalyst)
@@ -126,6 +128,116 @@ function isWild(a) {
   );
 }
 
+/* ─── Prompt 19 — mirror scan.js Telegram formatting (keep in sync with netlify/functions/scan.js) ─── */
+const TELEGRAM_ALERT_MIN_SCORE = 65;
+
+function volRatioOfAlertP19(a) {
+  return Number(a?.details?.volRatio ?? a?.volRatio ?? 0);
+}
+
+function hasCatalystSignalP19(a) {
+  const s = JSON.stringify(a || {}).toUpperCase();
+  return /CATALYST|EARNINGS|FDA|NEWS|\bGAP\b|UPGRADE|DOWNGRADE|BREAKING|MERGER|GUIDANCE|HIGH-PROBABILITY CATALYST/i.test(
+    s
+  );
+}
+
+function hasRegimeOrLevelKeywordsP19(a) {
+  const v = (
+    String(a?.aiVerdict || "") +
+    " " +
+    String(a?.aiCoPilot || "")
+  ).toUpperCase();
+  return /REVERSAL|REGIME|PIVOT|KEY LEVEL|BREAKDOWN|BREAKOUT|SWEEP|STOP\s*RUN|VWAP/.test(v);
+}
+
+function historicalMatchesShortP19(a) {
+  const sim = Array.isArray(a?.similar) ? a.similar : [];
+  if (sim.length) {
+    const wins = sim.filter((s) => s.win).length;
+    const wr = Math.round((wins / sim.length) * 100);
+    return `${sim.length} matches • ~${wr}% wins`;
+  }
+  const h = String(a.historicalSummary || "");
+  const m = h.match(/Historical:\s*([^.\n]+)/i);
+  if (m) return m[1].trim().slice(0, 120);
+  return "—";
+}
+
+function buildTelegramPrompt19Message(a) {
+  const sym = String(a.symbol || "—").toUpperCase();
+  const play = String(a.playTypeLabel || a.playType || "SETUP");
+  const score = Math.round(Number(a.score) || 0);
+  const edge = Number(a.edge ?? a.ev ?? 0);
+  const edgeStr = Number.isFinite(edge) ? edge.toFixed(2) : "—";
+  const last = Number(a.last ?? a.underlyingAtAlert);
+  const priceStr = Number.isFinite(last) ? `$${last.toFixed(2)}` : "—";
+  const bp = a.barChgPct;
+  let chg = "";
+  if (bp != null && Number.isFinite(Number(bp))) {
+    const p = Number(bp);
+    chg = ` (${p >= 0 ? "+" : ""}${p.toFixed(1)}%)`;
+  }
+  const ent = Number(a.entry);
+  const st = Number(a.stop);
+  const tg = Number(a.target);
+  const entryStr = Number.isFinite(ent) ? ent.toFixed(2) : "—";
+  const stopStr = Number.isFinite(st) ? st.toFixed(2) : "—";
+  const tgtStr = Number.isFinite(tg) ? tg.toFixed(2) : "—";
+  let grok = String(a.aiVerdict || "").replace(/\s+/g, " ").trim();
+  if (grok.length > 240) grok = grok.slice(0, 237) + "…";
+  const histLine = historicalMatchesShortP19(a);
+
+  const hi = [];
+  if (score >= 90) hi.push("⚡ SCORE 90+ — TOP TIER");
+  if (volRatioOfAlertP19(a) >= 3) hi.push("⚡ VOL SURGE 3×+");
+  if (hasCatalystSignalP19(a)) hi.push("⚡ CATALYST / NEWS");
+  if (hasRegimeOrLevelKeywordsP19(a)) hi.push("⚡ REGIME / LEVEL / REVERSAL — READ FULL GROK");
+
+  const banner = hi.length ? hi.join("\n") + "\n\n" : "";
+
+  return (
+    banner +
+    `🔥 SOHELATOR ALERT\n` +
+    `${sym} - ${play}\n` +
+    `SCORE ${score} | EDGE ${edgeStr}\n` +
+    `Price: ${priceStr}${chg}\n` +
+    `Play: ENTRY @ ${entryStr}\n` +
+    `Stop: ${stopStr} | Target: ${tgtStr}\n` +
+    `Grok: ${grok || "—"}\n` +
+    `Historical: ${histLine}`
+  );
+}
+
+async function relayPrompt19Telegrams(alerts, dedupeSet) {
+  const bot = process.env.TELEGRAM_BOT_TOKEN;
+  const chat = process.env.TELEGRAM_CHAT_ID;
+  if (!bot || !chat || !Array.isArray(alerts)) return;
+  for (let i = 0; i < alerts.length; i++) {
+    const a = alerts[i];
+    if (Number(a.score) < TELEGRAM_ALERT_MIN_SCORE) continue;
+    const k = `${a.symbol}|${Math.round(Number(a.score))}|${a.alertedAt || ""}|${String(a.alertedAtIso || "")}`;
+    if (dedupeSet.has(k)) continue;
+    dedupeSet.add(k);
+    const text = String(buildTelegramPrompt19Message(a) || "").trim().slice(0, 3900);
+    if (!text) continue;
+    try {
+      await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chat,
+          text,
+          disable_web_page_preview: true,
+        }),
+      });
+    } catch (e) {
+      console.warn("cheap-monitor Prompt19 Telegram:", e?.message || e);
+    }
+    await new Promise((r) => setTimeout(r, 300));
+  }
+}
+
 /**
  * SOHELATOR blueprint — remove NVDA hardcoding + after-hours hourly scans + news/catalyst detection (Prompt 12)
  * Tradier GET /v1/markets/news (limit). Shape varies; we normalize article/item arrays.
@@ -215,7 +327,7 @@ exports.handler = async () => {
     };
   }
 
-  let scanBody = { mode: "cheap" };
+  let scanBody = { mode: "cheap", suppressTelegram: true };
   let afterHoursSlot = null;
 
   if (inAfterHours) {
@@ -276,6 +388,7 @@ exports.handler = async () => {
       out.newsUniverseHits = syms;
       scanBody = {
         mode: "cheap",
+        suppressTelegram: true,
         extraSymbols: syms,
         prioritySymbols: syms,
         catalystNewsSummary:
@@ -286,13 +399,15 @@ exports.handler = async () => {
       };
     } catch (e) {
       console.warn("cheap-monitor news", e?.message || e);
-      scanBody = { mode: "cheap" };
+      scanBody = { mode: "cheap", suppressTelegram: true };
     }
     out.path = "after_hours_hourly";
     out.afterHoursSlot = afterHoursSlot;
   } else {
     out.path = "rth_5min";
   }
+
+  const telegramDedupe = new Set();
 
   try {
     const res = await fetch(`${base}/api/scan`, {
@@ -305,6 +420,8 @@ exports.handler = async () => {
     out.cheapSuccess = !!(j && j.success);
     const alerts = Array.isArray(j.alerts) ? j.alerts : [];
     out.alertCount = alerts.length;
+
+    await relayPrompt19Telegrams(alerts, telegramDedupe);
 
     const wild = alerts.filter(isWild);
     out.wildCount = wild.length;
@@ -346,6 +463,7 @@ exports.handler = async () => {
     if (doExpensive) {
       const expBody = {
         mode: "expensive",
+        suppressTelegram: true,
         extraSymbols: scanBody.extraSymbols || [],
         prioritySymbols: scanBody.prioritySymbols || [],
         catalystNewsSummary: scanBody.catalystNewsSummary || "",
@@ -360,6 +478,8 @@ exports.handler = async () => {
       out.expensiveHttp = exp.status;
       const ej = await exp.json().catch(() => ({}));
       out.expensiveOk = !!(ej && ej.success);
+      const expAlerts = Array.isArray(ej.alerts) ? ej.alerts : [];
+      await relayPrompt19Telegrams(expAlerts, telegramDedupe);
     }
 
     const push = await sendPushToAll({

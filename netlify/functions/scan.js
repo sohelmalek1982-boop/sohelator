@@ -3,6 +3,8 @@
  * → historical similarity → rich dashboard alerts (+ optional driving string).
  * SOHELATOR blueprint — remove NVDA hardcoding + after-hours hourly scans + news/catalyst detection (Prompt 12):
  * POST body may include extraSymbols, prioritySymbols, catalystNewsSummary (from cheap-monitor news pass).
+ * SOHELATOR blueprint — ALL alerts to Telegram (user wants to review everything) (Prompt 19):
+ * score ≥65 → formatted message; optional suppressTelegram when cheap-monitor relays the same run.
  */
 
 import {
@@ -148,6 +150,91 @@ function isUsEquityOptionsRthEt(d) {
   const open = 9 * 60 + 30;
   const close = 16 * 60;
   return t >= open && t < close;
+}
+
+/** SOHELATOR blueprint — ALL alerts to Telegram (user wants to review everything) (Prompt 19) */
+const TELEGRAM_ALERT_MIN_SCORE = 65;
+
+function volRatioOfAlert(a) {
+  return Number(a?.details?.volRatio ?? a?.volRatio ?? 0);
+}
+
+function hasCatalystSignal(a) {
+  const s = JSON.stringify(a || {}).toUpperCase();
+  return /CATALYST|EARNINGS|FDA|NEWS|\bGAP\b|UPGRADE|DOWNGRADE|BREAKING|MERGER|GUIDANCE|HIGH-PROBABILITY CATALYST/i.test(
+    s
+  );
+}
+
+function hasRegimeOrLevelKeywords(a) {
+  const v = (
+    String(a?.aiVerdict || "") +
+    " " +
+    String(a?.aiCoPilot || "")
+  ).toUpperCase();
+  return /REVERSAL|REGIME|PIVOT|KEY LEVEL|BREAKDOWN|BREAKOUT|SWEEP|STOP\s*RUN|VWAP/.test(v);
+}
+
+function historicalMatchesShort(a) {
+  const sim = Array.isArray(a?.similar) ? a.similar : [];
+  if (sim.length) {
+    const wins = sim.filter((s) => s.win).length;
+    const wr = Math.round((wins / sim.length) * 100);
+    return `${sim.length} matches • ~${wr}% wins`;
+  }
+  const h = String(a.historicalSummary || "");
+  const m = h.match(/Historical:\s*([^.\n]+)/i);
+  if (m) return m[1].trim().slice(0, 120);
+  return "—";
+}
+
+/**
+ * SOHELATOR blueprint — ALL alerts to Telegram (user wants to review everything) (Prompt 19)
+ * Clean format + optional high-signal banner lines (90+, vol, catalyst, regime/levels).
+ */
+function buildTelegramPrompt19Message(a) {
+  const sym = String(a.symbol || "—").toUpperCase();
+  const play = String(a.playTypeLabel || a.playType || "SETUP");
+  const score = Math.round(Number(a.score) || 0);
+  const edge = Number(a.edge ?? a.ev ?? 0);
+  const edgeStr = Number.isFinite(edge) ? edge.toFixed(2) : "—";
+  const last = Number(a.last ?? a.underlyingAtAlert);
+  const priceStr = Number.isFinite(last) ? `$${last.toFixed(2)}` : "—";
+  const bp = a.barChgPct;
+  let chg = "";
+  if (bp != null && Number.isFinite(Number(bp))) {
+    const p = Number(bp);
+    chg = ` (${p >= 0 ? "+" : ""}${p.toFixed(1)}%)`;
+  }
+  const ent = Number(a.entry);
+  const st = Number(a.stop);
+  const tg = Number(a.target);
+  const entryStr = Number.isFinite(ent) ? ent.toFixed(2) : "—";
+  const stopStr = Number.isFinite(st) ? st.toFixed(2) : "—";
+  const tgtStr = Number.isFinite(tg) ? tg.toFixed(2) : "—";
+  let grok = String(a.aiVerdict || "").replace(/\s+/g, " ").trim();
+  if (grok.length > 240) grok = grok.slice(0, 237) + "…";
+  const histLine = historicalMatchesShort(a);
+
+  const hi = [];
+  if (score >= 90) hi.push("⚡ SCORE 90+ — TOP TIER");
+  if (volRatioOfAlert(a) >= 3) hi.push("⚡ VOL SURGE 3×+");
+  if (hasCatalystSignal(a)) hi.push("⚡ CATALYST / NEWS");
+  if (hasRegimeOrLevelKeywords(a)) hi.push("⚡ REGIME / LEVEL / REVERSAL — READ FULL GROK");
+
+  const banner = hi.length ? hi.join("\n") + "\n\n" : "";
+
+  return (
+    banner +
+    `🔥 SOHELATOR ALERT\n` +
+    `${sym} - ${play}\n` +
+    `SCORE ${score} | EDGE ${edgeStr}\n` +
+    `Price: ${priceStr}${chg}\n` +
+    `Play: ENTRY @ ${entryStr}\n` +
+    `Stop: ${stopStr} | Target: ${tgtStr}\n` +
+    `Grok: ${grok || "—"}\n` +
+    `Historical: ${histLine}`
+  );
 }
 
 async function sendTelegramScanAlert(lines) {
@@ -339,6 +426,9 @@ export const handler = async (event) => {
         ? body.catalystNewsSummary.slice(0, 1500)
         : "";
 
+    /* Prompt 19 — cheap-monitor relays Telegram so cron + UI paths stay consistent without double-send from scan */
+    const suppressTelegram = body.suppressTelegram === true;
+
     const liquid = await getLiquidOptionsWatchlist(mergedUniverse);
     const withQuotes = await Promise.all(
       liquid.map(async (symbol) => {
@@ -502,28 +592,16 @@ Respond with a few short lines, then exactly one line: NET VERDICT: <one line>`;
       alerts.push(setup);
     }
 
+    /* SOHELATOR blueprint — ALL alerts to Telegram (user wants to review everything) (Prompt 19) */
     if (
       alerts.length &&
+      !suppressTelegram &&
       process.env.TELEGRAM_BOT_TOKEN &&
       process.env.TELEGRAM_CHAT_ID
     ) {
       for (const a of alerts) {
-        const when = a.alertedAtIso
-          ? new Date(a.alertedAtIso).toLocaleString("en-US", {
-              timeZone: "America/New_York",
-              hour: "numeric",
-              minute: "2-digit",
-              second: "2-digit",
-              hour12: true,
-            }) + " ET"
-          : "now";
-        const und =
-          a.underlyingAtAlert != null
-            ? ` · underlying ~$${Number(a.underlyingAtAlert).toFixed(2)}`
-            : "";
-        await sendTelegramScanAlert(
-          `SOHELATOR ${a.symbol} score ${Math.round(a.score)}/100\n${when}${und}\n${String(a.drivingText || a.aiVerdict || "").slice(0, 500)}`
-        );
+        if (Number(a.score) < TELEGRAM_ALERT_MIN_SCORE) continue;
+        await sendTelegramScanAlert(buildTelegramPrompt19Message(a));
       }
     }
 

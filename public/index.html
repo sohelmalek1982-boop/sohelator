@@ -5,526 +5,578 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0a0a0a" />
   <title>SOHELATOR</title>
-  <meta name="sohel-build" content="verbatim-neon-cleanup-final" />
+  <meta name="sohel-build" content="align-ics-v3-prompt16-learning" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Chakra+Petch:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   <style>
+    /* SOHELATOR blueprint — full ALIGN.ICS v3 template adoption (Prompt 15) */
+    /* SOHELATOR blueprint — LEARNING tab with AI progress tracking (Prompt 16) */
     :root {
       --lime: #39ff14;
       --cyan: #00f0ff;
       --magenta: #ff00ff;
       --amber: #ff9500;
+      --red: #ff3b3b;
       --bg: #0a0a0a;
-      --card: #121212;
-      --text: #eaeaea;
-      --muted: rgba(220, 220, 230, 0.55);
+      --card: #101012;
+      --text: #f0f0f5;
+      --muted: rgba(200, 200, 215, 0.55);
       --safe-t: env(safe-area-inset-top, 0px);
       --safe-b: env(safe-area-inset-bottom, 0px);
+      --nav-h: 58px;
+      --health-h: 52px;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { font-size: 18px; }
-    body.sohel-dark {
-      min-height: 100%;
-      background: radial-gradient(ellipse 120% 80% at 50% -30%, rgba(0, 240, 255, 0.06), transparent 55%), var(--bg);
+    html { font-size: 17px; }
+    body.align-v3 {
+      min-height: 100dvh;
+      background:
+        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,240,255,0.02) 2px, rgba(0,240,255,0.02) 4px),
+        radial-gradient(ellipse 100% 60% at 50% -20%, rgba(0, 240, 255, 0.07), transparent 55%),
+        var(--bg);
       color: var(--text);
       font-family: "Chakra Petch", system-ui, sans-serif;
-      padding: calc(12px + var(--safe-t)) 14px calc(100px + var(--safe-b));
+      padding-top: calc(8px + var(--safe-t));
+      padding-bottom: calc(var(--nav-h) + var(--health-h) + 24px + var(--safe-b));
       -webkit-font-smoothing: antialiased;
     }
-    .sohel-header {
+
+    .align-top {
+      padding: 0 14px 12px;
+      border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+    }
+    .align-brand {
       font-family: "Bebas Neue", sans-serif;
-      font-size: 2rem;
-      letter-spacing: 0.2em;
+      font-size: 1.85rem;
+      letter-spacing: 0.22em;
       text-align: center;
       color: var(--cyan);
-      text-shadow: 0 0 24px rgba(0, 240, 255, 0.35);
-      margin-bottom: 14px;
+      text-shadow: 0 0 20px rgba(0, 240, 255, 0.35);
+      margin-bottom: 10px;
     }
-    .sohel-tabs {
+    .align-strip {
       display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px 14px;
+      align-items: center;
+      font-family: "Space Mono", monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
     }
-    .sohel-tab {
-      flex: 1;
-      min-height: 52px;
-      border-radius: 14px;
-      border: 2px solid rgba(0, 240, 255, 0.35);
-      background: var(--card);
+    .align-strip span { color: var(--muted); }
+    .align-strip .v { color: var(--lime); font-weight: 700; }
+    .align-live-pill {
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: rgba(57, 255, 20, 0.15);
+      border: 1px solid var(--lime);
+      color: var(--lime) !important;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+    }
+    .align-live-pill--warn {
+      border-color: var(--amber);
+      color: var(--amber) !important;
+      background: rgba(255, 149, 0, 0.12);
+    }
+
+    /* SOHELATOR blueprint — LEARNING tab with AI progress tracking (Prompt 16) */
+    .align-top-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(0, 240, 255, 0.12);
+    }
+    .align-top-tab {
+      flex: 1 1 calc(25% - 8px);
+      min-width: 72px;
+      max-width: 120px;
+      min-height: 44px;
+      padding: 10px 8px;
+      border-radius: 12px;
+      border: 2px solid rgba(0, 240, 255, 0.4);
+      background: rgba(16, 16, 20, 0.95);
       color: var(--muted);
       font-family: "Bebas Neue", sans-serif;
-      font-size: 1rem;
-      letter-spacing: 0.12em;
-      cursor: pointer;
-      transition: color 0.15s, border-color 0.15s, box-shadow 0.15s;
-    }
-    .sohel-tab.active {
-      color: var(--lime);
-      border-color: rgba(57, 255, 20, 0.7);
-      box-shadow: 0 0 22px rgba(57, 255, 20, 0.2), inset 0 0 20px rgba(57, 255, 20, 0.06);
-    }
-    .sohel-page { display: none; }
-    .sohel-page.active { display: block; }
-    .sohel-regime, .sohel-watchlist {
-      background: var(--card);
-      border: 2px solid rgba(57, 255, 20, 0.3);
-      border-radius: 18px;
-      padding: 18px;
-      margin-bottom: 18px;
-      animation: neon-pulse 5s ease-in-out infinite;
-    }
-    .sohel-watchlist {
-      border-color: rgba(0, 240, 255, 0.35);
-    }
-    .sohel-regime h1 {
-      font-family: "Bebas Neue", sans-serif;
-      font-size: 1.35rem;
-      letter-spacing: 0.08em;
-      color: var(--lime);
-      margin-bottom: 14px;
-      text-shadow: 0 0 14px rgba(57, 255, 20, 0.25);
-    }
-    .sohel-watchlist h2, #alerts-page h2, #trades-page h2 {
-      font-family: "Bebas Neue", sans-serif;
-      font-size: 1.15rem;
+      font-size: 0.78rem;
       letter-spacing: 0.1em;
-      color: var(--cyan);
-      margin-bottom: 12px;
+      cursor: pointer;
+      text-shadow: none;
+      transition: box-shadow 0.2s, border-color 0.2s, color 0.2s;
     }
-    #regime-content { font-size: 0.95rem; line-height: 1.45; }
+    .align-top-tab.active {
+      color: var(--lime);
+      border-color: rgba(57, 255, 20, 0.75);
+      box-shadow: 0 0 16px rgba(57, 255, 20, 0.25);
+    }
+    .align-top-tab[data-sohel-top-tab="learning"].active {
+      color: var(--magenta);
+      border-color: rgba(255, 0, 255, 0.55);
+      box-shadow: 0 0 16px rgba(255, 0, 255, 0.2);
+    }
+    .align-top-tab[data-sohel-top-tab="regime"].active {
+      color: var(--amber);
+      border-color: rgba(255, 149, 0, 0.55);
+      box-shadow: 0 0 14px rgba(255, 149, 0, 0.2);
+    }
+
+    .align-regime-panel {
+      margin: 12px 14px 0;
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(57, 255, 20, 0.25);
+      background: rgba(18, 18, 22, 0.95);
+    }
+    .align-regime-panel #sohel-regime-header.regime-flash { animation: regime-flash 0.85s ease-out; }
     .sohel-pill {
       display: inline-block;
       font-family: "Space Mono", monospace;
-      font-size: 0.65rem;
-      padding: 6px 12px;
+      font-size: 0.6rem;
+      padding: 5px 10px;
       border-radius: 999px;
-      border: 1px solid rgba(255, 0, 255, 0.4);
+      border: 1px solid rgba(255, 0, 255, 0.45);
       color: var(--cyan);
-      margin-bottom: 12px;
-    }
-    .sohel-spy-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      padding: 14px;
-      background: rgba(0,0,0,0.45);
-      border-radius: 12px;
-      border: 1px solid rgba(57, 255, 20, 0.25);
-      margin-bottom: 10px;
-    }
-    .sohel-spy-row .lab { font-family: "Space Mono", monospace; font-size: 0.6rem; letter-spacing: 0.15em; color: var(--muted); }
-    .sohel-spy-row .px { font-family: "Bebas Neue", sans-serif; font-size: 2rem; color: var(--lime); }
-    .levels-3 {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 8px;
       margin-bottom: 8px;
     }
-    .level-cell {
-      text-align: center;
-      padding: 10px 6px;
-      border-radius: 10px;
-      border: 1px solid rgba(0, 240, 255, 0.2);
-      background: rgba(0,0,0,0.35);
-    }
-    .level-cell.sohel-near-level {
-      border-color: var(--magenta);
-      box-shadow: 0 0 16px rgba(255, 0, 255, 0.25);
-    }
-    .level-cell .lv { font-family: "Space Mono", monospace; font-size: 0.55rem; color: var(--muted); }
-    .level-cell .num { font-family: "Bebas Neue", sans-serif; font-size: 1.1rem; color: var(--lime); }
-    .sohel-level-note { font-size: 0.7rem; color: var(--muted); margin-top: 6px; }
-    .sohel-subh {
-      font-family: "Bebas Neue", sans-serif;
-      font-size: 0.95rem;
-      letter-spacing: 0.12em;
-      color: var(--magenta);
-      margin: 16px 0 8px;
-    }
-    .sohel-grok-body { color: var(--text); font-size: 0.88rem; }
-    .sohel-grok-tag { font-family: "Space Mono", monospace; font-size: 0.62rem; color: var(--amber); margin-bottom: 6px; }
-    .sohel-metrics {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 8px;
-      margin-top: 12px;
-    }
-    .sohel-metric {
-      text-align: center;
-      padding: 10px;
-      border-radius: 10px;
-      background: rgba(0,0,0,0.4);
-      border: 1px solid rgba(57, 255, 20, 0.15);
-    }
-    .sohel-metric .ml { font-size: 0.55rem; color: var(--muted); font-family: "Space Mono", monospace; }
-    .sohel-metric .mv { font-size: 1.1rem; font-weight: 700; color: var(--lime); }
-    /* Watchlist radar — vertical stack (tiered cards, ALIGN-style) */
-    .sohel-wl-stack { display: flex; flex-direction: column; gap: 20px; }
-    .sohel-wl-section-head {
+    .sohel-spy-row { display: flex; justify-content: space-between; align-items: baseline; padding: 10px; background: rgba(0,0,0,0.4); border-radius: 10px; margin-bottom: 8px; }
+    .sohel-spy-row .lab { font-size: 0.55rem; letter-spacing: 0.12em; color: var(--muted); }
+    .sohel-spy-row .px { font-family: "Bebas Neue", sans-serif; font-size: 1.6rem; color: var(--lime); }
+    .levels-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+    .level-cell { text-align: center; padding: 8px 4px; border-radius: 8px; border: 1px solid rgba(0,240,255,0.2); background: rgba(0,0,0,0.35); }
+    .level-cell.sohel-near-level { border-color: var(--magenta); box-shadow: 0 0 12px rgba(255,0,255,0.2); }
+    .level-cell .lv { font-size: 0.5rem; color: var(--muted); }
+    .level-cell .num { font-family: "Bebas Neue", sans-serif; font-size: 1rem; color: var(--lime); }
+    .sohel-level-note { font-size: 0.65rem; color: var(--muted); margin-top: 6px; }
+    .sohel-subh { font-family: "Bebas Neue", sans-serif; font-size: 0.85rem; letter-spacing: 0.1em; color: var(--magenta); margin: 12px 0 6px; }
+    .sohel-grok-body { font-size: 0.82rem; line-height: 1.4; }
+    .sohel-grok-tag { font-size: 0.58rem; color: var(--amber); margin-bottom: 4px; }
+    .sohel-metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 10px; }
+    .sohel-metric { text-align: center; padding: 8px; border-radius: 8px; background: rgba(0,0,0,0.35); border: 1px solid rgba(57,255,20,0.12); }
+    .sohel-metric .ml { font-size: 0.48rem; color: var(--muted); }
+    .sohel-metric .mv { font-size: 0.95rem; font-weight: 700; color: var(--lime); }
+
+    .align-main { padding: 16px 14px 8px; max-width: 520px; margin: 0 auto; }
+    .align-page { display: none; }
+    .align-page.active { display: block; }
+
+    .align-sec { margin-bottom: 22px; }
+    .align-sec-bar {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       gap: 10px;
-      margin-bottom: 10px;
-    }
-    .sohel-wl-pill {
+      padding: 10px 14px;
+      border-radius: 12px 12px 0 0;
       font-family: "Bebas Neue", sans-serif;
-      font-size: 0.85rem;
+      font-size: 1rem;
       letter-spacing: 0.14em;
-      padding: 6px 12px;
-      border-radius: 999px;
-      border: 2px solid currentColor;
     }
-    .sohel-wl-section--fire .sohel-wl-pill { color: #ff3b3b; box-shadow: 0 0 16px rgba(255, 59, 59, 0.25); }
-    .sohel-wl-section--heat .sohel-wl-pill { color: #ff9500; box-shadow: 0 0 14px rgba(255, 149, 0, 0.2); }
-    .sohel-wl-section--watch .sohel-wl-pill { color: var(--muted); border-color: rgba(200,200,210,0.35); }
-    .sohel-wl-sub { font-family: "Space Mono", monospace; font-size: 0.58rem; color: var(--muted); letter-spacing: 0.08em; }
-    .sohel-wl-cards { display: flex; flex-direction: column; gap: 12px; }
-    .sohel-radar-card {
-      position: relative;
+    .align-sec-bar .sub { font-family: "Space Mono", monospace; font-size: 0.55rem; letter-spacing: 0.08em; opacity: 0.85; margin-left: auto; }
+    .align-sec--fire .align-sec-bar {
+      background: linear-gradient(90deg, rgba(255,50,50,0.35), rgba(120,0,0,0.5));
+      border: 1px solid rgba(255,60,60,0.5);
+      color: #ff8888;
+      box-shadow: 0 0 20px rgba(255,60,60,0.15);
+    }
+    .align-sec--heat .align-sec-bar {
+      background: linear-gradient(90deg, rgba(255,149,0,0.3), rgba(120,60,0,0.45));
+      border: 1px solid rgba(255,149,0,0.45);
+      color: #ffcc80;
+    }
+    .align-sec--live .align-sec-bar {
+      background: linear-gradient(90deg, rgba(57,255,20,0.2), rgba(0,80,40,0.4));
+      border: 1px solid rgba(57,255,20,0.45);
+      color: var(--lime);
+    }
+    .align-sec-cards {
       display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-top: 12px;
+    }
+
+    .align-card {
       border-radius: 16px;
       overflow: hidden;
-      background: linear-gradient(135deg, rgba(20,20,24,0.98) 0%, rgba(10,10,12,0.99) 100%);
+      display: flex;
+      background: var(--card);
       border: 1px solid rgba(255,255,255,0.06);
-      min-height: 88px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.45);
     }
-    .sohel-radar-accent {
-      width: 5px;
-      flex-shrink: 0;
-    }
-    .sohel-radar-card--fire .sohel-radar-accent { background: linear-gradient(180deg, #ff5555, #cc0000); box-shadow: 0 0 12px rgba(255,60,60,0.5); }
-    .sohel-radar-card--heat .sohel-radar-accent { background: linear-gradient(180deg, #ffb020, #ff6600); box-shadow: 0 0 10px rgba(255,149,0,0.35); }
-    .sohel-radar-card--watch .sohel-radar-accent { background: linear-gradient(180deg, #555, #333); }
-    .sohel-radar-body { flex: 1; padding: 14px 14px 14px 12px; min-width: 0; }
-    .sohel-radar-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
-    .sohel-radar-head-left { flex: 1; min-width: 0; }
-    .sohel-radar-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .sohel-radar-sym {
-      font-family: "Bebas Neue", sans-serif;
-      font-size: 1.75rem;
-      letter-spacing: 0.06em;
-      line-height: 1;
-    }
-    .sohel-radar-card--fire .sohel-radar-sym { color: #ff8c42; text-shadow: 0 0 14px rgba(255,140,66,0.35); }
-    .sohel-radar-card--heat .sohel-radar-sym { color: #ffb347; text-shadow: 0 0 14px rgba(255,160,60,0.25); }
-    .sohel-radar-card--watch .sohel-radar-sym { color: var(--cyan); }
-    .sohel-radar-status {
+    .align-card-ac { width: 5px; flex-shrink: 0; }
+    .align-card--fire .align-card-ac { background: linear-gradient(180deg, #ff5555, #aa0000); }
+    .align-card--heat .align-card-ac { background: linear-gradient(180deg, #ffb020, #cc5500); }
+    .align-card--live .align-card-ac { background: linear-gradient(180deg, #39ff14, #0a6b0a); }
+    .align-card-body { flex: 1; padding: 14px 14px 14px 12px; min-width: 0; }
+    .align-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .align-sym { font-family: "Bebas Neue", sans-serif; font-size: 1.9rem; letter-spacing: 0.05em; line-height: 1; }
+    .align-card--fire .align-sym { color: #ff8c42; text-shadow: 0 0 14px rgba(255,100,60,0.35); }
+    .align-card--heat .align-sym { color: #ffb84d; }
+    .align-card--live .align-sym { color: var(--lime); }
+    .align-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .align-tag {
       font-family: "Space Mono", monospace;
-      font-size: 0.55rem;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      padding: 5px 10px;
-      border-radius: 8px;
-      border: 1px solid currentColor;
-    }
-    .sohel-radar-card--fire .sohel-radar-status { color: #ff5555; background: rgba(255,85,85,0.12); }
-    .sohel-radar-card--heat .sohel-radar-status { color: #ff9500; background: rgba(255,149,0,0.12); }
-    .sohel-radar-card--watch .sohel-radar-status { color: var(--muted); border-color: rgba(200,200,210,0.35); }
-    .sohel-radar-meta {
-      font-family: "Space Mono", monospace;
-      font-size: 0.58rem;
-      color: var(--muted);
-      letter-spacing: 0.06em;
-      margin-top: 6px;
-    }
-    .sohel-score-ring {
-      --ring: #39ff14;
-      width: 54px;
-      height: 54px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      background: conic-gradient(var(--ring) calc(var(--p, 0) * 1%), rgba(255,255,255,0.07) 0);
-      display: grid;
-      place-items: center;
-      position: relative;
-    }
-    .sohel-radar-card--fire .sohel-score-ring { --ring: #ff5555; }
-    .sohel-radar-card--heat .sohel-score-ring { --ring: #ff9500; }
-    .sohel-radar-card--watch .sohel-score-ring { --ring: rgba(0,240,255,0.65); }
-    .sohel-score-ring::after {
-      content: "";
-      position: absolute;
-      inset: 5px;
-      border-radius: 50%;
-      background: #0e0e10;
-    }
-    .sohel-score-ring span {
-      position: relative;
-      z-index: 1;
-      font-family: "Bebas Neue", sans-serif;
-      font-size: 1.2rem;
-      color: var(--text);
-    }
-    .sohel-radar-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
-    .sohel-badge {
-      font-family: "Space Mono", monospace;
-      font-size: 0.52rem;
+      font-size: 0.48rem;
       font-weight: 700;
       letter-spacing: 0.06em;
       padding: 4px 8px;
       border-radius: 6px;
       border: 1px solid currentColor;
-      line-height: 1.2;
     }
-    .sohel-badge--go { color: #ff4444; background: rgba(255,68,68,0.12); }
-    .sohel-badge--heat { color: #ff9500; background: rgba(255,149,0,0.12); }
-    .sohel-badge--cat { color: var(--amber); background: rgba(255,149,0,0.15); }
-    .sohel-badge--play { color: var(--cyan); background: rgba(0,240,255,0.1); }
-    .sohel-badge--dir { color: var(--magenta); background: rgba(255,0,255,0.08); }
-    .sohel-radar-score--na .sohel-score-ring {
-      background: rgba(255,255,255,0.06);
-    }
-    .sohel-radar-score--na .sohel-score-ring::after { background: #121214; }
-    .sohel-radar-score--na .sohel-score-ring span { color: var(--muted); font-size: 1rem; }
-    .sohel-radar-price-row {
-      display: flex;
-      align-items: baseline;
-      flex-wrap: wrap;
-      gap: 8px 12px;
-      margin-top: 10px;
-    }
-    .sohel-radar-price { font-family: "Chakra Petch", sans-serif; font-size: 1.35rem; font-weight: 700; color: #fff; }
-    .sohel-radar-chg { font-family: "Space Mono", monospace; font-size: 0.72rem; font-weight: 600; }
-    .sohel-radar-chg--up { color: #39ff14; }
-    .sohel-radar-chg--down { color: #ff5555; }
-    .sohel-radar-chg--flat { color: var(--muted); }
-    .sohel-ind-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 10px;
-    }
-    .sohel-ind-tag {
-      font-family: "Space Mono", monospace;
-      font-size: 0.5rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      padding: 4px 7px;
-      border-radius: 5px;
-      border: 1px solid rgba(255,255,255,0.12);
-    }
-    .sohel-ind-tag.tag-vol-bull { color: #39ff14; border-color: rgba(57,255,20,0.35); background: rgba(57,255,20,0.08); }
-    .sohel-ind-tag.tag-vol { color: #a8e6ff; border-color: rgba(0,240,255,0.25); }
-    .sohel-ind-tag.tag-vol-bear { color: #ff6b6b; border-color: rgba(255,80,80,0.35); background: rgba(255,80,80,0.08); }
-    .sohel-ind-tag.tag-macd-bull { color: #39ff14; border-color: rgba(57,255,20,0.35); background: rgba(57,255,20,0.08); }
-    .sohel-ind-tag.tag-macd-bear { color: #ff5555; border-color: rgba(255,85,85,0.35); background: rgba(255,85,85,0.08); }
-    .sohel-ind-tag.tag-adx { color: #c4b5fd; border-color: rgba(196,181,253,0.35); }
-    .sohel-ind-tag.tag-adx-chop { color: #ffcc00; border-color: rgba(255,204,0,0.4); background: rgba(255,204,0,0.08); }
-    .sohel-ind-tag.tag-rsi { color: #f0abfc; border-color: rgba(240,171,252,0.35); }
-    .sohel-levels-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 8px;
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid rgba(255,255,255,0.08);
-    }
-    .sohel-lv { text-align: center; padding: 8px 4px; border-radius: 10px; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.06); }
-    .sohel-lv-lab {
-      display: block;
-      font-family: "Space Mono", monospace;
-      font-size: 0.48rem;
-      letter-spacing: 0.14em;
-      color: var(--muted);
-      margin-bottom: 4px;
-    }
-    .sohel-lv-val { font-family: "Chakra Petch", sans-serif; font-size: 0.95rem; font-weight: 700; color: #fff; }
-    .sohel-lv-sub { font-size: 0.58rem; color: var(--muted); margin-top: 2px; }
-    .sohel-lv--target .sohel-lv-val { color: #39ff14; }
-    .sohel-lv--stop .sohel-lv-val { color: #ff5555; }
-    .sohel-opt-playbar {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr 1fr;
-      gap: 6px;
-      margin-top: 12px;
-      padding: 10px 8px;
-      border-radius: 12px;
-      background: rgba(0,0,0,0.45);
-      border: 1px solid rgba(0, 240, 255, 0.2);
-    }
+    .align-tag--go { color: var(--lime); background: rgba(57,255,20,0.12); border-color: var(--lime); }
+    .align-tag--heat { color: var(--amber); background: rgba(255,149,0,0.12); }
+    .align-tag--setup { color: var(--cyan); background: rgba(0,240,255,0.08); }
+    .align-meta { font-family: "Space Mono", monospace; font-size: 0.55rem; color: var(--muted); margin-top: 6px; }
+    .align-price-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-top: 10px; }
+    .align-price { font-size: 1.4rem; font-weight: 700; }
+    .align-chg { font-family: "Space Mono", monospace; font-size: 0.7rem; font-weight: 600; }
+    .align-chg-up { color: var(--lime); }
+    .align-chg-down { color: var(--red); }
+    .align-chg-flat { color: var(--muted); }
+    .align-prog { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.08); margin-top: 10px; overflow: hidden; }
+    .align-prog > i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--cyan), var(--lime)); }
+    .align-card--fire .align-prog > i { background: linear-gradient(90deg, #ff4444, #ff8888); }
+    .align-card--heat .align-prog > i { background: linear-gradient(90deg, #ff8800, #ffcc66); }
+    .align-ind-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+    .sohel-ind-tag { font-family: "Space Mono", monospace; font-size: 0.48rem; padding: 3px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.12); }
+    .sohel-ind-tag.tag-vol-bull { color: var(--lime); border-color: rgba(57,255,20,0.35); }
+    .sohel-ind-tag.tag-vol { color: #a8e6ff; }
+    .sohel-ind-tag.tag-vol-bear { color: #ff6b6b; }
+    .sohel-ind-tag.tag-macd-bull { color: var(--lime); }
+    .sohel-ind-tag.tag-macd-bear { color: #ff5555; }
+    .sohel-ind-tag.tag-adx { color: #c4b5fd; }
+    .sohel-ind-tag.tag-adx-chop { color: #ffcc00; }
+    .sohel-ind-tag.tag-rsi { color: #f0abfc; }
+    .sohel-levels-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
+    .sohel-lv { text-align: center; padding: 8px 4px; border-radius: 10px; background: rgba(0,0,0,0.35); }
+    .sohel-lv-lab { display: block; font-size: 0.45rem; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 3px; }
+    .sohel-lv-val { font-size: 0.9rem; font-weight: 700; }
+    .sohel-lv-sub { font-size: 0.55rem; color: var(--muted); margin-top: 2px; }
+    .sohel-lv--target .sohel-lv-val { color: var(--lime); }
+    .sohel-lv--stop .sohel-lv-val { color: var(--red); }
+    .sohel-opt-playbar { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 4px; margin-top: 12px; padding: 10px 6px; border-radius: 12px; background: rgba(0,0,0,0.45); border: 1px solid rgba(0,240,255,0.2); }
     .sohel-opt-cell { text-align: center; }
-    .sohel-opt-lab {
-      font-family: "Space Mono", monospace;
-      font-size: 0.45rem;
+    .sohel-opt-lab { font-size: 0.4rem; letter-spacing: 0.1em; color: var(--muted); display: block; margin-bottom: 3px; }
+    .sohel-opt-val { font-size: 0.72rem; font-weight: 600; color: var(--lime); }
+    .align-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+    .align-btn-enter {
+      min-height: 52px;
+      border-radius: 14px;
+      border: none;
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 1.05rem;
+      letter-spacing: 0.14em;
+      cursor: pointer;
+      background: linear-gradient(180deg, #3aff3a, #18a018);
+      color: #050505;
+      box-shadow: 0 0 22px rgba(57,255,20,0.35);
+    }
+    .align-btn-wait {
+      min-height: 48px;
+      border-radius: 14px;
+      background: transparent;
+      border: 2px solid var(--amber);
+      color: var(--amber);
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 0.95rem;
       letter-spacing: 0.12em;
-      color: var(--muted);
-      display: block;
-      margin-bottom: 4px;
+      cursor: pointer;
     }
-    .sohel-opt-val { font-family: "Chakra Petch", sans-serif; font-size: 0.78rem; font-weight: 600; color: var(--lime); }
-    .sohel-radar-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 12px;
-    }
-    .sohel-radar-btn {
-      flex: 1;
+    .align-btn-skip {
       min-height: 44px;
       border-radius: 12px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--muted);
       font-family: "Bebas Neue", sans-serif;
       font-size: 0.85rem;
       letter-spacing: 0.1em;
       cursor: pointer;
-      border: 2px solid transparent;
     }
-    .sohel-radar-btn--primary {
-      background: linear-gradient(180deg, #2aff2a, #1a991a);
-      color: #0a0a0a;
-      border-color: #39ff14;
-      box-shadow: 0 0 16px rgba(57,255,20,0.25);
+
+    .align-refresh {
+      display: block;
+      width: 100%;
+      max-width: 320px;
+      margin: 8px auto 0;
+      padding: 12px;
+      border-radius: 14px;
+      border: 2px solid rgba(0,240,255,0.4);
+      background: rgba(0,240,255,0.08);
+      color: var(--cyan);
+      font-family: "Bebas Neue", sans-serif;
+      letter-spacing: 0.12em;
+      cursor: pointer;
     }
-    .sohel-radar-btn--secondary {
-      background: transparent;
-      color: #ff9500;
-      border-color: rgba(255,149,0,0.6);
-    }
-    .sohel-radar-btn--ghost {
-      background: rgba(255,255,255,0.04);
-      color: var(--muted);
-      border-color: rgba(255,255,255,0.12);
-    }
-    .sohel-alerts-list, .sohel-trades-list { display: flex; flex-direction: column; gap: 14px; }
-    .ap-drive-card {
+
+    .tm-open-card {
       border: 2px solid rgba(57, 255, 20, 0.35);
       border-radius: 16px;
       padding: 16px;
-      font-size: 0.95rem;
-      line-height: 1.4;
-      background: var(--card);
-    }
-    .ap-time {
-      font-family: "Space Mono", monospace;
-      font-size: 0.72rem;
-      color: var(--cyan);
-      letter-spacing: 0.04em;
-      margin-bottom: 6px;
-    }
-    .ap-contract {
-      font-family: "Space Mono", monospace;
-      font-size: 0.68rem;
-      color: var(--lime);
-      letter-spacing: 0.03em;
-      margin-bottom: 10px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid rgba(57, 255, 20, 0.2);
-    }
-    .ap-hist { margin-top: 10px; font-size: 0.78rem; color: var(--muted); border-top: 1px solid rgba(0,240,255,0.15); padding-top: 10px; }
-    .tm-muted { color: var(--muted); font-size: 0.8rem; }
-    .tm-open-card {
-      border: 2px solid rgba(255, 149, 0, 0.45);
-      border-radius: 16px;
-      padding: 16px;
-      background: var(--card);
+      background: rgba(16,16,18,0.98);
     }
     .tm-row { font-size: 1rem; margin-bottom: 8px; }
     .tm-exit-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
     .tm-exit-row input, .tm-exit-row select {
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid rgba(0, 240, 255, 0.3);
-      background: #0a0a0a;
-      color: var(--text);
-      font-size: 1rem;
-      min-height: 48px;
+      padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(0,240,255,0.3);
+      background: #0a0a0a; color: var(--text); font-size: 1rem; min-height: 48px;
     }
-    .tm-btn-enter, .tm-btn-exit, .tm-btn-action {
-      min-height: 48px;
-      padding: 0 16px;
-      border-radius: 12px;
-      border: 2px solid var(--lime);
-      background: rgba(57, 255, 20, 0.12);
-      color: var(--lime);
+    .tm-btn-action, .tm-btn-exit, .tm-btn-enter {
+      min-height: 48px; padding: 0 14px; border-radius: 12px; cursor: pointer;
+      font-family: "Bebas Neue", sans-serif; letter-spacing: 0.06em; font-size: 0.85rem;
+    }
+    .tm-btn-action { border: 2px solid var(--cyan); color: var(--cyan); background: rgba(0,240,255,0.08); margin-right: 6px; margin-bottom: 6px; }
+    .tm-btn-exit { border: 2px solid var(--amber); color: var(--amber); background: rgba(255,149,0,0.1); }
+    .tm-btn-enter { border: 2px solid var(--lime); color: var(--lime); background: rgba(57,255,20,0.12); }
+    .tm-muted { color: var(--muted); font-size: 0.8rem; }
+
+    .ap-drive-card {
+      border: 2px solid rgba(57, 255, 20, 0.3);
+      border-radius: 16px;
+      padding: 16px;
+      background: var(--card);
+      margin-bottom: 12px;
+    }
+    .ap-time { font-family: "Space Mono", monospace; font-size: 0.68rem; color: var(--cyan); margin-bottom: 6px; }
+    .ap-contract { font-size: 0.65rem; color: var(--lime); margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid rgba(57,255,20,0.15); }
+    .ap-hist { margin-top: 10px; font-size: 0.78rem; color: var(--muted); border-top: 1px solid rgba(0,240,255,0.12); padding-top: 10px; }
+
+    .align-bottom-nav {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: calc(var(--health-h) + 8px + var(--safe-b));
+      display: flex;
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 0 10px;
+      gap: 8px;
+      z-index: 150;
+    }
+    .align-bottom-nav button {
+      flex: 1;
+      min-height: var(--nav-h);
+      border-radius: 14px;
+      border: 2px solid rgba(0,240,255,0.35);
+      background: rgba(16,16,18,0.96);
+      color: var(--muted);
       font-family: "Bebas Neue", sans-serif;
-      letter-spacing: 0.08em;
+      font-size: 0.82rem;
+      letter-spacing: 0.1em;
       cursor: pointer;
-      font-size: 0.95rem;
     }
-    .tm-btn-exit { border-color: var(--amber); color: var(--amber); background: rgba(255, 149, 0, 0.1); }
-    .tm-btn-action { border-color: var(--cyan); color: var(--cyan); background: rgba(0, 240, 255, 0.08); margin-right: 8px; margin-bottom: 6px; }
-    .tm-trade-wrap { margin-top: 12px; }
+    .align-bottom-nav button.active {
+      color: var(--lime);
+      border-color: rgba(57,255,20,0.65);
+      box-shadow: 0 0 18px rgba(57,255,20,0.2);
+    }
+    .align-bottom-nav button#nav-learning.active {
+      color: var(--magenta);
+      border-color: rgba(255,0,255,0.55);
+      box-shadow: 0 0 16px rgba(255,0,255,0.18);
+    }
+
+    /* SOHELATOR blueprint — LEARNING tab with AI progress tracking (Prompt 16) */
+    .learn-hero {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 1.35rem;
+      letter-spacing: 0.14em;
+      text-align: center;
+      color: var(--cyan);
+      text-shadow: 0 0 18px rgba(0,240,255,0.3);
+      margin-bottom: 16px;
+      line-height: 1.2;
+    }
+    .learn-card {
+      background: var(--card);
+      border: 1px solid rgba(0,240,255,0.2);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+    }
+    .learn-card h2 {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 0.95rem;
+      letter-spacing: 0.12em;
+      color: var(--magenta);
+      margin-bottom: 12px;
+    }
+    .learn-block {
+      font-size: 0.88rem;
+      line-height: 1.45;
+      color: var(--text);
+      margin-bottom: 14px;
+    }
+    .learn-block:last-child { margin-bottom: 0; }
+    .learn-k { font-family: "Space Mono", monospace; font-size: 0.55rem; letter-spacing: 0.1em; color: var(--amber); margin-bottom: 4px; }
+    .learn-ul { margin: 0; padding-left: 1.1rem; color: var(--muted); }
+    .learn-ul li { margin-bottom: 6px; }
+    .learn-ai-box {
+      background: rgba(0,0,0,0.45);
+      border-radius: 12px;
+      padding: 12px;
+      border: 1px solid rgba(57,255,20,0.2);
+      font-size: 0.84rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .learn-table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      margin: 0 -4px;
+    }
+    .learn-table {
+      width: 100%;
+      min-width: 420px;
+      border-collapse: collapse;
+      font-family: "Space Mono", monospace;
+      font-size: 0.62rem;
+    }
+    .learn-table th, .learn-table td {
+      padding: 10px 8px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .learn-table th {
+      color: var(--cyan);
+      letter-spacing: 0.06em;
+      font-weight: 700;
+    }
+    .learn-table td { color: var(--text); }
+    .learn-trend { font-size: 1.1rem; font-weight: 700; }
+    .learn-trend--up { color: var(--lime); }
+    .learn-trend--down { color: var(--red); }
+    .learn-trend--flat { color: var(--amber); }
+
     .sohel-health {
       position: fixed;
-      left: 12px;
-      right: 12px;
-      bottom: calc(10px + var(--safe-b));
-      padding: 12px 14px;
-      border-radius: 14px;
+      left: 10px;
+      right: 10px;
+      bottom: var(--safe-b);
+      min-height: var(--health-h);
+      padding: 8px 12px;
+      border-radius: 12px;
       border: 1px solid rgba(57, 255, 20, 0.35);
       background: rgba(10, 10, 10, 0.94);
       font-family: "Space Mono", monospace;
-      font-size: 0.62rem;
-      line-height: 1.5;
+      font-size: 0.55rem;
+      line-height: 1.4;
       color: #bef264;
-      z-index: 100;
+      z-index: 160;
       text-align: center;
     }
-    .sohel-health.sohel-health--stale {
-      border-color: rgba(255, 149, 0, 0.5);
-      color: var(--amber);
-    }
-    .hint { color: var(--muted); font-size: 0.9rem; }
-    @keyframes neon-pulse {
-      0%, 100% { box-shadow: 0 0 0 1px rgba(57, 255, 20, 0.1), 0 8px 28px rgba(0,0,0,0.5); }
-      50% { box-shadow: 0 0 0 1px rgba(0, 240, 255, 0.18), 0 8px 32px rgba(57, 255, 20, 0.06); }
-    }
+    .sohel-health.sohel-health--stale { border-color: rgba(255,149,0,0.5); color: var(--amber); }
+
+    .hint { color: var(--muted); font-size: 0.88rem; padding: 12px; }
+    @keyframes regime-flash { 0% { filter: brightness(1.25); } 100% { filter: brightness(1); } }
     @keyframes neon-flash {
-      0% { box-shadow: 0 0 0 2px rgba(57, 255, 20, 0.75), 0 0 24px rgba(0, 240, 255, 0.35); border-color: rgba(57, 255, 20, 0.95); }
-      100% { box-shadow: none; border-color: rgba(57, 255, 20, 0.35); }
+      0% { box-shadow: 0 0 0 2px rgba(57, 255, 20, 0.7); }
+      100% { box-shadow: none; }
     }
-    @keyframes regime-flash {
-      0% { filter: brightness(1.25); }
-      100% { filter: brightness(1); }
-    }
-    @keyframes neon-amber-pulse {
-      0%, 100% { box-shadow: 0 0 0 1px rgba(255, 149, 0, 0.4); }
-      50% { box-shadow: 0 0 20px rgba(255, 149, 0, 0.35); }
-    }
-    #sohel-regime-header.regime-flash { animation: regime-flash 0.85s ease-out; }
-    .tm-open-card.neon-amber-pulse { animation: neon-amber-pulse 0.65s ease-out; }
+    @keyframes neon-amber-pulse { 0%, 100% { box-shadow: 0 0 0 1px rgba(255,149,0,0.4); } 50% { box-shadow: 0 0 18px rgba(255,149,0,0.3); } }
     .ap-drive-card.neon-flash { animation: neon-flash 0.75s ease-out; }
+    .tm-open-card.neon-amber-pulse { animation: neon-amber-pulse 0.65s ease-out; }
   </style>
 </head>
-<body class="sohel-dark">
-  <div class="sohel-header">SOHELATOR</div>
-
-  <!-- Top tab bar -->
-  <div class="sohel-tabs">
-    <button id="tab-home" class="sohel-tab active">HOME</button>
-    <button id="tab-alerts" class="sohel-tab">ALERTS</button>
-    <button id="tab-trades" class="sohel-tab">OPEN TRADES</button>
-  </div>
-
-  <!-- HOME PAGE -->
-  <div id="home-page" class="sohel-page active">
-    <div class="sohel-regime">
-      <h1>TODAY’S REGIME ANALYSIS</h1>
-      <div id="regime-content"></div>
+<body class="align-v3">
+  <!-- SOHELATOR blueprint — full ALIGN.ICS v3 template adoption (Prompt 15) -->
+  <!-- SOHELATOR blueprint — LEARNING tab with AI progress tracking (Prompt 16) -->
+  <header class="align-top">
+    <div class="align-brand">SOHELATOR</div>
+    <div class="align-strip" aria-label="Market strip">
+      <span>SPY <span class="v" id="hdr-spy">—</span></span>
+      <span>VIX <span class="v" id="hdr-vix">—</span></span>
+      <span id="hdr-risk">RISK —</span>
+      <span class="align-live-pill" id="hdr-live-pill">LIVE</span>
     </div>
-    <div class="sohel-watchlist">
-      <h2>WATCHLIST RADAR</h2>
-      <div id="watchlist-grid" class="sohel-wl-stack"></div>
+    <!-- SOHELATOR blueprint — LEARNING tab with AI progress tracking (Prompt 16): 4th tab = LEARNING -->
+    <div class="align-top-tabs" role="tablist" aria-label="Main sections">
+      <button type="button" class="align-top-tab active" data-sohel-top-tab="live" id="top-tab-live">LIVE</button>
+      <button type="button" class="align-top-tab" data-sohel-top-tab="history" id="top-tab-history">HISTORY</button>
+      <button type="button" class="align-top-tab" data-sohel-top-tab="regime" id="top-tab-regime">REGIME</button>
+      <button type="button" class="align-top-tab" data-sohel-top-tab="learning" id="top-tab-learning">LEARNING</button>
     </div>
+  </header>
+
+  <div class="align-regime-panel" id="align-regime-panel">
+    <div id="align-regime-inner"></div>
   </div>
 
-  <!-- ALERTS PAGE -->
-  <div id="alerts-page" class="sohel-page">
-    <h2>ALL ALERTS</h2>
-    <div id="alerts-list" class="sohel-alerts-list"></div>
-  </div>
+  <main id="page-live" class="align-main align-page active">
+    <section class="align-sec align-sec--fire" aria-labelledby="firing-title">
+      <div class="align-sec-bar" id="firing-title">
+        <span>🔥 FIRING</span>
+        <span class="sub" id="firing-sub">0 ACTIVE</span>
+      </div>
+      <div class="align-sec-cards" id="align-firing-cards"></div>
+    </section>
+    <section class="align-sec align-sec--heat" aria-labelledby="heating-title">
+      <div class="align-sec-bar" id="heating-title">
+        <span>🌡 HEATING</span>
+        <span class="sub" id="heating-sub">0 BUILDING</span>
+      </div>
+      <div class="align-sec-cards" id="align-heating-cards"></div>
+    </section>
+    <section class="align-sec align-sec--live" aria-labelledby="live-title">
+      <div class="align-sec-bar" id="live-title">
+        <span>● LIVE</span>
+        <span class="sub" id="live-sub">0 OPEN</span>
+      </div>
+      <div class="align-sec-cards" id="align-live-list"></div>
+    </section>
+    <button type="button" class="align-refresh" id="btn-align-refresh">REFRESH SCAN</button>
+  </main>
 
-  <!-- OPEN TRADES PAGE -->
-  <div id="trades-page" class="sohel-page">
-    <h2>OPEN TRADES</h2>
-    <div id="open-trades-list" class="sohel-trades-list"></div>
-  </div>
+  <main id="page-history" class="align-main align-page">
+    <h2 class="sohel-subh" style="margin-top:0;">HISTORY</h2>
+    <p class="hint" style="padding:0 0 12px;">Chronological alerts — mark ENTERED to log a trade.</p>
+    <div id="history-list"></div>
+  </main>
 
-  <!-- Health banner -->
+  <main id="learning-page" class="align-main align-page">
+    <h1 class="learn-hero">NIGHTLY AI LEARNING REPORT</h1>
+    <section class="learn-card" aria-labelledby="learn-latest-h">
+      <h2 id="learn-latest-h">LATEST REPORT</h2>
+      <div id="learning-latest-body" class="hint" style="padding:0;">Loading…</div>
+    </section>
+    <section class="learn-card" aria-labelledby="learn-hist-h">
+      <h2 id="learn-hist-h">HISTORICAL PROGRESS</h2>
+      <div class="learn-table-wrap">
+        <table class="learn-table" id="learning-progress-table" aria-label="Historical progress">
+          <thead>
+            <tr>
+              <th scope="col">DATE</th>
+              <th scope="col">WIN %</th>
+              <th scope="col">TOTAL R*</th>
+              <th scope="col">EV %</th>
+              <th scope="col">SETUPS</th>
+              <th scope="col">TREND</th>
+            </tr>
+          </thead>
+          <tbody id="learning-progress-tbody">
+            <tr><td colspan="6" class="hint">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="hint" style="padding:8px 0 0;font-size:0.65rem;">*TOTAL R / EV derived from EOD estimated option return fields (proxy).</p>
+    </section>
+    <button type="button" class="align-refresh" id="btn-learning-refresh">REFRESH LEARNING</button>
+  </main>
+
+  <nav class="align-bottom-nav" aria-label="Primary">
+    <button type="button" id="nav-live" class="active">LIVE</button>
+    <button type="button" id="nav-history">HISTORY</button>
+    <button type="button" id="nav-learning">LEARNING</button>
+  </nav>
+
   <div id="health-banner" class="sohel-health"></div>
 
-  <!-- UI/JS deploy: (1) bump version in package.json (e.g. 1.1.1→1.1.2) — scripts/sync-version.js handles the rest automatically. -->
-  <script src="/ignition.js?v=1.1.4"></script>
+  <script src="/ignition.js?v=1.1.6"></script>
 </body>
 </html>

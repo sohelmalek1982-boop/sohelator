@@ -200,8 +200,9 @@ window.calculateIgnition = calculateIgnition;
 
 
 /**
- * Verbatim 3-tab DOM: #tab-home|alerts|trades, #regime-content, #watchlist-grid,
- * #alerts-list, #open-trades-list, #health-banner
+ * ALIGN.ICS v3 DOM: #page-live|history, #align-regime-inner, #align-firing-cards,
+ * #align-heating-cards, #align-live-list, #history-list, #health-banner
+ * SOHELATOR blueprint — full ALIGN.ICS v3 template adoption (Prompt 15)
  */
 (function initSohelatorVerbatimNeon() {
   var SCAN_URL = "/api/scan";
@@ -348,35 +349,87 @@ window.calculateIgnition = calculateIgnition;
       });
   }
 
-  function selectTab(which) {
-    var tabs = [
-      { btn: "tab-home", page: "home-page", key: "home" },
-      { btn: "tab-alerts", page: "alerts-page", key: "alerts" },
-      { btn: "tab-trades", page: "trades-page", key: "trades" },
-    ];
-    tabs.forEach(function (t) {
-      var b = document.getElementById(t.btn);
-      var p = document.getElementById(t.page);
-      var on = t.key === which;
-      if (b) b.classList.toggle("active", on);
-      if (p) p.classList.toggle("active", on);
-    });
+  /* SOHELATOR blueprint — full ALIGN.ICS v3 template adoption (Prompt 15) */
+  function refreshHeaderQuotes() {
+    tradierApi("/v1/markets/quotes", "GET", {
+      symbols: "SPY,VIX",
+      greeks: "false",
+    })
+      .then(function (qd) {
+        var quotes = normList(qd.quotes && (qd.quotes.quote || qd.quotes));
+        quotes.forEach(function (q) {
+          var sym = String(q.symbol || "")
+            .toUpperCase()
+            .replace(/^\$/, "");
+          var last = parseFloat(q.last || q.close || q.bid || NaN);
+          var s = isFinite(last)
+            ? sym.indexOf("VIX") !== -1
+              ? last.toFixed(2)
+              : "$" + last.toFixed(2)
+            : "—";
+          if (sym === "SPY") {
+            var el = document.getElementById("hdr-spy");
+            if (el) el.textContent = s;
+          }
+          if (sym === "VIX") {
+            var e2 = document.getElementById("hdr-vix");
+            if (e2) e2.textContent = s;
+          }
+        });
+      })
+      .catch(function () {});
+  }
+
+  function updateRiskPillFromScan(j) {
+    var el = document.getElementById("hdr-risk");
+    if (!el) return;
+    if (!j || j.success === false || !Array.isArray(j.alerts)) {
+      el.textContent = "RISK —";
+      return;
+    }
+    var maxS = j.alerts.reduce(function (m, a) {
+      return Math.max(m, Number(a.score) || 0);
+    }, 0);
+    if (maxS >= 80) el.textContent = "RISK ON";
+    else if (maxS >= 60) el.textContent = "WATCHING";
+    else el.textContent = "RISK OFF";
+  }
+
+  function updateHdrLiveFromPanel() {
+    var pill = document.getElementById("hdr-live-pill");
+    if (!pill) return;
+    pill.textContent = scanStatusOk ? "LIVE" : "WARN";
+    pill.classList.toggle("align-live-pill--warn", !scanStatusOk);
+  }
+
+  function showNavPage(which) {
+    var live = document.getElementById("page-live");
+    var hist = document.getElementById("page-history");
+    var bL = document.getElementById("nav-live");
+    var bH = document.getElementById("nav-history");
+    var onL = which === "live";
+    if (live) live.classList.toggle("active", onL);
+    if (hist) hist.classList.toggle("active", !onL);
+    if (bL) bL.classList.toggle("active", onL);
+    if (bH) bH.classList.toggle("active", !onL);
   }
 
   window.sohelSelectMainTab = function (k) {
-    selectTab(k);
+    if (k === "alerts" || k === "history") showNavPage("history");
+    else showNavPage("live");
   };
 
-  function bindTabs() {
-    [["tab-home", "home"], ["tab-alerts", "alerts"], ["tab-trades", "trades"]].forEach(
-      function (pair) {
-        var el = document.getElementById(pair[0]);
-        if (el)
-          el.addEventListener("click", function () {
-            selectTab(pair[1]);
-          });
-      }
-    );
+  function bindNav() {
+    var l = document.getElementById("nav-live");
+    var h = document.getElementById("nav-history");
+    if (l)
+      l.addEventListener("click", function () {
+        showNavPage("live");
+      });
+    if (h)
+      h.addEventListener("click", function () {
+        showNavPage("history");
+      });
   }
 
   function grokHtml(j) {
@@ -421,131 +474,17 @@ window.calculateIgnition = calculateIgnition;
   }
 
   function renderHomeFromScan(j) {
-    var regimeEl = document.getElementById("regime-content");
-    var grid = document.getElementById("watchlist-grid");
-    if (!regimeEl || !grid) return;
+    /* SOHELATOR blueprint — full ALIGN.ICS v3 template adoption (Prompt 15): regime + FIRING/HEATING buckets */
+    var regimeEl = document.getElementById("align-regime-inner");
+    var fireHost = document.getElementById("align-firing-cards");
+    var heatHost = document.getElementById("align-heating-cards");
+    var fireSub = document.getElementById("firing-sub");
+    var heatSub = document.getElementById("heating-sub");
+    if (!regimeEl || !fireHost || !heatHost) return;
 
-    if (!j || j.success === false) {
-      regimeEl.innerHTML =
-        '<div id="sohel-regime-header"></div><p class="hint">' +
-        esc(j && j.error ? "Scanner: " + String(j.error) : "Waiting for scanner…") +
-        "</p>";
-      grid.innerHTML = '<p class="hint">No watchlist data.</p>';
-      return;
-    }
-
-    var meta = j.meta || {};
-    var b7 = meta.backtest7d;
-    var gh = meta.grokHealth || "—";
-    var st = j.status || "ok";
-    var pill =
-      st === "after_hours"
-        ? "AFTER HOURS"
-        : st === "outside_window"
-          ? "OUTSIDE 8–4 ET"
-          : String(j.mode || "cheap").toUpperCase();
-
-    var lines = [];
-    lines.push(
-      "Mode: " + String(j.mode || "cheap") + (st === "outside_window" ? " (cheap outside window)" : "")
-    );
-    if (meta.optionsSessionNote) lines.push(String(meta.optionsSessionNote));
-    lines.push("Alerts this pass: " + (Array.isArray(j.alerts) ? j.alerts.length : 0));
-    if (b7) {
-      lines.push(
-        "7d EV " +
-          (b7.ev != null ? Number(b7.ev).toFixed(3) : "—") +
-          " · WR " +
-          (b7.winRate != null ? Math.round(b7.winRate * 100) / 100 : "—") +
-          " · setups " +
-          (b7.totalSetups != null ? b7.totalSetups : "—")
-      );
-    }
-    lines.push("Grok health: " + gh);
-    if (meta.minScore != null) lines.push("Min score: " + meta.minScore);
-
-    var metricsHtml = "";
-    if (b7) {
-      metricsHtml =
-        '<div class="sohel-metrics">' +
-        '<div class="sohel-metric"><span class="ml">7d EV</span><div class="mv">' +
-        esc(b7.ev != null ? Number(b7.ev).toFixed(2) : "—") +
-        '</div></div><div class="sohel-metric"><span class="ml">Win %</span><div class="mv">' +
-        esc(b7.winRate != null ? Math.round(b7.winRate * 100) + "%" : "—") +
-        '</div></div><div class="sohel-metric"><span class="ml">Setups</span><div class="mv">' +
-        esc(b7.totalSetups != null ? String(b7.totalSetups) : "—") +
-        "</div></div></div>";
-    }
-
-    var scanBlock =
-      '<div class="regime-scan"><h3 class="sohel-subh">Scanner summary</h3><p class="sohel-grok-body" style="margin-bottom:12px;">' +
-      lines.map(function (L) {
-        return esc(L);
-      }).join("<br/>") +
-      "</p>" +
-      metricsHtml +
-      "</div>";
-
-    regimeEl.innerHTML =
-      '<div id="sohel-regime-header" class="sohel-regime-top"><span class="sohel-pill">' +
-      esc(pill) +
-      '</span></div><div id="regime-spy-slot" class="sohel-spy-slot"><p class="hint">Loading SPY levels…</p></div>' +
-      grokHtml(j) +
-      scanBlock;
-
-    refreshSpyLevels();
-
-    var uni =
-      Array.isArray(meta.universeSymbols) && meta.universeSymbols.length
-        ? meta.universeSymbols
-        : null;
-
-    var alerts = Array.isArray(j.alerts) ? j.alerts : [];
-
-    if (st === "after_hours") {
-      grid.innerHTML =
-        '<p class="hint">' +
-        esc(
-          meta.optionsSessionNote ||
-            "Equity options trade 9:30–16:00 ET Mon–Fri — watchlist scan paused."
-        ) +
-        "</p>";
-      return;
-    }
-    var bySym = {};
-    alerts.forEach(function (a) {
-      var k = String(a.symbol || "")
-        .toUpperCase()
-        .replace(/[^A-Z0-9.-]/g, "")
-        .slice(0, 8);
-      if (!k) return;
-      if (!bySym[k] || (Number(a.score) || 0) > (Number(bySym[k].score) || 0)) {
-        bySym[k] = a;
-      }
-    });
-
-    var FIRING_SCORE = 78;
-    var HEATING_MIN = 65;
-
-    function cardTierForScore(sc, has) {
-      if (!has) return "watch";
-      if (sc >= FIRING_SCORE) return "fire";
-      if (sc >= HEATING_MIN) return "heat";
-      return "watch";
-    }
-
-    function watchingSinceLine(a) {
-      if (!a || !a.alertedAtIso) return "";
-      var ms = Date.parse(a.alertedAtIso);
-      if (!ms) return "";
-      var s = new Intl.DateTimeFormat("en-US", {
-        timeZone: "America/New_York",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      }).format(new Date(ms));
-      return "SIGNAL · " + s + " ET";
-    }
+    var FIRING_MIN = 80;
+    var HEATING_MIN = 60;
+    var HEATING_MAX = 79;
 
     function formatExpShort(iso) {
       if (!iso) return "—";
@@ -570,6 +509,19 @@ window.calculateIgnition = calculateIgnition;
       return (p >= 0 ? "+" : "") + p.toFixed(1) + "%";
     }
 
+    function watchingSinceLine(a) {
+      if (!a || !a.alertedAtIso) return "";
+      var ms = Date.parse(a.alertedAtIso);
+      if (!ms) return "";
+      var s = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }).format(new Date(ms));
+      return "WATCHING SINCE " + s + " ET";
+    }
+
     function indTagsHtml(a) {
       if (!a || !a.details) return "";
       var d = a.details;
@@ -577,10 +529,7 @@ window.calculateIgnition = calculateIgnition;
       var vr = Number(d.volRatio);
       if (isFinite(vr)) {
         if (vr >= 2)
-          tags.push({
-            cls: "tag-vol-bull",
-            t: "VOL " + vr.toFixed(1) + "x",
-          });
+          tags.push({ cls: "tag-vol-bull", t: "VOL " + vr.toFixed(1) + "x" });
         else if (vr < 0.9)
           tags.push({ cls: "tag-vol-bear", t: "VOL DRY" });
         else tags.push({ cls: "tag-vol", t: "VOL " + vr.toFixed(1) + "x" });
@@ -605,7 +554,7 @@ window.calculateIgnition = calculateIgnition;
       }
       if (!tags.length) return "";
       return (
-        '<div class="sohel-ind-row">' +
+        '<div class="align-ind-row">' +
         tags
           .map(function (x) {
             return (
@@ -638,7 +587,7 @@ window.calculateIgnition = calculateIgnition;
         '<div class="sohel-lv"><span class="sohel-lv-lab">ENTRY</span><span class="sohel-lv-val">' +
         esc(eStr) +
         '</span><div class="sohel-lv-sub">' +
-        esc(last != null ? pctFromTo(last, ent) + " vs last" : "—") +
+        esc(last != null ? pctFromTo(last, ent) + " vs last" : "On signal") +
         '</div></div><div class="sohel-lv sohel-lv--target"><span class="sohel-lv-lab">TARGET</span><span class="sohel-lv-val">' +
         esc(tStr) +
         '</span><div class="sohel-lv-sub">' +
@@ -688,23 +637,23 @@ window.calculateIgnition = calculateIgnition;
         a.last != null && isFinite(Number(a.last)) ? Number(a.last) : null;
       var lastStr = last != null ? "$" + last.toFixed(2) : "—";
       var bp = a.barChgPct;
-      var chgCls = "sohel-radar-chg--flat";
-      var chgTxt = "prior 5m bar —";
+      var chgCls = "align-chg-flat";
+      var chgTxt = "—";
       if (bp != null && isFinite(Number(bp))) {
         var p = Number(bp);
         chgCls =
-          p > 0.02
-            ? "sohel-radar-chg--up"
-            : p < -0.02
-              ? "sohel-radar-chg--down"
-              : "sohel-radar-chg--flat";
+          p > 0.02 ? "align-chg-up" : p < -0.02 ? "align-chg-down" : "align-chg-flat";
+        var absD = last && isFinite(last) ? (Math.abs(p) / 100) * last : 0;
         chgTxt =
-          (p >= 0 ? "+" : "") + p.toFixed(2) + "% (5m)";
+          (p >= 0 ? "+" : "") +
+          p.toFixed(2) +
+          "%" +
+          (absD > 0 ? " (~$" + absD.toFixed(2) + ")" : "");
       }
       return (
-        '<div class="sohel-radar-price-row"><span class="sohel-radar-price">' +
+        '<div class="align-price-row"><span class="align-price">' +
         esc(lastStr) +
-        '</span><span class="sohel-radar-chg ' +
+        '</span><span class="align-chg ' +
         chgCls +
         '">' +
         esc(chgTxt) +
@@ -712,215 +661,185 @@ window.calculateIgnition = calculateIgnition;
       );
     }
 
-    function radarCardHtml(symU, a, sectionTier) {
-      var rawSym = String(symU || "")
-        .toUpperCase()
-        .replace(/[^A-Z0-9.-]/g, "")
-        .slice(0, 8);
-      var sym = esc(symU || "—");
-      var has = !!a;
-      var sc = has && a.score != null ? Math.round(Number(a.score)) : null;
-      var tier =
-        sectionTier ||
-        cardTierForScore(sc != null ? sc : -1, has);
-      var statusLbl =
-        tier === "fire"
-          ? "FIRING"
-          : tier === "heat"
-            ? "HEATING"
-            : has
-              ? "SETTING UP"
-              : "UNIVERSE";
-      var metaLn = has ? watchingSinceLine(a) : "Watching universe";
-      var scoreRing = has
-        ? '<div class="sohel-score-ring" style="--p:' +
-          Math.min(100, Math.max(0, sc)) +
-          ';"><span>' +
-          esc(String(sc)) +
-          "</span></div>"
-        : '<div class="sohel-radar-score--na"><div class="sohel-score-ring" style="--p:0;"><span>—</span></div></div>';
-      var txt = has
-        ? String((a.aiVerdict || "") + (a.drivingText || ""))
-        : "";
-      var cat = /HIGH-PROBABILITY CATALYST/i.test(txt);
-      var badges = [];
-      if (cat && has) {
-        badges.push(
-          '<span class="sohel-badge sohel-badge--cat">CATALYST</span>'
-        );
+    function alignSetupCardHtml(a, bucket, idx) {
+      var tier = bucket === "firing" ? "fire" : "heat";
+      var sym = esc(String(a.symbol || "—").toUpperCase());
+      var sc = a.score != null ? Math.round(Number(a.score)) : 0;
+      var meta = watchingSinceLine(a);
+      var goTags =
+        bucket === "firing"
+          ? '<span class="align-tag align-tag--go">GO GO GO</span>'
+          : '<span class="align-tag align-tag--heat">HEATING</span>';
+      var setupTag = '<span class="align-tag align-tag--setup">SETTING UP</span>';
+      var txt = String((a.aiVerdict || "") + (a.drivingText || ""));
+      if (/HIGH-PROBABILITY CATALYST/i.test(txt)) {
+        setupTag +=
+          '<span class="align-tag align-tag--go" style="border-color:var(--amber);color:var(--amber)">CATALYST</span>';
       }
-      if (has) {
-        var play = String(a.playTypeLabel || a.playType || "").trim();
-        if (play) {
-          badges.push(
-            '<span class="sohel-badge sohel-badge--play">' +
-              esc(play.toUpperCase()) +
-              "</span>"
-          );
-        }
-        var dirRaw = String(a.direction || "").toLowerCase();
-        var dirLbl =
-          dirRaw === "short" ? "SHORT" : dirRaw === "long" ? "LONG" : "";
-        if (dirLbl) {
-          badges.push(
-            '<span class="sohel-badge sohel-badge--dir">' +
-              esc(dirLbl) +
-              "</span>"
-          );
-        }
+      var opt = optionPlayBarHtml(a);
+      if (!opt) {
+        opt =
+          '<div class="sohel-opt-playbar"><div class="sohel-opt-cell" style="grid-column:1/-1"><span class="sohel-opt-lab">OPTION</span><span class="sohel-opt-val" style="color:var(--muted);font-size:0.65rem">Chain n/a — refresh</span></div></div>';
       }
-      var optPlay = has ? optionPlayBarHtml(a) : "";
-      if (has && !optPlay) {
-        optPlay =
-          '<div class="sohel-opt-playbar"><div class="sohel-opt-cell" style="grid-column:1/-1"><span class="sohel-opt-lab">OPTION</span><span class="sohel-opt-val" style="color:var(--muted);font-size:0.65rem">Refresh scan for chain</span></div></div>';
-      }
-      var levels = has ? levelsGridHtml(a) : "";
-      var inds = has ? indTagsHtml(a) : "";
-      var priceRow = has
-        ? priceChgRowHtml(a)
-        : '<div class="sohel-radar-price-row"><span class="sohel-radar-price">—</span><span class="sohel-radar-chg sohel-radar-chg--flat">No pass this scan</span></div>';
-      var actions = has
-        ? '<div class="sohel-radar-actions">' +
-          '<button type="button" class="sohel-radar-btn sohel-radar-btn--primary" data-sohel-goto="alerts">LOG ON ALERTS</button>' +
-          '<button type="button" class="sohel-radar-btn sohel-radar-btn--secondary" data-sohel-goto="trades">OPEN TRADES</button>' +
-          '<button type="button" class="sohel-radar-btn sohel-radar-btn--ghost">SKIP</button>' +
-          "</div>"
-        : "";
       return (
-        '<div class="sohel-radar-card sohel-radar-card--' +
+        '<div class="align-card align-card--' +
         tier +
-        '" data-symbol="' +
-        rawSym +
-        '"><div class="sohel-radar-accent"></div><div class="sohel-radar-body"><div class="sohel-radar-head"><div class="sohel-radar-head-left"><div class="sohel-radar-top"><span class="sohel-radar-sym">' +
+        '"><div class="align-card-ac"></div><div class="align-card-body"><div class="align-card-head"><div><div class="align-sym">' +
         sym +
-        '</span><span class="sohel-radar-status">' +
-        esc(statusLbl) +
-        "</span></div>" +
-        (metaLn
-          ? '<div class="sohel-radar-meta">' + esc(metaLn) + "</div>"
-          : "") +
-        "</div>" +
-        scoreRing +
         '</div>' +
-        (badges.length
-          ? '<div class="sohel-radar-badges">' + badges.join("") + "</div>"
-          : "") +
-        priceRow +
-        inds +
-        levels +
-        optPlay +
-        actions +
-        "</div></div>"
+        (meta ? '<div class="align-meta">' + esc(meta) + "</div>" : "") +
+        '</div><div class="align-tags">' +
+        goTags +
+        setupTag +
+        "</div></div>" +
+        priceChgRowHtml(a) +
+        '<div class="align-prog"><i style="width:' +
+        Math.min(100, Math.max(4, sc)) +
+        '%"></i></div>' +
+        indTagsHtml(a) +
+        levelsGridHtml(a) +
+        opt +
+        '<div class="align-actions">' +
+        '<button type="button" class="align-btn-enter" data-sohel-enter="' +
+        bucket +
+        ":" +
+        idx +
+        '">ENTER NOW</button>' +
+        '<button type="button" class="align-btn-wait" data-sohel-wait="1">WAIT RETEST</button>' +
+        '<button type="button" class="align-btn-skip">SKIP</button>' +
+        "</div></div></div>"
       );
     }
 
-    function watchlistSection(title, sub, sectionTier, pairs) {
-      if (!pairs.length) return "";
-      return (
-        '<div class="sohel-wl-section sohel-wl-section--' +
-        sectionTier +
-        '"><div class="sohel-wl-section-head"><span class="sohel-wl-pill">' +
-        esc(title) +
-        '</span><span class="sohel-wl-sub">' +
-        esc(sub) +
-        '</span></div><div class="sohel-wl-cards">' +
-        pairs
-          .map(function (p) {
-            return radarCardHtml(p.sym, p.a, sectionTier);
+    if (!j || j.success === false) {
+      regimeEl.innerHTML =
+        '<div id="sohel-regime-header"></div><p class="hint">' +
+        esc(j && j.error ? "Scanner: " + String(j.error) : "Waiting for scanner…") +
+        "</p>";
+      fireHost.innerHTML = "";
+      heatHost.innerHTML = "";
+      if (fireSub) fireSub.textContent = "0 ACTIVE";
+      if (heatSub) heatSub.textContent = "0 BUILDING";
+      window.__sohelAlignFiring = [];
+      window.__sohelAlignHeating = [];
+      return;
+    }
+
+    var meta = j.meta || {};
+    var b7 = meta.backtest7d;
+    var gh = meta.grokHealth || "—";
+    var st = j.status || "ok";
+    var pill =
+      st === "after_hours"
+        ? "AFTER HOURS"
+        : st === "outside_window"
+          ? "OUTSIDE 8–4 ET"
+          : String(j.mode || "cheap").toUpperCase();
+
+    var lines = [];
+    lines.push(
+      "Mode: " + String(j.mode || "cheap") + (st === "outside_window" ? " (cheap outside window)" : "")
+    );
+    if (meta.optionsSessionNote) lines.push(String(meta.optionsSessionNote));
+    lines.push("Alerts: " + (Array.isArray(j.alerts) ? j.alerts.length : 0));
+    if (b7) {
+      lines.push(
+        "7d EV " +
+          (b7.ev != null ? Number(b7.ev).toFixed(3) : "—") +
+          " · WR " +
+          (b7.winRate != null ? Math.round(b7.winRate * 100) / 100 : "—")
+      );
+    }
+    lines.push("Grok: " + gh);
+
+    var metricsHtml = "";
+    if (b7) {
+      metricsHtml =
+        '<div class="sohel-metrics">' +
+        '<div class="sohel-metric"><span class="ml">7d EV</span><div class="mv">' +
+        esc(b7.ev != null ? Number(b7.ev).toFixed(2) : "—") +
+        '</div></div><div class="sohel-metric"><span class="ml">Win %</span><div class="mv">' +
+        esc(b7.winRate != null ? Math.round(b7.winRate * 100) + "%" : "—") +
+        '</div></div><div class="sohel-metric"><span class="ml">Setups</span><div class="mv">' +
+        esc(b7.totalSetups != null ? String(b7.totalSetups) : "—") +
+        "</div></div></div>";
+    }
+
+    regimeEl.innerHTML =
+      '<div id="sohel-regime-header" class="sohel-regime-top"><span class="sohel-pill">' +
+      esc(pill) +
+      '</span></div><div id="regime-spy-slot"><p class="hint">Loading SPY…</p></div>' +
+      grokHtml(j) +
+      '<div class="regime-scan"><h3 class="sohel-subh">Scanner summary</h3><p class="sohel-grok-body">' +
+      lines.map(function (L) {
+        return esc(L);
+      }).join("<br/>") +
+      "</p>" +
+      metricsHtml +
+      "</div>";
+
+    refreshSpyLevels();
+    refreshHeaderQuotes();
+
+    var alerts = Array.isArray(j.alerts) ? j.alerts : [];
+    if (st === "after_hours") {
+      fireHost.innerHTML =
+        '<p class="hint">' +
+        esc(
+          meta.optionsSessionNote ||
+            "Options session closed — 9:30–16:00 ET Mon–Fri."
+        ) +
+        "</p>";
+      heatHost.innerHTML = "";
+      if (fireSub) fireSub.textContent = "0 ACTIVE";
+      if (heatSub) heatSub.textContent = "0 BUILDING";
+      window.__sohelAlignFiring = [];
+      window.__sohelAlignHeating = [];
+      return;
+    }
+
+    var firing = alerts
+      .filter(function (a) {
+        return (Number(a.score) || 0) >= FIRING_MIN;
+      })
+      .sort(function (a, b) {
+        return (Number(b.score) || 0) - (Number(a.score) || 0);
+      });
+    var heating = alerts
+      .filter(function (a) {
+        var s = Number(a.score) || 0;
+        return s >= HEATING_MIN && s <= HEATING_MAX;
+      })
+      .sort(function (a, b) {
+        return (Number(b.score) || 0) - (Number(a.score) || 0);
+      });
+
+    window.__sohelAlignFiring = firing;
+    window.__sohelAlignHeating = heating;
+
+    if (fireSub) fireSub.textContent = firing.length + " ACTIVE";
+    if (heatSub) heatSub.textContent = heating.length + " BUILDING";
+
+    fireHost.innerHTML = firing.length
+      ? firing
+          .map(function (a, i) {
+            return alignSetupCardHtml(a, "firing", i);
           })
-          .join("") +
-        "</div></div>"
-      );
-    }
+          .join("")
+      : '<p class="hint">No FIRING setups (score &lt; ' + FIRING_MIN + ").</p>";
 
-    function buildPairsFromSymbols(symbols) {
-      return symbols.map(function (s) {
-        var key = String(s || "")
-          .toUpperCase()
-          .replace(/[^A-Z0-9.-]/g, "")
-          .slice(0, 8);
-        return { sym: s, a: bySym[key] || null };
-      });
-    }
-
-    function sortPairsByScore(pairs) {
-      return pairs.slice().sort(function (x, y) {
-        var sa = x.a ? Number(x.a.score) || 0 : -1;
-        var sb = y.a ? Number(y.a.score) || 0 : -1;
-        if (sb !== sa) return sb - sa;
-        return String(x.sym).localeCompare(String(y.sym));
-      });
-    }
-
-    function renderTieredWatchlist(pairs) {
-      var fire = [];
-      var heat = [];
-      var watch = [];
-      pairs.forEach(function (p) {
-        var a = p.a;
-        var sc = a ? Number(a.score) || 0 : -1;
-        if (!a) watch.push(p);
-        else if (sc >= FIRING_SCORE) fire.push(p);
-        else if (sc >= HEATING_MIN) heat.push(p);
-        else watch.push(p);
-      });
-      var html = "";
-      html += watchlistSection(
-        "FIRING",
-        fire.length + " ACTIVE",
-        "fire",
-        fire
-      );
-      html += watchlistSection(
-        "HEATING",
-        heat.length + " BUILDING",
-        "heat",
-        heat
-      );
-      html += watchlistSection(
-        "WATCH",
-        watch.length + " NAMES",
-        "watch",
-        watch
-      );
-      grid.innerHTML = html || '<p class="hint">Nothing to show.</p>';
-    }
-
-    if (uni && uni.length) {
-      var sortedU = uni.slice().sort(function (a, b) {
-        var ra = String(a || "")
-          .toUpperCase()
-          .replace(/[^A-Z0-9.-]/g, "")
-          .slice(0, 8);
-        var rb = String(b || "")
-          .toUpperCase()
-          .replace(/[^A-Z0-9.-]/g, "")
-          .slice(0, 8);
-        var A = bySym[ra];
-        var B = bySym[rb];
-        var sa = A ? Number(A.score) || 0 : -1;
-        var sb = B ? Number(B.score) || 0 : -1;
-        if (sb !== sa) return sb - sa;
-        return String(a).localeCompare(String(b));
-      });
-      renderTieredWatchlist(sortPairsByScore(buildPairsFromSymbols(sortedU)));
-      return;
-    }
-
-    if (!alerts.length) {
-      grid.innerHTML = '<p class="hint">No setups passed gates.</p>';
-      return;
-    }
-
-    var sortedA = alerts.slice().sort(function (a, b) {
-      return (Number(b.score) || 0) - (Number(a.score) || 0);
-    });
-    var pairsOnly = sortedA.map(function (a) {
-      return { sym: a.symbol, a: a };
-    });
-    renderTieredWatchlist(pairsOnly);
+    heatHost.innerHTML = heating.length
+      ? heating
+          .map(function (a, i) {
+            return alignSetupCardHtml(a, "heating", i);
+          })
+          .join("")
+      : '<p class="hint">No HEATING setups (need ' +
+        HEATING_MIN +
+        "–" +
+        HEATING_MAX +
+        ").</p>";
   }
-
   function formatAlertTimeEt(a) {
     var ms = 0;
     if (a.alertedAt != null && isFinite(Number(a.alertedAt))) {
@@ -1014,7 +933,7 @@ window.calculateIgnition = calculateIgnition;
   }
 
   function renderAlertsPage(j) {
-    var host = document.getElementById("alerts-list");
+    var host = document.getElementById("history-list");
     if (!host) return;
     if (!j || j.success === false) {
       window.__sohelAlertsDisplayed = [];
@@ -1043,8 +962,14 @@ window.calculateIgnition = calculateIgnition;
       return (Number(a.score) || 0) - (Number(b.score) || 0);
     });
     window.__sohelAlertsDisplayed = order;
+    /* SOHELATOR blueprint — ALL alerts to Telegram (user wants to review everything) (Prompt 19): prominent timestamp on HISTORY / alerts list */
     host.innerHTML = order
       .map(function (a) {
+        var ts = formatAlertTimeEt(a);
+        var tsLine =
+          '<div class="ap-alert-ts" style="font-family:Space Mono,monospace;font-size:0.8rem;font-weight:700;color:#00f0ff;letter-spacing:0.04em;margin-bottom:10px;text-shadow:0 0 12px rgba(0,240,255,0.25);">ALERT · ' +
+          esc(ts) +
+          "</div>";
         var metaLn = alertMetaLineHtml(a);
         var drive = a.drivingText
           ? esc(a.drivingText)
@@ -1052,7 +977,7 @@ window.calculateIgnition = calculateIgnition;
         var hist = a.historicalSummary
           ? "<div class=\"ap-hist\">" + esc(a.historicalSummary) + "</div>"
           : "";
-        return '<div class="ap-drive-card">' + metaLn + drive + hist + "</div>";
+        return '<div class="ap-drive-card">' + tsLine + metaLn + drive + hist + "</div>";
       })
       .join("");
   }
@@ -1061,6 +986,7 @@ window.calculateIgnition = calculateIgnition;
     scanStatusLabel = label;
     scanStatusOk = ok;
     updateHealthBanner();
+    updateHdrLiveFromPanel();
   }
 
   function setOpenStatus(label, ok) {
@@ -1070,11 +996,13 @@ window.calculateIgnition = calculateIgnition;
   }
 
   function renderOpenTrades(list) {
-    var host = document.getElementById("open-trades-list");
+    var host = document.getElementById("align-live-list");
+    var sub = document.getElementById("live-sub");
     if (!host) return;
+    if (sub) sub.textContent = (list && list.length ? list.length : 0) + " OPEN";
     if (!list || !list.length) {
       host.innerHTML =
-        '<p class="tm-muted" style="margin:0;">No open trades — mark ENTERED from ALERTS.</p>';
+        '<p class="tm-muted" style="margin:0;">No open trades logged.</p>';
       return;
     }
     host.innerHTML = list
@@ -1218,67 +1146,6 @@ window.calculateIgnition = calculateIgnition;
     });
   }
 
-  function alertFromCardIndex(idx) {
-    var list = window.__sohelAlertsDisplayed || window.__sohelLastAlerts || [];
-    var a = list[idx] ? Object.assign({}, list[idx]) : {};
-    var sym = a.symbol || a.ticker;
-    if (!sym && a.drivingText) {
-      var m = String(a.drivingText).match(/\b([A-Z]{1,5})\b/);
-      if (m) sym = m[1];
-    }
-    if (sym) a.symbol = String(sym).toUpperCase();
-    return a;
-  }
-
-  function injectTradeControls() {
-    var cards = document.querySelectorAll("#alerts-list .ap-drive-card");
-    cards.forEach(function (card, idx) {
-      if (card.querySelector("[data-tm-injected]")) return;
-      var wrap = document.createElement("div");
-      wrap.setAttribute("data-tm-injected", "1");
-      wrap.className = "tm-trade-wrap";
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "tm-btn-enter";
-      btn.textContent = "MARK ENTERED";
-      btn.onclick = function () {
-        var payload = alertFromCardIndex(idx);
-        if (!payload.symbol) {
-          alert("Could not detect symbol — wait for scan.");
-          return;
-        }
-        btn.disabled = true;
-        fetch(LOG_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "entered", alert: payload }),
-          cache: "no-store",
-        })
-          .then(function (r) {
-            return r.json();
-          })
-          .then(function (j2) {
-            if (!j2.success) throw new Error(j2.error || "log failed");
-            wrap.innerHTML =
-              "<span class=\"tm-muted\">Logged · " +
-              esc(j2.trade && j2.trade.id ? j2.trade.id : "ok") +
-              "</span>";
-            renderOpenTrades(j2.openTrades || []);
-          })
-          .catch(function (e) {
-            btn.disabled = false;
-            alert(String(e.message || e));
-          });
-      };
-      wrap.appendChild(btn);
-      card.appendChild(wrap);
-    });
-  }
-
-  var obsAlerts = new MutationObserver(function () {
-    injectTradeControls();
-  });
-
   function fetchOpenTrades() {
     fetch(LOG_URL, { method: "GET", cache: "no-store" })
       .then(function (r) {
@@ -1297,9 +1164,9 @@ window.calculateIgnition = calculateIgnition;
   function applyScanPayload(j, res) {
     if (j && j.alerts) window.__sohelLastAlerts = j.alerts;
     setPanelStatus(res && res.ok ? "SCAN OK" : "SCAN HTTP", !!(res && res.ok));
+    updateRiskPillFromScan(j);
     renderHomeFromScan(j);
     renderAlertsPage(j);
-    setTimeout(injectTradeControls, 0);
   }
 
   function pullScan() {
@@ -1320,7 +1187,7 @@ window.calculateIgnition = calculateIgnition;
       })
       .catch(function (e) {
         setPanelStatus("SCAN ERR", false);
-        var host = document.getElementById("alerts-list");
+        var host = document.getElementById("history-list");
         if (host)
           host.innerHTML =
             '<p class="hint">' + esc(e.message || String(e)) + "</p>";
@@ -1416,7 +1283,7 @@ window.calculateIgnition = calculateIgnition;
     ) {
       try {
         new Notification("SOHELATOR — alert spike", {
-          body: "Score up to " + Math.round(maxS) + " — check ALERTS",
+          body: "Score up to " + Math.round(maxS) + " — check LIVE / HISTORY",
           tag: "sohel-p7-wild",
         });
       } catch (e) {}
@@ -1512,7 +1379,7 @@ window.calculateIgnition = calculateIgnition;
   }
 
   function flashAlertCards() {
-    var host = document.getElementById("alerts-list");
+    var host = document.getElementById("history-list");
     if (!host) return;
     host.querySelectorAll(".ap-drive-card").forEach(function (el) {
       el.classList.remove("neon-flash");
@@ -1561,7 +1428,7 @@ window.calculateIgnition = calculateIgnition;
     var id = String(tradeId || "").replace(/"/g, "");
     if (!id) return;
     var el = document.querySelector(
-      '#open-trades-list .tm-open-card[data-tm-open-id="' + id + '"]'
+      '#align-live-list .tm-open-card[data-tm-open-id="' + id + '"]'
     );
     if (!el) return;
     el.classList.remove("neon-amber-pulse");
@@ -1628,39 +1495,60 @@ window.calculateIgnition = calculateIgnition;
     });
   };
 
-  function injectAlertsToolbar() {
-    var ap = document.getElementById("alerts-page");
-    if (!ap || document.getElementById("sohel-refresh-scan")) return;
-    var h2 = ap.querySelector("h2");
-    var row = document.createElement("div");
-    row.className = "sohel-alerts-toolbar";
-    row.style.cssText =
-      "display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;";
-    row.innerHTML =
-      '<button type="button" id="sohel-refresh-scan" class="sohel-tab" style="flex:0 0 auto;min-width:140px;">REFRESH SCAN</button>';
-    if (h2 && h2.nextSibling) ap.insertBefore(row, h2.nextSibling);
-    else ap.appendChild(row);
-    document.getElementById("sohel-refresh-scan").addEventListener("click", pullScan);
-  }
-
   function start() {
-    bindTabs();
-    selectTab("home");
-    var homePg = document.getElementById("home-page");
-    if (homePg) {
-      homePg.addEventListener("click", function (e) {
-        var b = e.target.closest("[data-sohel-goto]");
-        if (!b) return;
-        var t = b.getAttribute("data-sohel-goto");
-        if (t && typeof window.sohelSelectMainTab === "function") {
-          window.sohelSelectMainTab(t);
+    /* SOHELATOR blueprint — full ALIGN.ICS v3 template adoption (Prompt 15) */
+    bindNav();
+    showNavPage("live");
+    refreshHeaderQuotes();
+
+    var pageLive = document.getElementById("page-live");
+    if (pageLive) {
+      pageLive.addEventListener("click", function (e) {
+        var ent = e.target.closest("[data-sohel-enter]");
+        if (ent) {
+          var raw = ent.getAttribute("data-sohel-enter") || "";
+          var idxColon = raw.indexOf(":");
+          var bucket = idxColon >= 0 ? raw.slice(0, idxColon) : "";
+          var i = idxColon >= 0 ? parseInt(raw.slice(idxColon + 1), 10) : NaN;
+          var list =
+            bucket === "firing"
+              ? window.__sohelAlignFiring
+              : bucket === "heating"
+                ? window.__sohelAlignHeating
+                : null;
+          var a = list && !isNaN(i) ? list[i] : null;
+          if (!a || !a.symbol) {
+            alert("No alert payload — refresh scan.");
+            return;
+          }
+          ent.disabled = true;
+          fetch(LOG_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "entered",
+              alert: JSON.parse(JSON.stringify(a)),
+            }),
+            cache: "no-store",
+          })
+            .then(function (r) {
+              return r.json();
+            })
+            .then(function (j2) {
+              if (!j2.success) throw new Error(j2.error || "log failed");
+              ent.textContent = "LOGGED";
+              renderOpenTrades(j2.openTrades || []);
+            })
+            .catch(function (err) {
+              ent.disabled = false;
+              alert(String(err.message || err));
+            });
         }
       });
     }
-    injectAlertsToolbar();
 
-    var ac = document.getElementById("alerts-list");
-    if (ac) obsAlerts.observe(ac, { childList: true, subtree: true });
+    var refBtn = document.getElementById("btn-align-refresh");
+    if (refBtn) refBtn.addEventListener("click", pullScan);
 
     pullScan();
     if (pollScanTimer) clearInterval(pollScanTimer);
@@ -1672,11 +1560,15 @@ window.calculateIgnition = calculateIgnition;
 
     if (spyLevelsTimer) clearInterval(spyLevelsTimer);
     spyLevelsTimer = setInterval(function () {
-      if (document.getElementById("regime-spy-slot")) refreshSpyLevels();
+      if (document.getElementById("regime-spy-slot")) {
+        refreshSpyLevels();
+        refreshHeaderQuotes();
+      }
     }, 120000);
 
     requestNotifPermission();
     updateHealthBanner();
+    updateHdrLiveFromPanel();
     setInterval(updateHealthBanner, 15000);
   }
 
@@ -1686,3 +1578,285 @@ window.calculateIgnition = calculateIgnition;
     start();
   }
 })();
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SOHELATOR blueprint — LEARNING tab with AI progress tracking (Prompt 16)
+   Appended after main IIFE: unified nav (LIVE / HISTORY / REGIME / LEARNING),
+   fetches /api/memory-data + historical_patterns.json, renders report + table.
+   ───────────────────────────────────────────────────────────────────────────── */
+(function initSohelLearningPrompt16() {
+  var MEMORY_URL = "/api/memory-data";
+  var PATTERNS_URL = "/historical_patterns.json";
+  var lastLearningFetch = 0;
+  var STALE_MS = 90000;
+
+  function p16esc(s) {
+    if (s == null || s === "") return "";
+    var d = document.createElement("div");
+    d.textContent = String(s);
+    return d.innerHTML;
+  }
+
+  function setPageVisibility(which) {
+    var live = document.getElementById("page-live");
+    var hist = document.getElementById("page-history");
+    var learn = document.getElementById("learning-page");
+    var onL = which === "live";
+    var onH = which === "history";
+    var onG = which === "learning";
+    if (live) live.classList.toggle("active", onL);
+    if (hist) hist.classList.toggle("active", onH);
+    if (learn) learn.classList.toggle("active", onG);
+  }
+
+  function syncTabUi(which) {
+    document.querySelectorAll(".align-top-tab").forEach(function (b) {
+      var t = b.getAttribute("data-sohel-top-tab");
+      b.classList.toggle("active", t === which);
+    });
+    var mapBottom = { live: "nav-live", history: "nav-history", learning: "nav-learning" };
+    ["nav-live", "nav-history", "nav-learning"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.remove("active");
+    });
+    if (which === "regime") {
+      var nl = document.getElementById("nav-live");
+      if (nl) nl.classList.add("active");
+    } else {
+      var bid = mapBottom[which];
+      var nb = bid ? document.getElementById(bid) : null;
+      if (nb) nb.classList.add("active");
+    }
+  }
+
+  function setUnifiedPage(which) {
+    if (which === "regime") {
+      setPageVisibility("live");
+      syncTabUi("regime");
+      requestAnimationFrame(function () {
+        var rp = document.getElementById("align-regime-panel");
+        if (rp) rp.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      return;
+    }
+    setPageVisibility(which);
+    syncTabUi(which);
+    if (which === "learning") fetchLearningIfStale(true);
+  }
+
+  function rebindNavButton(id, which) {
+    var el = document.getElementById(id);
+    if (!el || !el.parentNode) return;
+    var n = el.cloneNode(true);
+    el.parentNode.replaceChild(n, el);
+    n.addEventListener("click", function () {
+      setUnifiedPage(which);
+    });
+  }
+
+  function rowMetrics(row) {
+    var res = Array.isArray(row.results) ? row.results : [];
+    var sumEst = res.reduce(function (s, r) {
+      return s + (Number(r.estimatedOptionReturn) || 0);
+    }, 0);
+    var totalR = sumEst / 100;
+    var ev = res.length ? sumEst / res.length : null;
+    var setups =
+      row.snapshotCount != null
+        ? row.snapshotCount
+        : row.totalCalls != null
+          ? row.totalCalls
+          : res.length;
+    return { totalR: totalR, ev: ev, setups: setups };
+  }
+
+  function trendClass(curWr, olderWr) {
+    if (olderWr == null || curWr == null || !isFinite(curWr) || !isFinite(olderWr)) {
+      return { cls: "learn-trend--flat", sym: "→" };
+    }
+    if (curWr > olderWr + 0.25) return { cls: "learn-trend--up", sym: "↑" };
+    if (curWr < olderWr - 0.25) return { cls: "learn-trend--down", sym: "↓" };
+    return { cls: "learn-trend--flat", sym: "→" };
+  }
+
+  function renderLearningLatest(imp, reviews, patterns) {
+    var host = document.getElementById("learning-latest-body");
+    if (!host) return;
+    var blocks = [];
+    var latest = reviews && reviews.length ? reviews[0] : null;
+    if (latest) {
+      var aiTxt =
+        latest.claudeAnalysis ||
+        latest.eodAnalysis ||
+        latest.improvementSuggestions ||
+        "";
+      aiTxt = String(aiTxt).trim();
+      if (aiTxt.length > 1400) aiTxt = aiTxt.slice(0, 1400) + "…";
+      blocks.push(
+        '<div class="learn-block"><div class="learn-k">EOD / AI REVIEW · ' +
+          p16esc(latest.date || "—") +
+          '</div><div class="learn-ai-box">' +
+          (aiTxt ? p16esc(aiTxt) : "<span class=\"hint\">No narrative stored for this day.</span>") +
+          "</div></div>"
+      );
+    }
+    if (imp && Array.isArray(imp.suggestions) && imp.suggestions.length) {
+      blocks.push(
+        '<div class="learn-block"><div class="learn-k">PATTERN IMPROVEMENTS</div><ul class="learn-ul">' +
+          imp.suggestions
+            .slice(0, 12)
+            .map(function (x) {
+              return "<li>" + p16esc(typeof x === "string" ? x : x.message || x.text || JSON.stringify(x)) + "</li>";
+            })
+          .join("") +
+          "</ul></div>"
+      );
+    }
+    if (patterns && patterns.length) {
+      var notes = patterns
+        .slice(-6)
+        .map(function (p) {
+          return p && p.note ? p.note : null;
+        })
+        .filter(Boolean);
+      if (notes.length) {
+        blocks.push(
+          '<div class="learn-block"><div class="learn-k">NEW PATTERNS (LOCAL JSON)</div><ul class="learn-ul">' +
+            notes.map(function (n) {
+              return "<li>" + p16esc(n) + "</li>";
+            }).join("") +
+            "</ul></div>"
+        );
+      }
+    }
+    if (!blocks.length) {
+      host.innerHTML =
+        '<p class="hint">No nightly blob data yet. Run <code style="color:var(--cyan)">/api/scan-eod</code> on schedule or open this page after EOD reviews populate.</p>';
+      return;
+    }
+    host.innerHTML = blocks.join("");
+  }
+
+  function renderLearningTable(reviews) {
+    var tb = document.getElementById("learning-progress-tbody");
+    if (!tb) return;
+    if (!reviews || !reviews.length) {
+      tb.innerHTML =
+        '<tr><td colspan="6" class="hint">No historical rows — EOD reviews will appear here.</td></tr>';
+      return;
+    }
+    var sorted = reviews.slice().sort(function (a, b) {
+      var ta = Number(a.timestamp) || 0;
+      var tb_ = Number(b.timestamp) || 0;
+      if (tb_ !== ta) return tb_ - ta;
+      return String(b.date || "").localeCompare(String(a.date || ""));
+    });
+    tb.innerHTML = sorted
+      .map(function (row, i) {
+        var m = rowMetrics(row);
+        var wr = row.winRate;
+        var wrN = wr != null && isFinite(Number(wr)) ? Number(wr) : null;
+        var older = sorted[i + 1];
+        var olderWr =
+          older && older.winRate != null && isFinite(Number(older.winRate))
+            ? Number(older.winRate)
+            : null;
+        var tr = trendClass(wrN, olderWr);
+        var wrStr = wrN != null ? wrN.toFixed(1) + "%" : "—";
+        var evStr = m.ev != null && isFinite(m.ev) ? m.ev.toFixed(1) + "%" : "—";
+        return (
+          "<tr><td>" +
+          p16esc(row.date || "—") +
+          "</td><td>" +
+          p16esc(wrStr) +
+          "</td><td>" +
+          p16esc(m.totalR.toFixed(2)) +
+          "</td><td>" +
+          p16esc(evStr) +
+          "</td><td>" +
+          p16esc(String(m.setups != null ? m.setups : "—")) +
+          '</td><td><span class="learn-trend ' +
+          tr.cls +
+          '" title="vs prior row">' +
+          tr.sym +
+          "</span></td></tr>"
+        );
+      })
+      .join("");
+  }
+
+  function fetchLearningIfStale(force) {
+    var now = Date.now();
+    if (!force && now - lastLearningFetch < STALE_MS) return;
+    lastLearningFetch = now;
+    var host = document.getElementById("learning-latest-body");
+    if (host) host.innerHTML = '<p class="hint" style="padding:0;">Loading…</p>';
+
+    Promise.all([
+      fetch(MEMORY_URL + "?type=improvements", { cache: "no-store" }).then(function (r) {
+        return r.json();
+      }),
+      fetch(MEMORY_URL + "?type=learning-log", { cache: "no-store" }).then(function (r) {
+        return r.json();
+      }),
+      fetch(PATTERNS_URL, { cache: "no-store" }).then(function (r) {
+        return r.ok ? r.json() : [];
+      }),
+    ])
+      .then(function (tuple) {
+        var imp = tuple[0];
+        var logPack = tuple[1] || {};
+        var reviews = Array.isArray(logPack.reviews) ? logPack.reviews : [];
+        var patterns = Array.isArray(tuple[2]) ? tuple[2] : [];
+        renderLearningLatest(imp, reviews, patterns);
+        renderLearningTable(reviews);
+      })
+      .catch(function () {
+        if (host)
+          host.innerHTML =
+            '<p class="hint">Could not load learning APIs (offline or CORS). Showing patterns file only…</p>';
+        fetch(PATTERNS_URL, { cache: "no-store" })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (patterns) {
+            renderLearningLatest(null, [], Array.isArray(patterns) ? patterns : []);
+            renderLearningTable([]);
+          })
+          .catch(function () {});
+      });
+  }
+
+  function wirePrompt16() {
+    rebindNavButton("nav-live", "live");
+    rebindNavButton("nav-history", "history");
+    rebindNavButton("nav-learning", "learning");
+
+    document.querySelectorAll("[data-sohel-top-tab]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var w = btn.getAttribute("data-sohel-top-tab");
+        if (w) setUnifiedPage(w);
+      });
+    });
+
+    window.sohelSelectMainTab = function (k) {
+      if (k === "alerts" || k === "history") setUnifiedPage("history");
+      else if (k === "learning") setUnifiedPage("learning");
+      else setUnifiedPage("live");
+    };
+
+    var refL = document.getElementById("btn-learning-refresh");
+    if (refL)
+      refL.addEventListener("click", function () {
+        lastLearningFetch = 0;
+        fetchLearningIfStale(true);
+      });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", wirePrompt16);
+  } else {
+    wirePrompt16();
+  }
+})();
+
