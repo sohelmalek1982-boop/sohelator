@@ -1,5 +1,6 @@
 [build]
-  publish = "public"
+  command   = "node scripts/sync-version.js"
+  publish   = "public"
   functions = "netlify/functions"
 
 # Avoid stale index.html after UI deploys (browser + CDN)
@@ -10,6 +11,12 @@
 
 [[headers]]
   for = "/"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# Fresh JS after UI deploys (browser revalidates; CDN should not pin old bundles)
+[[headers]]
+  for = "/*.js"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
 
@@ -212,14 +219,4 @@
 [[redirects]]
   from = "/api/cheap-monitor"
   to = "/.netlify/functions/cheap-monitor"
-  status = 200
-
-[[redirects]]
-  from = "/api/trigger-expensive"
-  to = "/.netlify/functions/trigger-expensive"
-  status = 200
-
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+  st

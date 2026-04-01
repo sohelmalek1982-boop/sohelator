@@ -198,727 +198,28 @@ function calculateIgnition(candles, indicators) {
 
 window.calculateIgnition = calculateIgnition;
 
+
 /**
- * SOHELATOR blueprint — new Action Panel wiring (Prompt 4)
- * Polls POST /api/scan every 60s (mode: cheap), renders server drivingText (formatDrivingAlert),
- * shows historical comparison per alert, Refresh Now + LIVE status. Does not modify calculateIgnition above.
+ * Verbatim 3-tab DOM: #tab-home|alerts|trades, #regime-content, #watchlist-grid,
+ * #alerts-list, #open-trades-list, #health-banner
  */
-(function initSohelatorActionPanelPrompt4() {
+(function initSohelatorVerbatimNeon() {
   var SCAN_URL = "/api/scan";
-  var POLL_MS = 60000;
-  var pollTimer = null;
-
-  function esc(s) {
-    if (s == null || s === "") return "";
-    var d = document.createElement("div");
-    d.textContent = String(s);
-    return d.innerHTML;
-  }
-
-  function setPanelStatus(label, ok) {
-    var el = document.getElementById("panel-status");
-    if (!el) return;
-    el.textContent = label;
-    el.style.color = ok ? "#bef264" : "#fbbf24";
-    el.style.border = ok ? "1px solid rgba(163,230,53,0.35)" : "1px solid rgba(251,191,36,0.4)";
-  }
-
-  function renderCards(alerts) {
-    var host = document.getElementById("alert-cards");
-    if (!host) return;
-
-    if (!alerts || !alerts.length) {
-      host.innerHTML =
-        '<p class="muted" style="font-size:0.8rem;line-height:1.5;margin:0;">No alerts above min score / EV gates — try Refresh after RTH or check API.</p>';
-      return;
-    }
-
-    host.innerHTML = alerts
-      .map(function (a) {
-        var drive = a.drivingText
-          ? esc(a.drivingText)
-          : "<span class=\"muted\">(no drivingText — server should return formatDrivingAlert string)</span>";
-        var hist = a.historicalSummary
-          ? "<div class=\"ap-hist\">Historical comparison: " + esc(a.historicalSummary) + "</div>"
-          : "";
-        return '<div class="ap-drive-card">' + drive + hist + "</div>";
-      })
-      .join("");
-  }
-
-  function fetchScan() {
-    if (!document.getElementById("alert-cards")) return;
-
-    setPanelStatus("…", true);
-    fetch(SCAN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "cheap" }),
-      cache: "no-store",
-    })
-      .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      })
-      .then(function (j) {
-        setPanelStatus("LIVE", true);
-        if (!j.success) {
-          document.getElementById("alert-cards").innerHTML =
-            '<p class="muted" style="font-size:0.8rem;">Scanner: ' + esc(j.error || "error") + "</p>";
-          return;
-        }
-        renderCards(j.alerts || []);
-      })
-      .catch(function (e) {
-        setPanelStatus("ERR", false);
-        var ac = document.getElementById("alert-cards");
-        if (ac)
-          ac.innerHTML =
-            '<p class="muted" style="font-size:0.8rem;">' + esc(e.message || String(e)) + "</p>";
-      });
-  }
-
-  function start() {
-    var btn = document.getElementById("btn-action-panel-refresh");
-    if (btn) {
-      btn.addEventListener("click", fetchScan);
-    }
-    fetchScan();
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(fetchScan, POLL_MS);
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", start);
-  } else {
-    start();
-  }
-})();
-
-/**
- * SOHELATOR blueprint — trade management layer (Prompt 5)
- * Open trades panel, MARK ENTERED on alert cards, live P&L poll (30s), dynamic actions, log via /api/log-trade.
- */
-(function initSohelatorTradeManagementPrompt5() {
   var LOG_URL = "/api/log-trade";
   var SCAN_HOOK = "/api/scan";
-  var POLL_MS = 30000;
-  var pollOpenTimer = null;
-
-  function esc(s) {
-    if (s == null || s === "") return "";
-    var d = document.createElement("div");
-    d.textContent = String(s);
-    return d.innerHTML;
-  }
-
-  function alertFromCardIndex(idx) {
-    var list = window.__sohelLastAlerts || [];
-    var a = list[idx] ? Object.assign({}, list[idx]) : {};
-    var sym = a.symbol || a.ticker;
-    if (!sym && a.drivingText) {
-      var m = String(a.drivingText).match(/\b([A-Z]{1,5})\b/);
-      if (m) sym = m[1];
-    }
-    if (sym) a.symbol = String(sym).toUpperCase();
-    return a;
-  }
-
-  function setOpenStatus(label, ok) {
-    var el = document.getElementById("open-status");
-    if (!el) return;
-    el.textContent = label;
-    el.style.color = ok ? "#fcd34d" : "#fb923c";
-    el.style.border = ok ? "1px solid rgba(251,191,36,0.35)" : "1px solid rgba(251,146,60,0.45)";
-  }
-
-  function renderOpenTrades(list) {
-    var host = document.getElementById("open-trade-cards");
-    if (!host) return;
-    if (!list || !list.length) {
-      host.innerHTML =
-        '<p class="tm-muted" style="margin:0;font-size:0.75rem;">No open trades — mark ENTERED from alerts above.</p>';
-      return;
-    }
-    host.innerHTML = list
-      .map(function (t) {
-        var sym = esc(t.symbol || "—");
-        var r = t.livePnlR != null ? Number(t.livePnlR).toFixed(3) : "—";
-        var pct = t.livePnlPct != null ? Number(t.livePnlPct).toFixed(2) : "—";
-        var g =
-          t.greeks && t.greeks.placeholder
-            ? "<div class=\"tm-muted\">Greeks: " + esc(t.greeks.note || "placeholder") + "</div>"
-            : "";
-        var actions = Array.isArray(t.actions) ? t.actions : [];
-        var actionHtml = actions
-          .map(function (act) {
-            return (
-              "<button type=\"button\" class=\"tm-btn-action\" data-tm-aid=\"" +
-              esc(act.id) +
-              "\" data-tm-tid=\"" +
-              esc(t.id) +
-              "\" title=\"" +
-              esc(act.reason || "") +
-              "\">" +
-              esc(act.label) +
-              "</button>"
-            );
-          })
-          .join("");
-        return (
-          "<div class=\"tm-open-card\" data-tm-open-id=\"" +
-          esc(t.id) +
-          "\">" +
-          "<div class=\"tm-row\"><strong>" +
-          sym +
-          "</strong> <span class=\"tm-muted\">P&amp;L ~" +
-          pct +
-          "% · " +
-          r +
-          "R</span> <span class=\"tm-muted\">@" +
-          esc(t.lastPrice != null ? t.lastPrice : "—") +
-          "</span></div>" +
-          g +
-          "<div class=\"tm-trade-wrap\" style=\"border-top-color:rgba(251,191,36,0.2);\">" +
-          actionHtml +
-          "</div>" +
-          "<div class=\"tm-exit-row\">" +
-          "<label class=\"tm-muted\">Exit</label>" +
-          "<input type=\"number\" step=\"0.01\" class=\"tm-exit-price\" data-tm-tid=\"" +
-          esc(t.id) +
-          "\" placeholder=\"px\" aria-label=\"Exit price\" />" +
-          "<select class=\"tm-exit-outcome\" data-tm-tid=\"" +
-          esc(t.id) +
-          "\">" +
-          "<option value=\"win\">win</option>" +
-          "<option value=\"loss\">loss</option>" +
-          "<option value=\"flat\">flat</option>" +
-          "</select>" +
-          "<button type=\"button\" class=\"tm-btn-exit\" data-tm-exit=\"" +
-          esc(t.id) +
-          "\">MARK EXITED</button>" +
-          "</div></div>"
-        );
-      })
-      .join("");
-
-    host.querySelectorAll(".tm-btn-exit").forEach(function (btn) {
-      btn.onclick = function () {
-        var tid = btn.getAttribute("data-tm-exit");
-        var card = btn.closest(".tm-open-card");
-        var inp = card ? card.querySelector(".tm-exit-price[data-tm-tid=\"" + tid + "\"]") : null;
-        var sel = card ? card.querySelector(".tm-exit-outcome[data-tm-tid=\"" + tid + "\"]") : null;
-        var px = inp && inp.value ? parseFloat(inp.value) : NaN;
-        if (!Number.isFinite(px)) {
-          alert("Enter a valid exit price.");
-          return;
-        }
-        var outcome = sel ? sel.value : "flat";
-        fetch(LOG_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "exited",
-            tradeId: tid,
-            exitPrice: px,
-            outcome: outcome,
-          }),
-          cache: "no-store",
-        })
-          .then(function (r) {
-            return r.json();
-          })
-          .then(function (j) {
-            if (!j.success) throw new Error(j.error || "exit failed");
-            renderOpenTrades(j.openTrades || []);
-          })
-          .catch(function (e) {
-            alert(String(e.message || e));
-          });
-      };
-    });
-  }
-
-  function fetchOpenTrades() {
-    fetch(LOG_URL, { method: "GET", cache: "no-store" })
-      .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      })
-      .then(function (j) {
-        setOpenStatus("LIVE", true);
-        renderOpenTrades(j.openTrades || []);
-      })
-      .catch(function () {
-        setOpenStatus("ERR", false);
-      });
-  }
-
-  function injectTradeControls() {
-    var cards = document.querySelectorAll("#alert-cards .ap-drive-card");
-    cards.forEach(function (card, idx) {
-      if (card.querySelector("[data-tm-injected]")) return;
-      var wrap = document.createElement("div");
-      wrap.setAttribute("data-tm-injected", "1");
-      wrap.className = "tm-trade-wrap";
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "tm-btn-enter";
-      btn.textContent = "MARK ENTERED";
-      btn.setAttribute("data-tm-idx", String(idx));
-      btn.onclick = function () {
-        var payload = alertFromCardIndex(idx);
-        if (!payload.symbol) {
-          alert("Could not detect symbol — wait for scan or refresh.");
-          return;
-        }
-        btn.disabled = true;
-        fetch(LOG_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "entered", alert: payload }),
-          cache: "no-store",
-        })
-          .then(function (r) {
-            return r.json();
-          })
-          .then(function (j) {
-            if (!j.success) throw new Error(j.error || "log failed");
-            wrap.innerHTML =
-              "<span class=\"tm-muted\" style=\"margin:0;\">Entered logged — see OPEN TRADES · " +
-              esc(j.trade && j.trade.id ? j.trade.id : "ok") +
-              "</span>";
-            renderOpenTrades(j.openTrades || []);
-          })
-          .catch(function (e) {
-            btn.disabled = false;
-            alert(String(e.message || e));
-          });
-      };
-      wrap.appendChild(btn);
-      card.appendChild(wrap);
-    });
-  }
-
-  var obs = new MutationObserver(function () {
-    injectTradeControls();
-  });
-  var ac = document.getElementById("alert-cards");
-  if (ac) {
-    obs.observe(ac, { childList: true, subtree: true });
-  }
-
-  var origFetch = window.fetch;
-  window.fetch = function (input, init) {
-    return origFetch.apply(this, arguments).then(function (res) {
-      try {
-        var u = typeof input === "string" ? input : input && input.url ? input.url : "";
-        if (u.indexOf(SCAN_HOOK) !== -1 && res && res.clone) {
-          res
-            .clone()
-            .json()
-            .then(function (j) {
-              if (j && j.alerts) window.__sohelLastAlerts = j.alerts;
-            })
-            .catch(function () {});
-        }
-      } catch (e1) {}
-      return res;
-    });
-  };
-
-  function startTm() {
-    injectTradeControls();
-    fetchOpenTrades();
-    if (pollOpenTimer) clearInterval(pollOpenTimer);
-    pollOpenTimer = setInterval(fetchOpenTrades, POLL_MS);
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", startTm);
-  } else {
-    startTm();
-  }
-})();
-
-/**
- * SOHELATOR blueprint — Final polish (Prompt 7): notifications, next expensive ET countdown,
- * open-trades refresh on new scan, self-tuned badge. Duplicates open-trade card HTML to refresh after /api/scan without editing Prompt 5.
- */
-(function initSohelatorFinalPolishPrompt7() {
-  var LOG_URL = "/api/log-trade";
-  var SCAN_HOOK = "/api/scan";
+  var POLL_SCAN_MS = 60000;
+  var POLL_OPEN_MS = 30000;
+  var SPY_LEVELS_SYM = "SPY";
   var EXPENSIVE_SLOTS_ET_MIN = [495, 565, 585, 660, 840, 960];
 
-  function esc(s) {
-    if (s == null || s === "") return "";
-    var d = document.createElement("div");
-    d.textContent = String(s);
-    return d.innerHTML;
-  }
-
-  function minutesEt(d) {
-    var parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/New_York",
-      hour: "numeric",
-      minute: "numeric",
-      hour12: false,
-    }).formatToParts(d);
-    var h = 0;
-    var m = 0;
-    for (var i = 0; i < parts.length; i++) {
-      if (parts[i].type === "hour") h = parseInt(parts[i].value, 10);
-      if (parts[i].type === "minute") m = parseInt(parts[i].value, 10);
-    }
-    return h * 60 + m;
-  }
-
-  function weekdayEt(d) {
-    return new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/New_York",
-      weekday: "short",
-    }).format(d);
-  }
-
-  function nextExpensiveLabel() {
-    var d = new Date();
-    var w = weekdayEt(d);
-    if (w === "Sat" || w === "Sun") {
-      return "Next expensive: Mon 8:15 ET";
-    }
-    var now = minutesEt(d);
-    var slots = EXPENSIVE_SLOTS_ET_MIN;
-    for (var i = 0; i < slots.length; i++) {
-      if (now < slots[i]) {
-        var hm = slots[i];
-        var hh = Math.floor(hm / 60);
-        var mm = hm % 60;
-        return "Next expensive scan in ~" + (slots[i] - now) + " min (" + hh + ":" + (mm < 10 ? "0" : "") + mm + " ET)";
-      }
-    }
-    return "Next expensive: tomorrow 8:15 ET";
-  }
-
-  function updateFooter() {
-    var el = document.getElementById("next-scan-time");
-    if (el) el.textContent = nextExpensiveLabel();
-    var st = document.getElementById("self-tuned");
-    if (st) st.textContent = "System self-tuned";
-  }
-
-  function requestNotifPermission() {
-    try {
-      if (typeof Notification === "undefined") return;
-      if (Notification.permission === "default") {
-        Notification.requestPermission().catch(function () {});
-      }
-    } catch (e) {}
-  }
-
-  function p7RenderOpenTrades(list) {
-    var host = document.getElementById("open-trade-cards");
-    if (!host) return;
-    if (!list || !list.length) {
-      host.innerHTML =
-        '<p class="tm-muted" style="margin:0;font-size:0.75rem;">No open trades — mark ENTERED from alerts above.</p>';
-      return;
-    }
-    host.innerHTML = list
-      .map(function (t) {
-        var sym = esc(t.symbol || "—");
-        var r = t.livePnlR != null ? Number(t.livePnlR).toFixed(3) : "—";
-        var pct = t.livePnlPct != null ? Number(t.livePnlPct).toFixed(2) : "—";
-        var g =
-          t.greeks && t.greeks.placeholder
-            ? "<div class=\"tm-muted\">Greeks: " + esc(t.greeks.note || "placeholder") + "</div>"
-            : "";
-        var actions = Array.isArray(t.actions) ? t.actions : [];
-        var actionHtml = actions
-          .map(function (act) {
-            return (
-              "<button type=\"button\" class=\"tm-btn-action\" data-tm-aid=\"" +
-              esc(act.id) +
-              "\" data-tm-tid=\"" +
-              esc(t.id) +
-              "\" title=\"" +
-              esc(act.reason || "") +
-              "\">" +
-              esc(act.label) +
-              "</button>"
-            );
-          })
-          .join("");
-        return (
-          "<div class=\"tm-open-card\" data-tm-open-id=\"" +
-          esc(t.id) +
-          "\">" +
-          "<div class=\"tm-row\"><strong>" +
-          sym +
-          "</strong> <span class=\"tm-muted\">P&amp;L ~" +
-          pct +
-          "% · " +
-          r +
-          "R</span> <span class=\"tm-muted\">@" +
-          esc(t.lastPrice != null ? t.lastPrice : "—") +
-          "</span></div>" +
-          g +
-          "<div class=\"tm-trade-wrap\" style=\"border-top-color:rgba(251,191,36,0.2);\">" +
-          actionHtml +
-          "</div>" +
-          "<div class=\"tm-exit-row\">" +
-          "<label class=\"tm-muted\">Exit</label>" +
-          "<input type=\"number\" step=\"0.01\" class=\"tm-exit-price\" data-tm-tid=\"" +
-          esc(t.id) +
-          "\" placeholder=\"px\" aria-label=\"Exit price\" />" +
-          "<select class=\"tm-exit-outcome\" data-tm-tid=\"" +
-          esc(t.id) +
-          "\">" +
-          "<option value=\"win\">win</option>" +
-          "<option value=\"loss\">loss</option>" +
-          "<option value=\"flat\">flat</option>" +
-          "</select>" +
-          "<button type=\"button\" class=\"tm-btn-exit\" data-tm-exit=\"" +
-          esc(t.id) +
-          "\">MARK EXITED</button>" +
-          "</div></div>"
-        );
-      })
-      .join("");
-
-    host.querySelectorAll(".tm-btn-exit").forEach(function (btn) {
-      btn.onclick = function () {
-        var tid = btn.getAttribute("data-tm-exit");
-        var card = btn.closest(".tm-open-card");
-        var inp = card ? card.querySelector(".tm-exit-price[data-tm-tid=\"" + tid + "\"]") : null;
-        var sel = card ? card.querySelector(".tm-exit-outcome[data-tm-tid=\"" + tid + "\"]") : null;
-        var px = inp && inp.value ? parseFloat(inp.value) : NaN;
-        if (!Number.isFinite(px)) {
-          alert("Enter a valid exit price.");
-          return;
-        }
-        var outcome = sel ? sel.value : "flat";
-        fetch(LOG_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "exited",
-            tradeId: tid,
-            exitPrice: px,
-            outcome: outcome,
-          }),
-          cache: "no-store",
-        })
-          .then(function (r) {
-            return r.json();
-          })
-          .then(function (j) {
-            if (!j.success) throw new Error(j.error || "exit failed");
-            p7RenderOpenTrades(j.openTrades || []);
-          })
-          .catch(function (e) {
-            alert(String(e.message || e));
-          });
-      };
-    });
-  }
-
-  function p7RefreshOpenTrades() {
-    fetch(LOG_URL, { method: "GET", cache: "no-store" })
-      .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      })
-      .then(function (j) {
-        p7RenderOpenTrades(j.openTrades || []);
-        var os = document.getElementById("open-status");
-        if (os) {
-          os.textContent = "LIVE";
-          os.style.color = "#fcd34d";
-        }
-      })
-      .catch(function () {});
-  }
-
-  function onScanPayload(j) {
-    if (!j || !j.alerts) return;
-    var maxS = 0;
-    var volMax = 0;
-    j.alerts.forEach(function (a) {
-      if (a.score > maxS) maxS = a.score;
-      var vr = Number(a.details && a.details.volRatio != null ? a.details.volRatio : a.volRatio || 0);
-      if (vr > volMax) volMax = vr;
-    });
-    var wild =
-      maxS >= 85 ||
-      volMax >= 3 ||
-      /catalyst|earnings|fda|news|gap|upgrade|breaking/i.test(JSON.stringify(j.alerts));
-    if (window.__sohelP7SkipFirstScanNotify == null) {
-      window.__sohelP7SkipFirstScanNotify = false;
-      window.__sohelLastScanPeak = maxS;
-      p7RefreshOpenTrades();
-      return;
-    }
-    var prev = window.__sohelLastScanPeak || 0;
-    window.__sohelLastScanPeak = maxS;
-    if (
-      wild &&
-      typeof Notification !== "undefined" &&
-      Notification.permission === "granted" &&
-      maxS > prev
-    ) {
-      try {
-        new Notification("SOHELATOR — alert spike", {
-          body: "Score up to " + Math.round(maxS) + " — review WHAT TO DO NOW",
-          tag: "sohel-p7-wild",
-        });
-      } catch (e) {}
-    }
-    p7RefreshOpenTrades();
-  }
-
-  var prevFetch = window.fetch;
-  window.fetch = function (input, init) {
-    return prevFetch.apply(this, arguments).then(function (res) {
-      try {
-        var u = typeof input === "string" ? input : input && input.url ? input.url : "";
-        if (u.indexOf(SCAN_HOOK) !== -1 && res && res.clone) {
-          res
-            .clone()
-            .json()
-            .then(onScanPayload)
-            .catch(function () {});
-        }
-      } catch (e1) {}
-      return res;
-    });
-  };
-
-  function startP7() {
-    requestNotifPermission();
-    updateFooter();
-    setInterval(updateFooter, 30000);
-    var sys = document.getElementById("system-status");
-    if (sys) {
-      sys.style.borderColor = "rgba(163, 230, 53, 0.4)";
-    }
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", startP7);
-  } else {
-    startP7();
-  }
-})();
-
-/**
- * SOHELATOR blueprint — System health banner + scan stale toast (Prompt 8)
- */
-(function initSohelatorHealthPrompt8() {
-  var SCAN_HOOK = "/api/scan";
-  window.__sohelPageLoadAt = Date.now();
-  window.__sohelLastScanOkAt = null;
-  window.__sohelLastGrokHealth = "skipped";
-
-  function nextMonitorMinutes() {
-    var mod = Math.floor(Date.now() / 60000) % 5;
-    return mod === 0 ? 5 : 5 - mod;
-  }
-
-  function grokLabel(h) {
-    if (h === "ok") return "OK";
-    if (h === "fallback_cheap") return "OK (fallback)";
-    if (h === "error") return "ERROR";
-    if (h === "outside_window") return "WINDOW";
-    return "—";
-  }
-
-  function updateHealthBanner() {
-    var ht = document.getElementById("health-text");
-    if (!ht) return;
-    var grok = grokLabel(window.__sohelLastGrokHealth);
-    var line =
-      "Next scan ~" + nextMonitorMinutes() + " min · Last Grok: " + grok;
-    if (window.__sohelLastScanStatus === "outside_window") {
-      line += " · ET 8–4: window off (cheap)";
-    }
-    ht.textContent = line;
-    ht.style.color = grok === "ERROR" ? "#f87171" : "#bef264";
-  }
-
-  function checkScanStaleToast() {
-    var toast = document.getElementById("scan-fail-toast");
-    if (!toast) return;
-    var now = Date.now();
-    var okAt = window.__sohelLastScanOkAt;
-    var stale =
-      okAt == null
-        ? now - window.__sohelPageLoadAt > 600000
-        : now - okAt > 600000;
-    if (stale) {
-      toast.classList.add("is-visible");
-    } else {
-      toast.classList.remove("is-visible");
-    }
-  }
-
-  function onScanJson(res, j) {
-    if (res.ok && j && j.success !== false) {
-      window.__sohelLastScanOkAt = Date.now();
-    }
-    window.__sohelLastScanStatus = j && j.status;
-    if (j && j.meta && j.meta.grokHealth != null) {
-      window.__sohelLastGrokHealth = j.meta.grokHealth;
-    }
-    updateHealthBanner();
-    checkScanStaleToast();
-  }
-
-  var innerFetch = window.fetch;
-  window.fetch = function (input, init) {
-    return innerFetch.apply(this, arguments).then(function (res) {
-      try {
-        var u = typeof input === "string" ? input : input && input.url ? input.url : "";
-        if (u.indexOf(SCAN_HOOK) !== -1 && res && res.clone) {
-          res
-            .clone()
-            .json()
-            .then(function (j) {
-              onScanJson(res, j);
-            })
-            .catch(function () {});
-        }
-      } catch (e) {}
-      return res;
-    });
-  };
-
-  function startP8() {
-    updateHealthBanner();
-    checkScanStaleToast();
-    setInterval(function () {
-      updateHealthBanner();
-      checkScanStaleToast();
-    }, 15000);
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", startP8);
-  } else {
-    startP8();
-  }
-})();
-
-/**
- * SOHELATOR blueprint — 3-tab layout (Prompt 9): HOME / ALERTS / OPEN TRADES,
- * regime + watchlist on HOME, full alert list newest-first on ALERTS (no dedupe),
- * outer fetch hook refreshes home + defers alert-cards after Prompt 4 render.
- * SOHELATOR blueprint — remove NVDA hardcoding + after-hours hourly scans + news/catalyst detection (Prompt 12):
- * HOME watchlist uses meta.universeSymbols (full liquid list) with per-symbol alert overlay; merges universe into broker wl.
- */
-(function initSohelatorThreeTabLayoutPrompt9() {
-  var SCAN_HOOK = "/api/scan";
-  var SPY_LEVELS_SYM = "SPY";
+  var pollScanTimer = null;
+  var pollOpenTimer = null;
   var spyLevelsTimer = null;
+
+  var scanStatusLabel = "—";
+  var scanStatusOk = true;
+  var openStatusLabel = "—";
+  var openStatusOk = true;
 
   function esc(s) {
     if (s == null || s === "") return "";
@@ -973,7 +274,7 @@ window.calculateIgnition = calculateIgnition;
   }
 
   function clearLevelHighlights() {
-    document.querySelectorAll(".sohel-level-cell").forEach(function (cell) {
+    document.querySelectorAll("#regime-spy-slot .level-cell").forEach(function (cell) {
       cell.classList.remove("sohel-near-level");
     });
   }
@@ -983,12 +284,14 @@ window.calculateIgnition = calculateIgnition;
     var thr = Math.abs(last * 0.0015);
     if (Math.abs(last - levelPx) > thr) return;
     var el = document.getElementById(levelValId);
-    var cell = el && el.closest ? el.closest(".sohel-level-cell") : null;
+    var cell = el && el.closest ? el.closest(".level-cell") : null;
     if (cell) cell.classList.add("sohel-near-level");
   }
 
   function refreshSpyLevels() {
     var sym = SPY_LEVELS_SYM;
+    var slot = document.getElementById("regime-spy-slot");
+    if (!slot) return;
     tradierApi("/v1/markets/history", "GET", {
       symbol: sym,
       interval: "daily",
@@ -1010,88 +313,124 @@ window.calculateIgnition = calculateIgnition;
               parseFloat(q.close) ||
               parseFloat(q.bid) ||
               NaN);
-          var setTxt = function (id, t) {
-            var el = document.getElementById(id);
-            if (el) el.textContent = t;
-          };
           clearLevelHighlights();
-          setTxt("home-level-price", isFinite(last) ? fmtPx(last) : "—");
-          if (piv) {
-            setTxt("home-level-pp", fmtPx(piv.pp));
-            setTxt("home-level-r1", fmtPx(piv.r1));
-            setTxt("home-level-s1", fmtPx(piv.s1));
-            if (isFinite(last)) {
-              maybeHighlightLevel(last, piv.r1, "home-level-r1");
-              maybeHighlightLevel(last, piv.pp, "home-level-pp");
-              maybeHighlightLevel(last, piv.s1, "home-level-s1");
-            }
-          }
-          var note = document.getElementById("home-level-note");
-          if (note && prev && prev.date) {
-            note.textContent =
-              "Prior bar " +
-              String(prev.date) +
-              " H/L/C → classic PP / R1 / S1 vs live " +
-              sym +
-              " quote.";
+          var lastStr = isFinite(last) ? fmtPx(last) : "—";
+          var note =
+            prev && prev.date
+              ? "Prior bar " + String(prev.date) + " → PP / R1 / S1 vs live " + sym + "."
+              : "";
+          var r1s = piv ? fmtPx(piv.r1) : "—";
+          var pps = piv ? fmtPx(piv.pp) : "—";
+          var s1s = piv ? fmtPx(piv.s1) : "—";
+          slot.innerHTML =
+            '<div class="sohel-spy-row"><span class="lab">SPY LAST</span><span class="px" id="spy-price-val">' +
+            esc(lastStr) +
+            '</span></div><div class="levels-3">' +
+            '<div class="level-cell r1"><span class="lv">R1</span><span class="num" id="spy-r1-val">' +
+            esc(r1s) +
+            '</span></div><div class="level-cell pp"><span class="lv">PIVOT</span><span class="num" id="spy-pp-val">' +
+            esc(pps) +
+            '</span></div><div class="level-cell s1"><span class="lv">S1</span><span class="num" id="spy-s1-val">' +
+            esc(s1s) +
+            "</span></div></div>" +
+            (note ? '<p class="sohel-level-note">' + esc(note) + "</p>" : "");
+          if (piv && isFinite(last)) {
+            maybeHighlightLevel(last, piv.r1, "spy-r1-val");
+            maybeHighlightLevel(last, piv.pp, "spy-pp-val");
+            maybeHighlightLevel(last, piv.s1, "spy-s1-val");
           }
         });
       })
       .catch(function () {
-        /* optional: SPY quote/history may fail if Tradier proxy idle */
+        if (slot)
+          slot.innerHTML =
+            '<p class="hint">SPY levels unavailable (quote/history).</p>';
       });
   }
 
-  function selectTab(tabId) {
-    var map = { home: "home-page", alerts: "alerts-page", trades: "open-trades-page" };
-    document.querySelectorAll("#sohel-tabbar .sohel-tab").forEach(function (btn) {
-      var on = btn.getAttribute("data-sohel-tab") === tabId;
-      btn.classList.toggle("sohel-tab--active", on);
-      btn.setAttribute("aria-selected", on ? "true" : "false");
+  function selectTab(which) {
+    var tabs = [
+      { btn: "tab-home", page: "home-page", key: "home" },
+      { btn: "tab-alerts", page: "alerts-page", key: "alerts" },
+      { btn: "tab-trades", page: "trades-page", key: "trades" },
+    ];
+    tabs.forEach(function (t) {
+      var b = document.getElementById(t.btn);
+      var p = document.getElementById(t.page);
+      var on = t.key === which;
+      if (b) b.classList.toggle("active", on);
+      if (p) p.classList.toggle("active", on);
     });
-    Object.keys(map).forEach(function (key) {
-      var el = document.getElementById(map[key]);
-      if (!el) return;
-      var show = key === tabId;
-      if (show) {
-        el.removeAttribute("hidden");
-        el.classList.add("sohel-tab-page--active");
-      } else {
-        el.setAttribute("hidden", "");
-        el.classList.remove("sohel-tab-page--active");
+  }
+
+  window.sohelSelectMainTab = function (k) {
+    selectTab(k);
+  };
+
+  function bindTabs() {
+    [["tab-home", "home"], ["tab-alerts", "alerts"], ["tab-trades", "trades"]].forEach(
+      function (pair) {
+        var el = document.getElementById(pair[0]);
+        if (el)
+          el.addEventListener("click", function () {
+            selectTab(pair[1]);
+          });
+      }
+    );
+  }
+
+  function grokHtml(j) {
+    if (!j || j.success === false || !Array.isArray(j.alerts) || !j.alerts.length) {
+      return (
+        '<div class="regime-grok"><h3 class="sohel-subh">Grok brief</h3><p class="sohel-grok-body">' +
+        esc(
+          "Grok co-pilot text appears on expensive scans (ET window) when returned on alerts."
+        ) +
+        "</p></div>"
+      );
+    }
+    var best = null;
+    var bestScore = -1;
+    j.alerts.forEach(function (a) {
+      var sc = Number(a.score) || 0;
+      if (a.aiCoPilot && sc >= bestScore) {
+        bestScore = sc;
+        best = a;
       }
     });
-  }
-
-  window.sohelSelectMainTab = selectTab;
-
-  function bindTabBar() {
-    var bar = document.getElementById("sohel-tabbar");
-    if (!bar) return;
-    bar.querySelectorAll(".sohel-tab").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var id = btn.getAttribute("data-sohel-tab");
-        if (id) selectTab(id);
-      });
+    if (best && best.aiCoPilot) {
+      return (
+        '<div class="regime-grok"><h3 class="sohel-subh">Grok brief</h3><div class="sohel-grok-tag">TOP CO-PILOT · ' +
+        esc(best.symbol || "—") +
+        '</div><div class="sohel-grok-body">' +
+        esc(best.aiCoPilot).replace(/\n/g, "<br/>") +
+        "</div></div>"
+      );
+    }
+    var any = j.alerts.find(function (a) {
+      return a.aiVerdict;
     });
+    var txt = any
+      ? String(any.aiVerdict)
+      : "No Grok body this pass (cheap mode or outside Grok window).";
+    return (
+      '<div class="regime-grok"><h3 class="sohel-subh">Grok brief</h3><p class="sohel-grok-body">' +
+      esc(txt) +
+      "</p></div>"
+    );
   }
 
   function renderHomeFromScan(j) {
-    var bodyEl = document.getElementById("home-regime-body");
-    var pill = document.getElementById("home-regime-pill");
-    var wlMeta = document.getElementById("home-watchlist-meta");
-    var grid = document.getElementById("home-watchlist-grid");
-    if (!bodyEl || !grid) return;
+    var regimeEl = document.getElementById("regime-content");
+    var grid = document.getElementById("watchlist-grid");
+    if (!regimeEl || !grid) return;
 
     if (!j || j.success === false) {
-      bodyEl.textContent =
-        j && j.error
-          ? "Scanner: " + String(j.error)
-          : "Waiting for scanner…";
-      if (pill) pill.textContent = "—";
-      if (wlMeta) wlMeta.textContent = "—";
-      grid.innerHTML =
-        '<p class="muted" style="font-size:0.75rem;margin:0;">No watchlist data.</p>';
+      regimeEl.innerHTML =
+        '<div id="sohel-regime-header"></div><p class="hint">' +
+        esc(j && j.error ? "Scanner: " + String(j.error) : "Waiting for scanner…") +
+        "</p>";
+      grid.innerHTML = '<p class="hint">No watchlist data.</p>';
       return;
     }
 
@@ -1099,72 +438,62 @@ window.calculateIgnition = calculateIgnition;
     var b7 = meta.backtest7d;
     var gh = meta.grokHealth || "—";
     var st = j.status || "ok";
-    if (pill) {
-      pill.textContent =
-        st === "outside_window" ? "OUTSIDE 8–4 ET" : String(j.mode || "cheap").toUpperCase();
-    }
+    var pill =
+      st === "outside_window" ? "OUTSIDE 8–4 ET" : String(j.mode || "cheap").toUpperCase();
 
     var lines = [];
     lines.push(
-      "Scanner mode: " + String(j.mode || "cheap") + (st === "outside_window" ? " (expensive → cheap outside window)" : "")
+      "Mode: " + String(j.mode || "cheap") + (st === "outside_window" ? " (cheap outside window)" : "")
     );
-    lines.push("Live alerts this pass: " + (Array.isArray(j.alerts) ? j.alerts.length : 0));
+    lines.push("Alerts this pass: " + (Array.isArray(j.alerts) ? j.alerts.length : 0));
     if (b7) {
       lines.push(
-        "7d backtest sample — EV " +
+        "7d EV " +
           (b7.ev != null ? Number(b7.ev).toFixed(3) : "—") +
-          ", WR " +
+          " · WR " +
           (b7.winRate != null ? Math.round(b7.winRate * 100) / 100 : "—") +
-          ", setups " +
+          " · setups " +
           (b7.totalSetups != null ? b7.totalSetups : "—")
       );
     }
     lines.push("Grok health: " + gh);
-    if (meta.minScore != null) lines.push("Min score gate: " + meta.minScore);
+    if (meta.minScore != null) lines.push("Min score: " + meta.minScore);
 
     var metricsHtml = "";
     if (b7) {
       metricsHtml =
-        '<div class="sohel-regime-metrics">' +
-        '<div class="sohel-regime-metric"><div class="lab">7d EV</div><div class="val">' +
+        '<div class="sohel-metrics">' +
+        '<div class="sohel-metric"><span class="ml">7d EV</span><div class="mv">' +
         esc(b7.ev != null ? Number(b7.ev).toFixed(2) : "—") +
-        '</div></div><div class="sohel-regime-metric"><div class="lab">Win %</div><div class="val">' +
+        '</div></div><div class="sohel-metric"><span class="ml">Win %</span><div class="mv">' +
         esc(b7.winRate != null ? Math.round(b7.winRate * 100) + "%" : "—") +
-        '</div></div><div class="sohel-regime-metric"><div class="lab">Setups</div><div class="val">' +
+        '</div></div><div class="sohel-metric"><span class="ml">Setups</span><div class="mv">' +
         esc(b7.totalSetups != null ? String(b7.totalSetups) : "—") +
         "</div></div></div>";
     }
 
-    bodyEl.innerHTML =
-      "<p class=\"sohel-regime-lede\" style=\"margin:0 0 12px;font-size:0.78rem;line-height:1.55;color:rgba(238,248,255,0.88);\">" +
+    var scanBlock =
+      '<div class="regime-scan"><h3 class="sohel-subh">Scanner summary</h3><p class="sohel-grok-body" style="margin-bottom:12px;">' +
       lines.map(function (L) {
         return esc(L);
       }).join("<br/>") +
       "</p>" +
-      metricsHtml;
+      metricsHtml +
+      "</div>";
+
+    regimeEl.innerHTML =
+      '<div id="sohel-regime-header" class="sohel-regime-top"><span class="sohel-pill">' +
+      esc(pill) +
+      '</span></div><div id="regime-spy-slot" class="sohel-spy-slot"><p class="hint">Loading SPY levels…</p></div>' +
+      grokHtml(j) +
+      scanBlock;
+
+    refreshSpyLevels();
 
     var uni =
       Array.isArray(meta.universeSymbols) && meta.universeSymbols.length
         ? meta.universeSymbols
         : null;
-
-    if (wlMeta) {
-      wlMeta.textContent =
-        (uni ? uni.length : Array.isArray(j.alerts) ? j.alerts.length : 0) +
-        " liquid names · tap ALERTS for full cards";
-    }
-
-    if (
-      typeof window.sohelMergeUniverseIntoWl === "function" &&
-      uni &&
-      uni.length
-    ) {
-      try {
-        window.sohelMergeUniverseIntoWl(uni);
-      } catch (e1) {
-        console.warn("Prompt12 merge wl", e1);
-      }
-    }
 
     var alerts = Array.isArray(j.alerts) ? j.alerts : [];
     var bySym = {};
@@ -1174,10 +503,7 @@ window.calculateIgnition = calculateIgnition;
         .replace(/[^A-Z0-9.-]/g, "")
         .slice(0, 8);
       if (!k) return;
-      if (
-        !bySym[k] ||
-        (Number(a.score) || 0) > (Number(bySym[k].score) || 0)
-      ) {
+      if (!bySym[k] || (Number(a.score) || 0) > (Number(bySym[k].score) || 0)) {
         bySym[k] = a;
       }
     });
@@ -1191,11 +517,11 @@ window.calculateIgnition = calculateIgnition;
       var sc = a && a.score != null ? Math.round(Number(a.score)) : "—";
       var play = a ? esc(a.playTypeLabel || a.playType || "—") : "—";
       var dir = a ? esc(a.direction || "—") : "—";
-      var txt = String(a && (a.aiVerdict || a.drivingText || "") ? a.aiVerdict || a.drivingText : "");
+      var txt = String(
+        a && (a.aiVerdict || a.drivingText || "") ? a.aiVerdict || a.drivingText : ""
+      );
       var cat = /HIGH-PROBABILITY CATALYST PLAY/i.test(txt);
-      var badge = cat
-        ? '<div class="sohel-wl-cat font-mono">CATALYST</div>'
-        : "";
+      var badge = cat ? '<div class="sohel-wl-cat">CATALYST</div>' : "";
       var scoreLine = a ? "SCORE " + esc(String(sc)) : "NO SETUP";
       return (
         '<div class="sohel-wl-tile" data-symbol="' +
@@ -1231,19 +557,20 @@ window.calculateIgnition = calculateIgnition;
         if (sb !== sa) return sb - sa;
         return String(a).localeCompare(String(b));
       });
-      grid.innerHTML = sortedU.map(function (s) {
-        var key = String(s || "")
-          .toUpperCase()
-          .replace(/[^A-Z0-9.-]/g, "")
-          .slice(0, 8);
-        return tileHtml(s, bySym[key]);
-      }).join("");
+      grid.innerHTML = sortedU
+        .map(function (s) {
+          var key = String(s || "")
+            .toUpperCase()
+            .replace(/[^A-Z0-9.-]/g, "")
+            .slice(0, 8);
+          return tileHtml(s, bySym[key]);
+        })
+        .join("");
       return;
     }
 
     if (!alerts.length) {
-      grid.innerHTML =
-        '<p class="muted" style="font-size:0.75rem;margin:0;">No setups passed gates — refresh after RTH.</p>';
+      grid.innerHTML = '<p class="hint">No setups passed gates.</p>';
       return;
     }
 
@@ -1257,122 +584,438 @@ window.calculateIgnition = calculateIgnition;
       .join("");
   }
 
-  function refillAlertsNewestFirst(j) {
-    var host = document.getElementById("alert-cards");
-    if (!host || !j || j.success === false) return;
+  function alertTimeMs(a) {
+    var t =
+      Date.parse(a.ts || a.timestamp || a.createdAt || a.alertAt || "") || 0;
+    return t;
+  }
 
-    var alerts = Array.isArray(j.alerts) ? j.alerts : [];
-    if (!alerts.length) {
+  function renderAlertsPage(j) {
+    var host = document.getElementById("alerts-list");
+    if (!host) return;
+    if (!j || j.success === false) {
+      window.__sohelAlertsDisplayed = [];
       host.innerHTML =
-        '<p class="muted" style="font-size:0.8rem;line-height:1.5;margin:0;">No alerts above min score / EV gates — try Refresh after RTH or check API.</p>';
+        '<p class="hint">' + esc(j && j.error ? String(j.error) : "No scan yet.") + "</p>";
       return;
     }
-
+    var alerts = Array.isArray(j.alerts) ? j.alerts : [];
+    if (!alerts.length) {
+      window.__sohelAlertsDisplayed = [];
+      host.innerHTML = '<p class="hint">No alerts this pass.</p>';
+      return;
+    }
     var order = alerts.slice().sort(function (a, b) {
-      var ta =
-        Date.parse(a.ts || a.timestamp || a.createdAt || a.alertAt || "") || 0;
-      var tb =
-        Date.parse(b.ts || b.timestamp || b.createdAt || b.alertAt || "") || 0;
-      if (tb !== ta) return tb - ta;
-      return (Number(b.score) || 0) - (Number(a.score) || 0);
+      var ta = alertTimeMs(a);
+      var tb = alertTimeMs(b);
+      if (ta !== tb) return ta - tb;
+      var sa = String(a.symbol || "").localeCompare(String(b.symbol || ""));
+      if (sa !== 0) return sa;
+      return (Number(a.score) || 0) - (Number(b.score) || 0);
     });
-
+    window.__sohelAlertsDisplayed = order;
     host.innerHTML = order
       .map(function (a) {
         var drive = a.drivingText
           ? esc(a.drivingText)
-          : "<span class=\"muted\">(no drivingText)</span>";
+          : "<span class=\"tm-muted\">(no drivingText)</span>";
         var hist = a.historicalSummary
-          ? "<div class=\"ap-hist\">Historical comparison: " + esc(a.historicalSummary) + "</div>"
+          ? "<div class=\"ap-hist\">" + esc(a.historicalSummary) + "</div>"
           : "";
         return '<div class="ap-drive-card">' + drive + hist + "</div>";
       })
       .join("");
   }
 
-  function onScanJsonForTabs(res, j) {
-    try {
-      renderHomeFromScan(j);
-      refreshSpyLevels();
-      setTimeout(function () {
-        refillAlertsNewestFirst(j);
-      }, 0);
-    } catch (e) {
-      console.warn("Prompt9 scan UI", e);
+  function setPanelStatus(label, ok) {
+    scanStatusLabel = label;
+    scanStatusOk = ok;
+    updateHealthBanner();
+  }
+
+  function setOpenStatus(label, ok) {
+    openStatusLabel = label;
+    openStatusOk = ok;
+    updateHealthBanner();
+  }
+
+  function renderOpenTrades(list) {
+    var host = document.getElementById("open-trades-list");
+    if (!host) return;
+    if (!list || !list.length) {
+      host.innerHTML =
+        '<p class="tm-muted" style="margin:0;">No open trades — mark ENTERED from ALERTS.</p>';
+      return;
     }
-  }
+    host.innerHTML = list
+      .map(function (t) {
+        var sym = esc(t.symbol || "—");
+        var r = t.livePnlR != null ? Number(t.livePnlR).toFixed(3) : "—";
+        var pct = t.livePnlPct != null ? Number(t.livePnlPct).toFixed(2) : "—";
+        var g =
+          t.greeks && t.greeks.placeholder
+            ? "<div class=\"tm-muted\">Greeks: " + esc(t.greeks.note || "placeholder") + "</div>"
+            : "";
+        var actions = Array.isArray(t.actions) ? t.actions : [];
+        var actionHtml = actions
+          .map(function (act) {
+            return (
+              "<button type=\"button\" class=\"tm-btn-action\" data-tm-aid=\"" +
+              esc(act.id) +
+              "\" data-tm-tid=\"" +
+              esc(t.id) +
+              "\" title=\"" +
+              esc(act.reason || "") +
+              "\">" +
+              esc(act.label) +
+              "</button>"
+            );
+          })
+          .join("");
+        return (
+          "<div class=\"tm-open-card\" data-tm-open-id=\"" +
+          esc(t.id) +
+          "\">" +
+          "<div class=\"tm-row\"><strong>" +
+          sym +
+          "</strong> <span class=\"tm-muted\">P&amp;L ~" +
+          pct +
+          "% · " +
+          r +
+          "R</span> <span class=\"tm-muted\">@" +
+          esc(t.lastPrice != null ? t.lastPrice : "—") +
+          "</span></div>" +
+          g +
+          "<div class=\"tm-trade-wrap\" style=\"margin-top:10px;\">" +
+          actionHtml +
+          "</div>" +
+          "<div class=\"tm-exit-row\">" +
+          "<label class=\"tm-muted\">Exit</label>" +
+          "<input type=\"number\" step=\"0.01\" class=\"tm-exit-price\" data-tm-tid=\"" +
+          esc(t.id) +
+          "\" placeholder=\"px\" />" +
+          "<select class=\"tm-exit-outcome\" data-tm-tid=\"" +
+          esc(t.id) +
+          "\">" +
+          "<option value=\"win\">win</option>" +
+          "<option value=\"loss\">loss</option>" +
+          "<option value=\"flat\">flat</option>" +
+          "</select>" +
+          "<button type=\"button\" class=\"tm-btn-exit\" data-tm-exit=\"" +
+          esc(t.id) +
+          "\">MARK EXITED</button>" +
+          "</div></div>"
+        );
+      })
+      .join("");
 
-  var innerFetchP9 = window.fetch;
-  window.fetch = function (input, init) {
-    return innerFetchP9.apply(this, arguments).then(function (res) {
-      try {
-        var u = typeof input === "string" ? input : input && input.url ? input.url : "";
-        if (u.indexOf(SCAN_HOOK) !== -1 && res && res.clone) {
-          res
-            .clone()
-            .json()
-            .then(function (j) {
-              onScanJsonForTabs(res, j);
-            })
-            .catch(function () {});
+    host.querySelectorAll(".tm-btn-exit").forEach(function (btn) {
+      btn.onclick = function () {
+        var tid = btn.getAttribute("data-tm-exit");
+        var card = btn.closest(".tm-open-card");
+        var inp = card
+          ? card.querySelector(".tm-exit-price[data-tm-tid=\"" + tid + "\"]")
+          : null;
+        var sel = card
+          ? card.querySelector(".tm-exit-outcome[data-tm-tid=\"" + tid + "\"]")
+          : null;
+        var px = inp && inp.value ? parseFloat(inp.value) : NaN;
+        if (!Number.isFinite(px)) {
+          alert("Enter a valid exit price.");
+          return;
         }
-      } catch (e1) {}
-      return res;
+        var outcome = sel ? sel.value : "flat";
+        fetch(LOG_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "exited",
+            tradeId: tid,
+            exitPrice: px,
+            outcome: outcome,
+          }),
+          cache: "no-store",
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (j2) {
+            if (!j2.success) throw new Error(j2.error || "exit failed");
+            renderOpenTrades(j2.openTrades || []);
+          })
+          .catch(function (e) {
+            alert(String(e.message || e));
+          });
+      };
     });
-  };
-
-  function startP9() {
-    bindTabBar();
-    selectTab("home");
-    refreshSpyLevels();
-    if (spyLevelsTimer) clearInterval(spyLevelsTimer);
-    spyLevelsTimer = setInterval(refreshSpyLevels, 120000);
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", startP9);
-  } else {
-    startP9();
+  function alertFromCardIndex(idx) {
+    var list = window.__sohelAlertsDisplayed || window.__sohelLastAlerts || [];
+    var a = list[idx] ? Object.assign({}, list[idx]) : {};
+    var sym = a.symbol || a.ticker;
+    if (!sym && a.drivingText) {
+      var m = String(a.drivingText).match(/\b([A-Z]{1,5})\b/);
+      if (m) sym = m[1];
+    }
+    if (sym) a.symbol = String(sym).toUpperCase();
+    return a;
   }
-})();
 
-/**
- * SOHELATOR blueprint — neon motion: alert flash, regime flash, open-trade amber pulse (Prompt 11)
- */
-(function initSohelatorNeonMotionPrompt11() {
-  var SCAN_HOOK = "/api/scan";
-  var LOG_HOOK = "/api/log-trade";
+  function injectTradeControls() {
+    var cards = document.querySelectorAll("#alerts-list .ap-drive-card");
+    cards.forEach(function (card, idx) {
+      if (card.querySelector("[data-tm-injected]")) return;
+      var wrap = document.createElement("div");
+      wrap.setAttribute("data-tm-injected", "1");
+      wrap.className = "tm-trade-wrap";
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "tm-btn-enter";
+      btn.textContent = "MARK ENTERED";
+      btn.onclick = function () {
+        var payload = alertFromCardIndex(idx);
+        if (!payload.symbol) {
+          alert("Could not detect symbol — wait for scan.");
+          return;
+        }
+        btn.disabled = true;
+        fetch(LOG_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "entered", alert: payload }),
+          cache: "no-store",
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (j2) {
+            if (!j2.success) throw new Error(j2.error || "log failed");
+            wrap.innerHTML =
+              "<span class=\"tm-muted\">Logged · " +
+              esc(j2.trade && j2.trade.id ? j2.trade.id : "ok") +
+              "</span>";
+            renderOpenTrades(j2.openTrades || []);
+          })
+          .catch(function (e) {
+            btn.disabled = false;
+            alert(String(e.message || e));
+          });
+      };
+      wrap.appendChild(btn);
+      card.appendChild(wrap);
+    });
+  }
+
+  var obsAlerts = new MutationObserver(function () {
+    injectTradeControls();
+  });
+
+  function fetchOpenTrades() {
+    fetch(LOG_URL, { method: "GET", cache: "no-store" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (j) {
+        setOpenStatus("OPEN OK", true);
+        renderOpenTrades(j.openTrades || []);
+      })
+      .catch(function () {
+        setOpenStatus("OPEN ERR", false);
+      });
+  }
+
+  function applyScanPayload(j, res) {
+    if (j && j.alerts) window.__sohelLastAlerts = j.alerts;
+    setPanelStatus(res && res.ok ? "SCAN OK" : "SCAN HTTP", !!(res && res.ok));
+    renderHomeFromScan(j);
+    renderAlertsPage(j);
+    setTimeout(injectTradeControls, 0);
+  }
+
+  function pullScan() {
+    setPanelStatus("SCAN …", true);
+    fetch(SCAN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "cheap" }),
+      cache: "no-store",
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { r: r, j: j };
+        });
+      })
+      .then(function (o) {
+        applyScanPayload(o.j, o.r);
+      })
+      .catch(function (e) {
+        setPanelStatus("SCAN ERR", false);
+        var host = document.getElementById("alerts-list");
+        if (host)
+          host.innerHTML =
+            '<p class="hint">' + esc(e.message || String(e)) + "</p>";
+      });
+  }
+
+  function minutesEt(d) {
+    var parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "numeric",
+      minute: "numeric",
+      hour12: false,
+    }).formatToParts(d);
+    var h = 0;
+    var m = 0;
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i].type === "hour") h = parseInt(parts[i].value, 10);
+      if (parts[i].type === "minute") m = parseInt(parts[i].value, 10);
+    }
+    return h * 60 + m;
+  }
+
+  function weekdayEt(d) {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      weekday: "short",
+    }).format(d);
+  }
+
+  function nextExpensiveLabel() {
+    var d = new Date();
+    var w = weekdayEt(d);
+    if (w === "Sat" || w === "Sun") return "Next expensive: Mon 8:15 ET";
+    var now = minutesEt(d);
+    var slots = EXPENSIVE_SLOTS_ET_MIN;
+    for (var i = 0; i < slots.length; i++) {
+      if (now < slots[i]) {
+        var hm = slots[i];
+        var hh = Math.floor(hm / 60);
+        var mm = hm % 60;
+        return (
+          "Next expensive ~" +
+          (slots[i] - now) +
+          "m (" +
+          hh +
+          ":" +
+          (mm < 10 ? "0" : "") +
+          mm +
+          " ET)"
+        );
+      }
+    }
+    return "Next expensive: tomorrow";
+  }
+
+  function requestNotifPermission() {
+    try {
+      if (typeof Notification === "undefined") return;
+      if (Notification.permission === "default") {
+        Notification.requestPermission().catch(function () {});
+      }
+    } catch (e) {}
+  }
+
+  function onScanNotifyAndRefreshOpen(j) {
+    if (!j || !j.alerts) return;
+    var maxS = 0;
+    var volMax = 0;
+    j.alerts.forEach(function (a) {
+      if (a.score > maxS) maxS = a.score;
+      var vr = Number(
+        a.details && a.details.volRatio != null ? a.details.volRatio : a.volRatio || 0
+      );
+      if (vr > volMax) volMax = vr;
+    });
+    var wild =
+      maxS >= 85 ||
+      volMax >= 3 ||
+      /catalyst|earnings|fda|news|gap|upgrade|breaking/i.test(JSON.stringify(j.alerts));
+    if (window.__sohelP7SkipFirstScanNotify == null) {
+      window.__sohelP7SkipFirstScanNotify = false;
+      window.__sohelLastScanPeak = maxS;
+      fetchOpenTrades();
+      return;
+    }
+    var prev = window.__sohelLastScanPeak || 0;
+    window.__sohelLastScanPeak = maxS;
+    if (
+      wild &&
+      typeof Notification !== "undefined" &&
+      Notification.permission === "granted" &&
+      maxS > prev
+    ) {
+      try {
+        new Notification("SOHELATOR — alert spike", {
+          body: "Score up to " + Math.round(maxS) + " — check ALERTS",
+          tag: "sohel-p7-wild",
+        });
+      } catch (e) {}
+    }
+    fetchOpenTrades();
+  }
+
+  window.__sohelPageLoadAt = Date.now();
+  window.__sohelLastScanOkAt = null;
+  window.__sohelLastGrokHealth = "skipped";
+
+  function nextMonitorMinutes() {
+    var mod = Math.floor(Date.now() / 60000) % 5;
+    return mod === 0 ? 5 : 5 - mod;
+  }
+
+  function grokLabel(h) {
+    if (h === "ok") return "OK";
+    if (h === "fallback_cheap") return "OK (fallback)";
+    if (h === "error") return "ERROR";
+    if (h === "outside_window") return "WINDOW";
+    return "—";
+  }
+
+  function updateHealthBanner() {
+    var hb = document.getElementById("health-banner");
+    if (!hb) return;
+    var now = Date.now();
+    var okAt = window.__sohelLastScanOkAt;
+    var stale =
+      okAt == null
+        ? now - window.__sohelPageLoadAt > 600000
+        : now - okAt > 600000;
+    hb.classList.toggle("sohel-health--stale", stale);
+    var grok = grokLabel(window.__sohelLastGrokHealth);
+    var parts = [];
+    parts.push(scanStatusLabel);
+    parts.push(openStatusLabel);
+    parts.push("Poll ~" + nextMonitorMinutes() + "m");
+    parts.push("Grok " + grok);
+    if (window.__sohelLastScanStatus === "outside_window") {
+      parts.push("cheap outside 8–4 ET");
+    }
+    parts.push(nextExpensiveLabel());
+    parts.push("Self-tuned nightly");
+    if (stale) parts.push("Scanner idle 10+ min");
+    hb.textContent = parts.join(" · ");
+    var errGrok = grok === "ERROR";
+    var bad = errGrok || !scanStatusOk || !openStatusOk;
+    hb.style.color = bad ? (errGrok ? "#f87171" : "#fbbf24") : "#bef264";
+  }
+
+  function onHealthScan(res, j) {
+    if (res.ok && j && j.success !== false) {
+      window.__sohelLastScanOkAt = Date.now();
+    }
+    window.__sohelLastScanStatus = j && j.status;
+    if (j && j.meta && j.meta.grokHealth != null) {
+      window.__sohelLastGrokHealth = j.meta.grokHealth;
+    }
+    updateHealthBanner();
+  }
 
   var prevAlertSig = null;
   var prevRegSig = null;
   var prevMaxScore = null;
   var prevTradeSnap = {};
-
-  function flashAlertCards() {
-    var host = document.getElementById("alert-cards");
-    if (!host) return;
-    host.querySelectorAll(".ap-drive-card").forEach(function (el) {
-      el.classList.remove("neon-flash");
-    });
-    host.querySelectorAll(".ap-drive-card").forEach(function (el) {
-      void el.offsetWidth;
-      el.classList.add("neon-flash");
-      setTimeout(function () {
-        el.classList.remove("neon-flash");
-      }, 820);
-    });
-  }
-
-  function regimeFlash() {
-    var h = document.getElementById("home-regime-header");
-    if (!h) return;
-    h.classList.remove("regime-flash");
-    void h.offsetWidth;
-    h.classList.add("regime-flash");
-    setTimeout(function () {
-      h.classList.remove("regime-flash");
-    }, 900);
-  }
 
   function digestAlerts(alerts) {
     if (!Array.isArray(alerts)) return "";
@@ -1397,34 +1040,47 @@ window.calculateIgnition = calculateIgnition;
     ].join(";");
   }
 
-  function onScanJson(j) {
-    if (!j || j.success === false) return;
+  function flashAlertCards() {
+    var host = document.getElementById("alerts-list");
+    if (!host) return;
+    host.querySelectorAll(".ap-drive-card").forEach(function (el) {
+      el.classList.remove("neon-flash");
+      void el.offsetWidth;
+      el.classList.add("neon-flash");
+      setTimeout(function () {
+        el.classList.remove("neon-flash");
+      }, 800);
+    });
+  }
 
+  function regimeFlash() {
+    var h = document.getElementById("sohel-regime-header");
+    if (!h) return;
+    h.classList.remove("regime-flash");
+    void h.offsetWidth;
+    h.classList.add("regime-flash");
+    setTimeout(function () {
+      h.classList.remove("regime-flash");
+    }, 900);
+  }
+
+  function onNeonScan(j) {
+    if (!j || j.success === false) return;
     var alerts = j.alerts || [];
     var sig = digestAlerts(alerts);
     var regSig = digestRegime(j);
     var maxScore = alerts.reduce(function (m, a) {
       return Math.max(m, Number(a.score) || 0);
     }, 0);
-
     if (prevAlertSig !== null && sig !== prevAlertSig) {
-      setTimeout(function () {
-        flashAlertCards();
-      }, 120);
+      setTimeout(flashAlertCards, 120);
     }
-
     if (prevRegSig !== null) {
-      if (regSig !== prevRegSig) {
-        regimeFlash();
-      } else if (
-        prevMaxScore !== null &&
-        maxScore > 85 &&
-        prevMaxScore <= 85
-      ) {
+      if (regSig !== prevRegSig) regimeFlash();
+      else if (prevMaxScore !== null && maxScore > 85 && prevMaxScore <= 85) {
         regimeFlash();
       }
     }
-
     prevAlertSig = sig;
     prevRegSig = regSig;
     prevMaxScore = maxScore;
@@ -1434,7 +1090,7 @@ window.calculateIgnition = calculateIgnition;
     var id = String(tradeId || "").replace(/"/g, "");
     if (!id) return;
     var el = document.querySelector(
-      '#open-trade-cards .tm-open-card[data-tm-open-id="' + id + '"]'
+      '#open-trades-list .tm-open-card[data-tm-open-id="' + id + '"]'
     );
     if (!el) return;
     el.classList.remove("neon-amber-pulse");
@@ -1456,12 +1112,10 @@ window.calculateIgnition = calculateIgnition;
       var ar = Math.abs(r);
       var prev = prevTradeSnap[id];
       prevTradeSnap[id] = { p: p, r: r };
-
       var bigLevel = ap >= 2.5 || ar >= 0.4;
       var moved =
         prev &&
         (Math.abs(p - prev.p) >= 0.45 || Math.abs(r - prev.r) >= 0.12);
-
       if (bigLevel && (moved || !prev)) {
         requestAnimationFrame(function () {
           pulseOpenTradeCard(id);
@@ -1470,9 +1124,9 @@ window.calculateIgnition = calculateIgnition;
     });
   }
 
-  var innerFetchNeon = window.fetch;
+  var nativeFetch = window.fetch.bind(window);
   window.fetch = function (input, init) {
-    return innerFetchNeon.apply(this, arguments).then(function (res) {
+    return nativeFetch(input, init).then(function (res) {
       try {
         var u =
           typeof input === "string"
@@ -1480,27 +1134,73 @@ window.calculateIgnition = calculateIgnition;
             : input && input.url
               ? input.url
               : "";
-        if (res && res.clone) {
-          if (u.indexOf(SCAN_HOOK) !== -1) {
-            res
-              .clone()
-              .json()
-              .then(onScanJson)
-              .catch(function () {});
-          }
-          if (u.indexOf(LOG_HOOK) !== -1 && res.ok) {
-            res
-              .clone()
-              .json()
-              .then(onLogTradeJson)
-              .catch(function () {});
-          }
+        if (u.indexOf(SCAN_HOOK) !== -1 && res && res.clone) {
+          res
+            .clone()
+            .json()
+            .then(function (j) {
+              onHealthScan(res, j);
+              onScanNotifyAndRefreshOpen(j);
+              onNeonScan(j);
+            })
+            .catch(function () {});
+        }
+        if (u.indexOf(LOG_URL) !== -1 && res.ok && res.clone) {
+          res
+            .clone()
+            .json()
+            .then(onLogTradeJson)
+            .catch(function () {});
         }
       } catch (e) {}
       return res;
     });
   };
-})();
 
-/* SOHELATOR blueprint — remove NVDA hardcoding + after-hours hourly scans + news/catalyst detection (Prompt 12):
-   dynamic HOME watchlist + window.sohelMergeUniverseIntoWl are implemented inside initSohelatorThreeTabLayoutPrompt9. */
+  function injectAlertsToolbar() {
+    var ap = document.getElementById("alerts-page");
+    if (!ap || document.getElementById("sohel-refresh-scan")) return;
+    var h2 = ap.querySelector("h2");
+    var row = document.createElement("div");
+    row.className = "sohel-alerts-toolbar";
+    row.style.cssText =
+      "display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;";
+    row.innerHTML =
+      '<button type="button" id="sohel-refresh-scan" class="sohel-tab" style="flex:0 0 auto;min-width:140px;">REFRESH SCAN</button>';
+    if (h2 && h2.nextSibling) ap.insertBefore(row, h2.nextSibling);
+    else ap.appendChild(row);
+    document.getElementById("sohel-refresh-scan").addEventListener("click", pullScan);
+  }
+
+  function start() {
+    bindTabs();
+    selectTab("home");
+    injectAlertsToolbar();
+
+    var ac = document.getElementById("alerts-list");
+    if (ac) obsAlerts.observe(ac, { childList: true, subtree: true });
+
+    pullScan();
+    if (pollScanTimer) clearInterval(pollScanTimer);
+    pollScanTimer = setInterval(pullScan, POLL_SCAN_MS);
+
+    fetchOpenTrades();
+    if (pollOpenTimer) clearInterval(pollOpenTimer);
+    pollOpenTimer = setInterval(fetchOpenTrades, POLL_OPEN_MS);
+
+    if (spyLevelsTimer) clearInterval(spyLevelsTimer);
+    spyLevelsTimer = setInterval(function () {
+      if (document.getElementById("regime-spy-slot")) refreshSpyLevels();
+    }, 120000);
+
+    requestNotifPermission();
+    updateHealthBanner();
+    setInterval(updateHealthBanner, 15000);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
