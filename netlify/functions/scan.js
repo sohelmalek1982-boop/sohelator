@@ -392,6 +392,12 @@ export const handler = async (event) => {
       const playTypeLabel = playLabelPretty(playRaw);
       const lv = levelsFromLastBar(bars5, bull, riskPct);
       const hist = historicalSummary(similar);
+      const bPrev = bars5[bars5.length - 2];
+      const bLast = bars5[bars5.length - 1];
+      const cPrev = bPrev ? num(bPrev.close) : 0;
+      const cLast = bLast ? num(bLast.close) : 0;
+      const barChgPct =
+        cPrev > 0 ? ((cLast - cPrev) / cPrev) * 100 : null;
 
       const tAlert = Date.now();
       const setup = {
@@ -405,6 +411,7 @@ export const handler = async (event) => {
         alertedAt: tAlert,
         alertedAtIso: new Date(tAlert).toISOString(),
         underlyingAtAlert: row.last,
+        barChgPct,
         bars5m: bars5.length,
         bars15m: bars15.length,
         dailyBars: daily.length,

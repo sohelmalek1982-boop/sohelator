@@ -153,6 +153,7 @@ export async function getOptionChain(symbol, expiration) {
     open_interest: num(o.open_interest ?? o.openInterest),
     volume: num(o.volume),
     last: num(o.last),
+    delta: o.greeks?.delta != null ? num(o.greeks.delta) : null,
   }));
   return { expiration: String(expiration).slice(0, 10), options: opts };
 }
@@ -162,7 +163,7 @@ export async function getOptionChain(symbol, expiration) {
  * @param {string} symbol
  * @param {number} underlyingLast
  * @param {boolean} wantCall true = call, false = put
- * @returns {Promise<null | { right: string, strike: number, expiration: string, optionSymbol: string | null, bid: number, ask: number, mid: number | null }>}
+ * @returns {Promise<null | { right: string, strike: number, expiration: string, optionSymbol: string | null, bid: number, ask: number, mid: number | null, delta: number | null }>}
  */
 export async function suggestAtmOption(symbol, underlyingLast, wantCall) {
   const sym = String(symbol || "").trim().toUpperCase();
@@ -210,6 +211,7 @@ export async function suggestAtmOption(symbol, underlyingLast, wantCall) {
     bid,
     ask,
     mid,
+    delta: best.delta != null && Number.isFinite(best.delta) ? best.delta : null,
   };
 }
 

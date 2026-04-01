@@ -52,6 +52,9 @@ export function formatDrivingAlert(setup) {
           `CONTRACT: ${String(opt.right || "").toUpperCase()} $${fmt(opt.strike)} exp ${opt.expiration}` +
             (opt.mid != null && Number.isFinite(Number(opt.mid))
               ? ` · est mid $${fmt(opt.mid)}`
+              : "") +
+            (opt.delta != null && Number.isFinite(Number(opt.delta))
+              ? ` · delta ${Number(opt.delta).toFixed(2)}`
               : ""),
         ]
       : [];

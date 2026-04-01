@@ -527,33 +527,189 @@ window.calculateIgnition = calculateIgnition;
     var FIRING_SCORE = 78;
     var HEATING_MIN = 65;
 
-    function formatOptionLineHtml(opt) {
-      if (!opt || opt.strike == null || !opt.expiration) return "";
-      var r = String(opt.right || "").toLowerCase() === "put" ? "PUT" : "CALL";
-      var stk = Number(opt.strike);
-      var stks =
-        Math.abs(stk - Math.round(stk)) < 1e-6
-          ? String(Math.round(stk))
-          : stk.toFixed(2);
-      var midStr =
-        opt.mid != null && isFinite(Number(opt.mid))
-          ? " · mid ~$" + Number(opt.mid).toFixed(2)
-          : "";
-      return (
-        esc(r) +
-        " $" +
-        esc(stks) +
-        " · exp " +
-        esc(String(opt.expiration)) +
-        esc(midStr)
-      );
-    }
-
     function cardTierForScore(sc, has) {
       if (!has) return "watch";
       if (sc >= FIRING_SCORE) return "fire";
       if (sc >= HEATING_MIN) return "heat";
       return "watch";
+    }
+
+    function watchingSinceLine(a) {
+      if (!a || !a.alertedAtIso) return "";
+      var ms = Date.parse(a.alertedAtIso);
+      if (!ms) return "";
+      var s = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }).format(new Date(ms));
+      return "SIGNAL · " + s + " ET";
+    }
+
+    function formatExpShort(iso) {
+      if (!iso) return "—";
+      var d = new Date(iso + "T12:00:00Z");
+      if (isNaN(d.getTime())) return esc(String(iso).slice(0, 10));
+      return esc(
+        new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(d)
+      );
+    }
+
+    function pctFromTo(from, to) {
+      if (
+        from == null ||
+        to == null ||
+        !isFinite(Number(from)) ||
+        !isFinite(Number(to)) ||
+        Number(from) === 0
+      ) {
+        return "—";
+      }
+      var p = ((Number(to) - Number(from)) / Math.abs(Number(from))) * 100;
+      return (p >= 0 ? "+" : "") + p.toFixed(1) + "%";
+    }
+
+    function indTagsHtml(a) {
+      if (!a || !a.details) return "";
+      var d = a.details;
+      var tags = [];
+      var vr = Number(d.volRatio);
+      if (isFinite(vr)) {
+        if (vr >= 2)
+          tags.push({
+            cls: "tag-vol-bull",
+            t: "VOL " + vr.toFixed(1) + "x",
+          });
+        else if (vr < 0.9)
+          tags.push({ cls: "tag-vol-bear", t: "VOL DRY" });
+        else tags.push({ cls: "tag-vol", t: "VOL " + vr.toFixed(1) + "x" });
+      }
+      var mh = Number(d.macdHist);
+      if (isFinite(mh)) {
+        if (mh > 0) tags.push({ cls: "tag-macd-bull", t: "MACD BULL" });
+        else tags.push({ cls: "tag-macd-bear", t: "MACD BEAR" });
+      }
+      var adx = Number(d.adx);
+      if (isFinite(adx)) {
+        if (adx < 22)
+          tags.push({
+            cls: "tag-adx-chop",
+            t: "ADX " + Math.round(adx) + " CHOP",
+          });
+        else tags.push({ cls: "tag-adx", t: "ADX " + Math.round(adx) });
+      }
+      var rsi = Number(d.rsi);
+      if (isFinite(rsi)) {
+        tags.push({ cls: "tag-rsi", t: "RSI " + Math.round(rsi) });
+      }
+      if (!tags.length) return "";
+      return (
+        '<div class="sohel-ind-row">' +
+        tags
+          .map(function (x) {
+            return (
+              '<span class="sohel-ind-tag ' +
+              x.cls +
+              '">' +
+              esc(x.t) +
+              "</span>"
+            );
+          })
+          .join("") +
+        "</div>"
+      );
+    }
+
+    function levelsGridHtml(a) {
+      if (!a) return "";
+      var last = a.last;
+      var ent = a.entry;
+      var st = a.stop;
+      var tgt = a.target;
+      var eStr =
+        ent != null && isFinite(Number(ent)) ? "$" + Number(ent).toFixed(2) : "—";
+      var sStr =
+        st != null && isFinite(Number(st)) ? "$" + Number(st).toFixed(2) : "—";
+      var tStr =
+        tgt != null && isFinite(Number(tgt)) ? "$" + Number(tgt).toFixed(2) : "—";
+      return (
+        '<div class="sohel-levels-grid">' +
+        '<div class="sohel-lv"><span class="sohel-lv-lab">ENTRY</span><span class="sohel-lv-val">' +
+        esc(eStr) +
+        '</span><div class="sohel-lv-sub">' +
+        esc(last != null ? pctFromTo(last, ent) + " vs last" : "—") +
+        '</div></div><div class="sohel-lv sohel-lv--target"><span class="sohel-lv-lab">TARGET</span><span class="sohel-lv-val">' +
+        esc(tStr) +
+        '</span><div class="sohel-lv-sub">' +
+        esc(last != null ? pctFromTo(last, tgt) + " vs last" : "—") +
+        '</div></div><div class="sohel-lv sohel-lv--stop"><span class="sohel-lv-lab">STOP</span><span class="sohel-lv-val">' +
+        esc(sStr) +
+        '</span><div class="sohel-lv-sub">' +
+        esc(last != null ? pctFromTo(last, st) + " vs last" : "—") +
+        "</div></div></div>"
+      );
+    }
+
+    function optionPlayBarHtml(a) {
+      var o = a && a.suggestedOption;
+      if (!o || o.strike == null) return "";
+      var letter = String(o.right || "").toLowerCase() === "put" ? "P" : "C";
+      var stk = Number(o.strike);
+      var play =
+        (Math.abs(stk - Math.round(stk)) < 1e-6
+          ? String(Math.round(stk))
+          : stk.toFixed(2)) + letter;
+      var mid =
+        o.mid != null && isFinite(Number(o.mid))
+          ? "$" + Number(o.mid).toFixed(2)
+          : "—";
+      var del =
+        o.delta != null && isFinite(Number(o.delta))
+          ? Number(o.delta).toFixed(2)
+          : "—";
+      return (
+        '<div class="sohel-opt-playbar">' +
+        '<div class="sohel-opt-cell"><span class="sohel-opt-lab">PLAY</span><span class="sohel-opt-val">' +
+        esc(play) +
+        '</span></div><div class="sohel-opt-cell"><span class="sohel-opt-lab">PRICE</span><span class="sohel-opt-val">' +
+        esc(mid) +
+        '</span></div><div class="sohel-opt-cell"><span class="sohel-opt-lab">EXP</span><span class="sohel-opt-val">' +
+        formatExpShort(o.expiration) +
+        '</span></div><div class="sohel-opt-cell"><span class="sohel-opt-lab">DELTA</span><span class="sohel-opt-val">' +
+        esc(del) +
+        "</span></div></div>"
+      );
+    }
+
+    function priceChgRowHtml(a) {
+      if (!a) return "";
+      var last =
+        a.last != null && isFinite(Number(a.last)) ? Number(a.last) : null;
+      var lastStr = last != null ? "$" + last.toFixed(2) : "—";
+      var bp = a.barChgPct;
+      var chgCls = "sohel-radar-chg--flat";
+      var chgTxt = "prior 5m bar —";
+      if (bp != null && isFinite(Number(bp))) {
+        var p = Number(bp);
+        chgCls =
+          p > 0.02
+            ? "sohel-radar-chg--up"
+            : p < -0.02
+              ? "sohel-radar-chg--down"
+              : "sohel-radar-chg--flat";
+        chgTxt =
+          (p >= 0 ? "+" : "") + p.toFixed(2) + "% (5m)";
+      }
+      return (
+        '<div class="sohel-radar-price-row"><span class="sohel-radar-price">' +
+        esc(lastStr) +
+        '</span><span class="sohel-radar-chg ' +
+        chgCls +
+        '">' +
+        esc(chgTxt) +
+        "</span></div>"
+      );
     }
 
     function radarCardHtml(symU, a, sectionTier) {
@@ -567,76 +723,93 @@ window.calculateIgnition = calculateIgnition;
       var tier =
         sectionTier ||
         cardTierForScore(sc != null ? sc : -1, has);
-      var last =
-        has && a.last != null && isFinite(Number(a.last))
-          ? Number(a.last)
-          : null;
-      var lastStr = last != null ? "$" + last.toFixed(2) : "—";
-      var play = has ? String(a.playTypeLabel || a.playType || "").trim() : "";
-      var dirRaw = has ? String(a.direction || "").toLowerCase() : "";
-      var dirLbl =
-        dirRaw === "short" ? "SHORT" : dirRaw === "long" ? "LONG" : "";
+      var statusLbl =
+        tier === "fire"
+          ? "FIRING"
+          : tier === "heat"
+            ? "HEATING"
+            : has
+              ? "SETTING UP"
+              : "UNIVERSE";
+      var metaLn = has ? watchingSinceLine(a) : "Watching universe";
+      var scoreRing = has
+        ? '<div class="sohel-score-ring" style="--p:' +
+          Math.min(100, Math.max(0, sc)) +
+          ';"><span>' +
+          esc(String(sc)) +
+          "</span></div>"
+        : '<div class="sohel-radar-score--na"><div class="sohel-score-ring" style="--p:0;"><span>—</span></div></div>';
       var txt = has
         ? String((a.aiVerdict || "") + (a.drivingText || ""))
         : "";
       var cat = /HIGH-PROBABILITY CATALYST/i.test(txt);
       var badges = [];
-      if (tier === "fire" && has) {
-        badges.push(
-          '<span class="sohel-badge sohel-badge--go">HOT</span>'
-        );
-      } else if (tier === "heat" && has) {
-        badges.push(
-          '<span class="sohel-badge sohel-badge--heat">BUILDING</span>'
-        );
-      }
       if (cat && has) {
         badges.push(
           '<span class="sohel-badge sohel-badge--cat">CATALYST</span>'
         );
       }
-      if (play && has) {
-        badges.push(
-          '<span class="sohel-badge sohel-badge--play">' +
-            esc(play.toUpperCase()) +
-            "</span>"
-        );
+      if (has) {
+        var play = String(a.playTypeLabel || a.playType || "").trim();
+        if (play) {
+          badges.push(
+            '<span class="sohel-badge sohel-badge--play">' +
+              esc(play.toUpperCase()) +
+              "</span>"
+          );
+        }
+        var dirRaw = String(a.direction || "").toLowerCase();
+        var dirLbl =
+          dirRaw === "short" ? "SHORT" : dirRaw === "long" ? "LONG" : "";
+        if (dirLbl) {
+          badges.push(
+            '<span class="sohel-badge sohel-badge--dir">' +
+              esc(dirLbl) +
+              "</span>"
+          );
+        }
       }
-      if (dirLbl && has) {
-        badges.push(
-          '<span class="sohel-badge sohel-badge--dir">' +
-            esc(dirLbl) +
-            "</span>"
-        );
+      var optPlay = has ? optionPlayBarHtml(a) : "";
+      if (has && !optPlay) {
+        optPlay =
+          '<div class="sohel-opt-playbar"><div class="sohel-opt-cell" style="grid-column:1/-1"><span class="sohel-opt-lab">OPTION</span><span class="sohel-opt-val" style="color:var(--muted);font-size:0.65rem">Refresh scan for chain</span></div></div>';
       }
-      var optLine = has ? formatOptionLineHtml(a.suggestedOption) : "";
-      var optHtml = optLine
-        ? '<div class="sohel-radar-opt">' + optLine + "</div>"
-        : has
-          ? '<div class="sohel-radar-opt sohel-radar-opt--muted">Contract not loaded — refresh scan</div>'
-          : '<div class="sohel-radar-opt sohel-radar-opt--muted">No setup this pass</div>';
-      var scoreBlock = has
-        ? '<div class="sohel-radar-score"><span>' +
-          esc(String(sc)) +
-          '</span><div class="sohel-radar-bar" style="width:' +
-          Math.min(100, Math.max(8, sc)) +
-          '%"></div></div>'
-        : '<div class="sohel-radar-score sohel-radar-score--na"><span>—</span></div>';
+      var levels = has ? levelsGridHtml(a) : "";
+      var inds = has ? indTagsHtml(a) : "";
+      var priceRow = has
+        ? priceChgRowHtml(a)
+        : '<div class="sohel-radar-price-row"><span class="sohel-radar-price">—</span><span class="sohel-radar-chg sohel-radar-chg--flat">No pass this scan</span></div>';
+      var actions = has
+        ? '<div class="sohel-radar-actions">' +
+          '<button type="button" class="sohel-radar-btn sohel-radar-btn--primary" data-sohel-goto="alerts">LOG ON ALERTS</button>' +
+          '<button type="button" class="sohel-radar-btn sohel-radar-btn--secondary" data-sohel-goto="trades">OPEN TRADES</button>' +
+          '<button type="button" class="sohel-radar-btn sohel-radar-btn--ghost">SKIP</button>' +
+          "</div>"
+        : "";
       return (
         '<div class="sohel-radar-card sohel-radar-card--' +
         tier +
         '" data-symbol="' +
         rawSym +
-        '"><div class="sohel-radar-accent"></div><div class="sohel-radar-body"><div class="sohel-radar-top"><span class="sohel-radar-sym">' +
+        '"><div class="sohel-radar-accent"></div><div class="sohel-radar-body"><div class="sohel-radar-head"><div class="sohel-radar-head-left"><div class="sohel-radar-top"><span class="sohel-radar-sym">' +
         sym +
-        '</span><div class="sohel-radar-badges">' +
-        badges.join("") +
+        '</span><span class="sohel-radar-status">' +
+        esc(statusLbl) +
+        "</span></div>" +
+        (metaLn
+          ? '<div class="sohel-radar-meta">' + esc(metaLn) + "</div>"
+          : "") +
         "</div>" +
-        scoreBlock +
-        '</div><div class="sohel-radar-price">' +
-        esc(lastStr) +
-        "</div>" +
-        optHtml +
+        scoreRing +
+        '</div>' +
+        (badges.length
+          ? '<div class="sohel-radar-badges">' + badges.join("") + "</div>"
+          : "") +
+        priceRow +
+        inds +
+        levels +
+        optPlay +
+        actions +
         "</div></div>"
       );
     }
@@ -798,7 +971,19 @@ window.calculateIgnition = calculateIgnition;
       o.mid != null && isFinite(Number(o.mid))
         ? " · mid ~$" + Number(o.mid).toFixed(2)
         : "";
-    return esc(r) + " $" + esc(stks) + " · exp " + esc(String(o.expiration)) + esc(mid);
+    var del =
+      o.delta != null && isFinite(Number(o.delta))
+        ? " · Δ" + Number(o.delta).toFixed(2)
+        : "";
+    return (
+      esc(r) +
+      " $" +
+      esc(stks) +
+      " · exp " +
+      esc(String(o.expiration)) +
+      esc(mid) +
+      esc(del)
+    );
   }
 
   function alertMetaLineHtml(a) {
@@ -1461,6 +1646,17 @@ window.calculateIgnition = calculateIgnition;
   function start() {
     bindTabs();
     selectTab("home");
+    var homePg = document.getElementById("home-page");
+    if (homePg) {
+      homePg.addEventListener("click", function (e) {
+        var b = e.target.closest("[data-sohel-goto]");
+        if (!b) return;
+        var t = b.getAttribute("data-sohel-goto");
+        if (t && typeof window.sohelSelectMainTab === "function") {
+          window.sohelSelectMainTab(t);
+        }
+      });
+    }
     injectAlertsToolbar();
 
     var ac = document.getElementById("alerts-list");
