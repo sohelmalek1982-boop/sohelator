@@ -269,6 +269,7 @@ export async function markEntered(alert) {
 
   const state = await readMergedState();
   const id = `tm_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const alertedAtMs = num(n.raw.alertedAt ?? n.raw.timestamp, 0);
   const trade = {
     id,
     status: "open",
@@ -281,6 +282,12 @@ export async function markEntered(alert) {
     playType: n.playType,
     riskPct: n.riskPct,
     direction: n.direction,
+    alertedAt: alertedAtMs || null,
+    alertedAtIso:
+      n.raw.alertedAtIso ||
+      (alertedAtMs ? new Date(alertedAtMs).toISOString() : null),
+    underlyingAtAlert:
+      num(n.raw.underlyingAtAlert ?? n.raw.last, 0) || null,
     alertSnapshot: n.raw,
     historicalSummary: n.raw.historicalSummary || null,
     drivingText: n.raw.drivingText || null,

@@ -439,12 +439,17 @@ window.calculateIgnition = calculateIgnition;
     var gh = meta.grokHealth || "—";
     var st = j.status || "ok";
     var pill =
-      st === "outside_window" ? "OUTSIDE 8–4 ET" : String(j.mode || "cheap").toUpperCase();
+      st === "after_hours"
+        ? "AFTER HOURS"
+        : st === "outside_window"
+          ? "OUTSIDE 8–4 ET"
+          : String(j.mode || "cheap").toUpperCase();
 
     var lines = [];
     lines.push(
       "Mode: " + String(j.mode || "cheap") + (st === "outside_window" ? " (cheap outside window)" : "")
     );
+    if (meta.optionsSessionNote) lines.push(String(meta.optionsSessionNote));
     lines.push("Alerts this pass: " + (Array.isArray(j.alerts) ? j.alerts.length : 0));
     if (b7) {
       lines.push(
@@ -496,6 +501,17 @@ window.calculateIgnition = calculateIgnition;
         : null;
 
     var alerts = Array.isArray(j.alerts) ? j.alerts : [];
+
+    if (st === "after_hours") {
+      grid.innerHTML =
+        '<p class="hint">' +
+        esc(
+          meta.optionsSessionNote ||
+            "Equity options trade 9:30–16:00 ET Mon–Fri — watchlist scan paused."
+        ) +
+        "</p>";
+      return;
+    }
     var bySym = {};
     alerts.forEach(function (a) {
       var k = String(a.symbol || "")
@@ -584,10 +600,62 @@ window.calculateIgnition = calculateIgnition;
       .join("");
   }
 
+  function formatAlertTimeEt(a) {
+    var ms = 0;
+    if (a.alertedAt != null && isFinite(Number(a.alertedAt))) {
+      ms = Number(a.alertedAt);
+    } else if (a.alertedAtIso) {
+      ms = Date.parse(a.alertedAtIso) || 0;
+    }
+    if (!ms) {
+      ms =
+        Date.parse(a.ts || a.timestamp || a.createdAt || a.alertAt || "") ||
+        0;
+    }
+    if (!ms) return "—";
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    }).format(new Date(ms)) + " ET";
+  }
+
   function alertTimeMs(a) {
-    var t =
-      Date.parse(a.ts || a.timestamp || a.createdAt || a.alertAt || "") || 0;
-    return t;
+    if (a.alertedAt != null && isFinite(Number(a.alertedAt))) {
+      return Number(a.alertedAt);
+    }
+    var iso = Date.parse(a.alertedAtIso || "") || 0;
+    if (iso) return iso;
+    return (
+      Date.parse(a.ts || a.timestamp || a.createdAt || a.alertAt || "") || 0
+    );
+  }
+
+  function alertMetaLineHtml(a) {
+    var sym = esc(String(a.symbol || a.ticker || "—").toUpperCase());
+    var t = formatAlertTimeEt(a);
+    var und =
+      a.underlyingAtAlert != null && isFinite(Number(a.underlyingAtAlert))
+        ? " · underlying $" + esc(Number(a.underlyingAtAlert).toFixed(2))
+        : a.last != null && isFinite(Number(a.last))
+          ? " · last $" + esc(Number(a.last).toFixed(2))
+          : "";
+    var sc =
+      a.score != null ? " · score " + esc(String(Math.round(Number(a.score)))) : "";
+    return (
+      '<div class="ap-time">' +
+      sym +
+      " · " +
+      esc(t) +
+      und +
+      sc +
+      "</div>"
+    );
   }
 
   function renderAlertsPage(j) {
@@ -599,10 +667,16 @@ window.calculateIgnition = calculateIgnition;
         '<p class="hint">' + esc(j && j.error ? String(j.error) : "No scan yet.") + "</p>";
       return;
     }
+    var meta = j.meta || {};
     var alerts = Array.isArray(j.alerts) ? j.alerts : [];
     if (!alerts.length) {
       window.__sohelAlertsDisplayed = [];
-      host.innerHTML = '<p class="hint">No alerts this pass.</p>';
+      var emptyMsg =
+        j.status === "after_hours"
+          ? meta.optionsSessionNote ||
+            "After hours — no optionable session (9:30–16:00 ET Mon–Fri)."
+          : "No alerts this pass.";
+      host.innerHTML = '<p class="hint">' + esc(emptyMsg) + "</p>";
       return;
     }
     var order = alerts.slice().sort(function (a, b) {
@@ -616,13 +690,14 @@ window.calculateIgnition = calculateIgnition;
     window.__sohelAlertsDisplayed = order;
     host.innerHTML = order
       .map(function (a) {
+        var metaLn = alertMetaLineHtml(a);
         var drive = a.drivingText
           ? esc(a.drivingText)
           : "<span class=\"tm-muted\">(no drivingText)</span>";
         var hist = a.historicalSummary
           ? "<div class=\"ap-hist\">" + esc(a.historicalSummary) + "</div>"
           : "";
-        return '<div class="ap-drive-card">' + drive + hist + "</div>";
+        return '<div class="ap-drive-card">' + metaLn + drive + hist + "</div>";
       })
       .join("");
   }
@@ -672,6 +747,31 @@ window.calculateIgnition = calculateIgnition;
             );
           })
           .join("");
+        var snap = t.alertSnapshot || {};
+        var alertCtx = "";
+        var und =
+          t.underlyingAtAlert != null
+            ? t.underlyingAtAlert
+            : snap.underlyingAtAlert != null
+              ? snap.underlyingAtAlert
+              : snap.last;
+        var atIso = t.alertedAtIso || snap.alertedAtIso;
+        var atMs = t.alertedAt || snap.alertedAt;
+        var et = "";
+        if (atMs && isFinite(Number(atMs))) {
+          et = formatAlertTimeEt({ alertedAt: atMs });
+        } else if (atIso) {
+          et = formatAlertTimeEt({ alertedAtIso: atIso });
+        }
+        if (et && et !== "—") {
+          alertCtx =
+            '<div class="ap-time tm-muted" style="margin-bottom:8px;">Signal time ' +
+            esc(et) +
+            (und != null && isFinite(Number(und))
+              ? " · underlying $" + esc(Number(und).toFixed(2)) + " at alert"
+              : "") +
+            "</div>";
+        }
         return (
           "<div class=\"tm-open-card\" data-tm-open-id=\"" +
           esc(t.id) +
@@ -685,6 +785,7 @@ window.calculateIgnition = calculateIgnition;
           "R</span> <span class=\"tm-muted\">@" +
           esc(t.lastPrice != null ? t.lastPrice : "—") +
           "</span></div>" +
+          alertCtx +
           g +
           "<div class=\"tm-trade-wrap\" style=\"margin-top:10px;\">" +
           actionHtml +
@@ -991,6 +1092,9 @@ window.calculateIgnition = calculateIgnition;
     parts.push("Grok " + grok);
     if (window.__sohelLastScanStatus === "outside_window") {
       parts.push("cheap outside 8–4 ET");
+    }
+    if (window.__sohelLastScanStatus === "after_hours") {
+      parts.push("options session closed");
     }
     parts.push(nextExpensiveLabel());
     parts.push("Self-tuned nightly");

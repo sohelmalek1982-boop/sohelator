@@ -140,6 +140,36 @@ function isEtGrokWindow(d) {
   return t >= 8 * 60 && t <= 16 * 60;
 }
 
+/** US equity options generally trade ~9:30–16:00 ET Mon–Fri — skip actionable alerts outside. */
+function isUsEquityOptionsRthEt(d) {
+  if (!isWeekdayEt(d)) return false;
+  const t = minutesEt(d);
+  const open = 9 * 60 + 30;
+  const close = 16 * 60;
+  return t >= open && t < close;
+}
+
+async function sendTelegramScanAlert(lines) {
+  const bot = process.env.TELEGRAM_BOT_TOKEN;
+  const chat = process.env.TELEGRAM_CHAT_ID;
+  if (!bot || !chat) return;
+  const text = String(lines || "").trim().slice(0, 3900);
+  if (!text) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chat,
+        text,
+        disable_web_page_preview: true,
+      }),
+    });
+  } catch (e) {
+    console.warn("scan.js Telegram:", e?.message || e);
+  }
+}
+
 const GROK_HEALTH_RANK = {
   error: 5,
   fallback_cheap: 4,
@@ -219,6 +249,8 @@ export const handler = async (event) => {
   let scanMode = mode;
   let scanStatus = "ok";
   const nowEt = new Date();
+  const optionsRth = isUsEquityOptionsRthEt(nowEt);
+  const forceAlertsAfterHours = body.forceAlertsAfterHours === true;
   const allowCatalystGrokOutsideWindow =
     body.allowCatalystGrokOutsideWindow === true;
   if (
@@ -239,6 +271,51 @@ export const handler = async (event) => {
       backtest7 = await runBacktest(7);
     } catch (e) {
       console.warn("scan.js runBacktest(7) optional:", e?.message || e);
+    }
+
+    const P0 = getOptimizedParams();
+    if (!optionsRth && !forceAlertsAfterHours) {
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          status: "after_hours",
+          mode: scanMode,
+          requestedMode: requestedMode !== scanMode ? requestedMode : undefined,
+          meta: {
+            minScore: P0.minScore,
+            evThreshold: P0.evThreshold,
+            grokHealth: "skipped",
+            universeSymbols: [
+              ...new Set([
+                ...DEFAULT_UNIVERSE,
+                ...(Array.isArray(body.extraSymbols)
+                  ? body.extraSymbols
+                      .map((s) => String(s || "").trim().toUpperCase())
+                      .filter(Boolean)
+                  : []),
+              ]),
+            ].slice(0, 48),
+            priorityFromNews: Array.isArray(body.prioritySymbols)
+              ? body.prioritySymbols
+                  .map((s) => String(s || "").trim().toUpperCase())
+                  .filter(Boolean)
+              : [],
+            backtest7d: backtest7
+              ? {
+                  ev: backtest7.ev,
+                  winRate: backtest7.winRate,
+                  totalSetups: backtest7.totalSetups,
+                }
+              : null,
+            optionsSession: "after_hours",
+            optionsSessionNote:
+              "Equity options session is 9:30–16:00 ET Mon–Fri — alerts paused.",
+          },
+          alerts: [],
+        }),
+      };
     }
 
     const extraSyms = Array.isArray(body.extraSymbols)
@@ -315,6 +392,7 @@ export const handler = async (event) => {
       const lv = levelsFromLastBar(bars5, bull, riskPct);
       const hist = historicalSummary(similar);
 
+      const tAlert = Date.now();
       const setup = {
         symbol,
         score: sc.score,
@@ -323,6 +401,9 @@ export const handler = async (event) => {
         playTypeLabel,
         direction: bull ? "long" : "short",
         last: row.last,
+        alertedAt: tAlert,
+        alertedAtIso: new Date(tAlert).toISOString(),
+        underlyingAtAlert: row.last,
         bars5m: bars5.length,
         bars15m: bars15.length,
         dailyBars: daily.length,
@@ -419,6 +500,31 @@ Respond with a few short lines, then exactly one line: NET VERDICT: <one line>`;
       alerts.push(setup);
     }
 
+    if (
+      alerts.length &&
+      process.env.TELEGRAM_BOT_TOKEN &&
+      process.env.TELEGRAM_CHAT_ID
+    ) {
+      for (const a of alerts) {
+        const when = a.alertedAtIso
+          ? new Date(a.alertedAtIso).toLocaleString("en-US", {
+              timeZone: "America/New_York",
+              hour: "numeric",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: true,
+            }) + " ET"
+          : "now";
+        const und =
+          a.underlyingAtAlert != null
+            ? ` · underlying ~$${Number(a.underlyingAtAlert).toFixed(2)}`
+            : "";
+        await sendTelegramScanAlert(
+          `SOHELATOR ${a.symbol} score ${Math.round(a.score)}/100\n${when}${und}\n${String(a.drivingText || a.aiVerdict || "").slice(0, 500)}`
+        );
+      }
+    }
+
     return {
       statusCode: 200,
       headers,
@@ -433,6 +539,7 @@ Respond with a few short lines, then exactly one line: NET VERDICT: <one line>`;
           grokHealth: grokHealthAgg,
           universeSymbols: mergedUniverse.slice(0, 48),
           priorityFromNews: Array.from(prioritySyms),
+          optionsSession: "rth",
           backtest7d: backtest7
             ? {
                 ev: backtest7.ev,
