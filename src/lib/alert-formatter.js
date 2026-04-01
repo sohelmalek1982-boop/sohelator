@@ -44,6 +44,18 @@ export function formatDrivingAlert(setup) {
     setup.thetaCountdown ||
     "Theta countdown: — (options greeks not wired in this path)";
 
+  const opt = setup.suggestedOption;
+  const optBlock =
+    opt && opt.strike != null && opt.expiration
+      ? [
+          ``,
+          `CONTRACT: ${String(opt.right || "").toUpperCase()} $${fmt(opt.strike)} exp ${opt.expiration}` +
+            (opt.mid != null && Number.isFinite(Number(opt.mid))
+              ? ` · est mid $${fmt(opt.mid)}`
+              : ""),
+        ]
+      : [];
+
   return [
     `🎯 SOHELATOR | ${sym}`,
     `━━━━━━━━━━━━━━━━━━━━`,
@@ -53,6 +65,7 @@ export function formatDrivingAlert(setup) {
     `ENTRY  ${entry}`,
     `STOP   ${stop}`,
     `TARGET ${target}`,
+    ...optBlock,
     ``,
     ai,
     ``,

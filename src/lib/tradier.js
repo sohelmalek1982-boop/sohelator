@@ -158,6 +158,62 @@ export async function getOptionChain(symbol, expiration) {
 }
 
 /**
+ * Nearest listed expiration + ATM call or put vs underlying (for scan alerts / UI).
+ * @param {string} symbol
+ * @param {number} underlyingLast
+ * @param {boolean} wantCall true = call, false = put
+ * @returns {Promise<null | { right: string, strike: number, expiration: string, optionSymbol: string | null, bid: number, ask: number, mid: number | null }>}
+ */
+export async function suggestAtmOption(symbol, underlyingLast, wantCall) {
+  const sym = String(symbol || "").trim().toUpperCase();
+  const last = num(underlyingLast);
+  if (!sym || !(last > 0)) return null;
+  const expJ = await tradierGet("/v1/markets/options/expirations", {
+    symbol: sym,
+    includeAllRoots: "true",
+  });
+  const dates = normList(expJ.expirations?.date || expJ.expirations?.expiration)
+    .map(String)
+    .sort();
+  const pick =
+    dates.find((d) => {
+      const dte = Math.round(
+        (new Date(d + "T12:00:00Z").getTime() - Date.now()) / 86400000
+      );
+      return dte >= 0;
+    }) || dates[0];
+  if (!pick) return null;
+  const chain = await getOptionChain(sym, pick);
+  const want = wantCall ? "call" : "put";
+  const legs = chain.options.filter(
+    (o) => String(o.option_type || "").toLowerCase() === want
+  );
+  if (!legs.length) return null;
+  let best = legs[0];
+  let bestD = Math.abs(num(best.strike) - last);
+  for (const o of legs) {
+    const d = Math.abs(num(o.strike) - last);
+    if (d < bestD) {
+      bestD = d;
+      best = o;
+    }
+  }
+  const bid = num(best.bid);
+  const ask = num(best.ask);
+  const mid =
+    bid > 0 && ask > 0 ? (bid + ask) / 2 : num(best.last) || null;
+  return {
+    right: want,
+    strike: num(best.strike),
+    expiration: chain.expiration,
+    optionSymbol: best.symbol ? String(best.symbol) : null,
+    bid,
+    ask,
+    mid,
+  };
+}
+
+/**
  * Rank underlying symbols by total open interest on the nearest listed expiry (max 80).
  * @param {string[]} fullList
  * @returns {Promise<string[]>}

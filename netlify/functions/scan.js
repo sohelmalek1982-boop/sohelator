@@ -10,6 +10,7 @@ import {
   getTimesales,
   getQuote,
   getDailyHistory,
+  suggestAtmOption,
 } from "../../src/lib/tradier.js";
 import {
   calculateSetupScore,
@@ -422,6 +423,13 @@ export const handler = async (event) => {
         details: sc.details,
       };
 
+      try {
+        const sug = await suggestAtmOption(symbol, row.last, bull);
+        if (sug) setup.suggestedOption = sug;
+      } catch (e) {
+        console.warn("scan suggestAtmOption", symbol, e?.message || e);
+      }
+
       /* GROK_API_KEY — Prompt 8: ET window + 2× expensive + cheap fallback */
       if (scanMode === "expensive" && process.env.GROK_API_KEY) {
         try {
@@ -482,20 +490,7 @@ Respond with a few short lines, then exactly one line: NET VERDICT: <one line>`;
         }
       }
 
-      setup.drivingText = formatDrivingAlert({
-        symbol: setup.symbol,
-        score: setup.score,
-        edge: setup.edge,
-        playTypeLabel: setup.playTypeLabel,
-        entry: setup.entry,
-        stop: setup.stop,
-        target: setup.target,
-        aiVerdict: setup.aiVerdict,
-        historicalSummary: setup.historicalSummary,
-        ev: setup.ev,
-        projectedEv: setup.projectedEv ?? undefined,
-        thetaCountdown: setup.thetaCountdown,
-      });
+      setup.drivingText = formatDrivingAlert(setup);
 
       alerts.push(setup);
     }

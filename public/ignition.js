@@ -524,36 +524,193 @@ window.calculateIgnition = calculateIgnition;
       }
     });
 
-    function tileHtml(symU, a) {
-      var sym = esc(symU || "—");
+    var FIRING_SCORE = 78;
+    var HEATING_MIN = 65;
+
+    function formatOptionLineHtml(opt) {
+      if (!opt || opt.strike == null || !opt.expiration) return "";
+      var r = String(opt.right || "").toLowerCase() === "put" ? "PUT" : "CALL";
+      var stk = Number(opt.strike);
+      var stks =
+        Math.abs(stk - Math.round(stk)) < 1e-6
+          ? String(Math.round(stk))
+          : stk.toFixed(2);
+      var midStr =
+        opt.mid != null && isFinite(Number(opt.mid))
+          ? " · mid ~$" + Number(opt.mid).toFixed(2)
+          : "";
+      return (
+        esc(r) +
+        " $" +
+        esc(stks) +
+        " · exp " +
+        esc(String(opt.expiration)) +
+        esc(midStr)
+      );
+    }
+
+    function cardTierForScore(sc, has) {
+      if (!has) return "watch";
+      if (sc >= FIRING_SCORE) return "fire";
+      if (sc >= HEATING_MIN) return "heat";
+      return "watch";
+    }
+
+    function radarCardHtml(symU, a, sectionTier) {
       var rawSym = String(symU || "")
         .toUpperCase()
         .replace(/[^A-Z0-9.-]/g, "")
         .slice(0, 8);
-      var sc = a && a.score != null ? Math.round(Number(a.score)) : "—";
-      var play = a ? esc(a.playTypeLabel || a.playType || "—") : "—";
-      var dir = a ? esc(a.direction || "—") : "—";
-      var txt = String(
-        a && (a.aiVerdict || a.drivingText || "") ? a.aiVerdict || a.drivingText : ""
-      );
-      var cat = /HIGH-PROBABILITY CATALYST PLAY/i.test(txt);
-      var badge = cat ? '<div class="sohel-wl-cat">CATALYST</div>' : "";
-      var scoreLine = a ? "SCORE " + esc(String(sc)) : "NO SETUP";
+      var sym = esc(symU || "—");
+      var has = !!a;
+      var sc = has && a.score != null ? Math.round(Number(a.score)) : null;
+      var tier =
+        sectionTier ||
+        cardTierForScore(sc != null ? sc : -1, has);
+      var last =
+        has && a.last != null && isFinite(Number(a.last))
+          ? Number(a.last)
+          : null;
+      var lastStr = last != null ? "$" + last.toFixed(2) : "—";
+      var play = has ? String(a.playTypeLabel || a.playType || "").trim() : "";
+      var dirRaw = has ? String(a.direction || "").toLowerCase() : "";
+      var dirLbl =
+        dirRaw === "short" ? "SHORT" : dirRaw === "long" ? "LONG" : "";
+      var txt = has
+        ? String((a.aiVerdict || "") + (a.drivingText || ""))
+        : "";
+      var cat = /HIGH-PROBABILITY CATALYST/i.test(txt);
+      var badges = [];
+      if (tier === "fire" && has) {
+        badges.push(
+          '<span class="sohel-badge sohel-badge--go">HOT</span>'
+        );
+      } else if (tier === "heat" && has) {
+        badges.push(
+          '<span class="sohel-badge sohel-badge--heat">BUILDING</span>'
+        );
+      }
+      if (cat && has) {
+        badges.push(
+          '<span class="sohel-badge sohel-badge--cat">CATALYST</span>'
+        );
+      }
+      if (play && has) {
+        badges.push(
+          '<span class="sohel-badge sohel-badge--play">' +
+            esc(play.toUpperCase()) +
+            "</span>"
+        );
+      }
+      if (dirLbl && has) {
+        badges.push(
+          '<span class="sohel-badge sohel-badge--dir">' +
+            esc(dirLbl) +
+            "</span>"
+        );
+      }
+      var optLine = has ? formatOptionLineHtml(a.suggestedOption) : "";
+      var optHtml = optLine
+        ? '<div class="sohel-radar-opt">' + optLine + "</div>"
+        : has
+          ? '<div class="sohel-radar-opt sohel-radar-opt--muted">Contract not loaded — refresh scan</div>'
+          : '<div class="sohel-radar-opt sohel-radar-opt--muted">No setup this pass</div>';
+      var scoreBlock = has
+        ? '<div class="sohel-radar-score"><span>' +
+          esc(String(sc)) +
+          '</span><div class="sohel-radar-bar" style="width:' +
+          Math.min(100, Math.max(8, sc)) +
+          '%"></div></div>'
+        : '<div class="sohel-radar-score sohel-radar-score--na"><span>—</span></div>';
       return (
-        '<div class="sohel-wl-tile" data-symbol="' +
+        '<div class="sohel-radar-card sohel-radar-card--' +
+        tier +
+        '" data-symbol="' +
         rawSym +
-        '"><div><span class="sohel-wl-sym">' +
+        '"><div class="sohel-radar-accent"></div><div class="sohel-radar-body"><div class="sohel-radar-top"><span class="sohel-radar-sym">' +
         sym +
-        "</span>" +
-        badge +
-        '<div class="sohel-wl-meta">' +
-        play +
-        " · " +
-        dir +
-        '</div></div><div class="sohel-wl-score">' +
-        scoreLine +
+        '</span><div class="sohel-radar-badges">' +
+        badges.join("") +
+        "</div>" +
+        scoreBlock +
+        '</div><div class="sohel-radar-price">' +
+        esc(lastStr) +
+        "</div>" +
+        optHtml +
         "</div></div>"
       );
+    }
+
+    function watchlistSection(title, sub, sectionTier, pairs) {
+      if (!pairs.length) return "";
+      return (
+        '<div class="sohel-wl-section sohel-wl-section--' +
+        sectionTier +
+        '"><div class="sohel-wl-section-head"><span class="sohel-wl-pill">' +
+        esc(title) +
+        '</span><span class="sohel-wl-sub">' +
+        esc(sub) +
+        '</span></div><div class="sohel-wl-cards">' +
+        pairs
+          .map(function (p) {
+            return radarCardHtml(p.sym, p.a, sectionTier);
+          })
+          .join("") +
+        "</div></div>"
+      );
+    }
+
+    function buildPairsFromSymbols(symbols) {
+      return symbols.map(function (s) {
+        var key = String(s || "")
+          .toUpperCase()
+          .replace(/[^A-Z0-9.-]/g, "")
+          .slice(0, 8);
+        return { sym: s, a: bySym[key] || null };
+      });
+    }
+
+    function sortPairsByScore(pairs) {
+      return pairs.slice().sort(function (x, y) {
+        var sa = x.a ? Number(x.a.score) || 0 : -1;
+        var sb = y.a ? Number(y.a.score) || 0 : -1;
+        if (sb !== sa) return sb - sa;
+        return String(x.sym).localeCompare(String(y.sym));
+      });
+    }
+
+    function renderTieredWatchlist(pairs) {
+      var fire = [];
+      var heat = [];
+      var watch = [];
+      pairs.forEach(function (p) {
+        var a = p.a;
+        var sc = a ? Number(a.score) || 0 : -1;
+        if (!a) watch.push(p);
+        else if (sc >= FIRING_SCORE) fire.push(p);
+        else if (sc >= HEATING_MIN) heat.push(p);
+        else watch.push(p);
+      });
+      var html = "";
+      html += watchlistSection(
+        "FIRING",
+        fire.length + " ACTIVE",
+        "fire",
+        fire
+      );
+      html += watchlistSection(
+        "HEATING",
+        heat.length + " BUILDING",
+        "heat",
+        heat
+      );
+      html += watchlistSection(
+        "WATCH",
+        watch.length + " NAMES",
+        "watch",
+        watch
+      );
+      grid.innerHTML = html || '<p class="hint">Nothing to show.</p>';
     }
 
     if (uni && uni.length) {
@@ -573,15 +730,7 @@ window.calculateIgnition = calculateIgnition;
         if (sb !== sa) return sb - sa;
         return String(a).localeCompare(String(b));
       });
-      grid.innerHTML = sortedU
-        .map(function (s) {
-          var key = String(s || "")
-            .toUpperCase()
-            .replace(/[^A-Z0-9.-]/g, "")
-            .slice(0, 8);
-          return tileHtml(s, bySym[key]);
-        })
-        .join("");
+      renderTieredWatchlist(sortPairsByScore(buildPairsFromSymbols(sortedU)));
       return;
     }
 
@@ -590,14 +739,13 @@ window.calculateIgnition = calculateIgnition;
       return;
     }
 
-    var sorted = alerts.slice().sort(function (a, b) {
+    var sortedA = alerts.slice().sort(function (a, b) {
       return (Number(b.score) || 0) - (Number(a.score) || 0);
     });
-    grid.innerHTML = sorted
-      .map(function (a) {
-        return tileHtml(a.symbol, a);
-      })
-      .join("");
+    var pairsOnly = sortedA.map(function (a) {
+      return { sym: a.symbol, a: a };
+    });
+    renderTieredWatchlist(pairsOnly);
   }
 
   function formatAlertTimeEt(a) {
@@ -636,6 +784,23 @@ window.calculateIgnition = calculateIgnition;
     );
   }
 
+  function alertOptionLine(a) {
+    if (!a || !a.suggestedOption) return "";
+    var o = a.suggestedOption;
+    if (o.strike == null || !o.expiration) return "";
+    var r = String(o.right || "").toLowerCase() === "put" ? "PUT" : "CALL";
+    var stk = Number(o.strike);
+    var stks =
+      Math.abs(stk - Math.round(stk)) < 1e-6
+        ? String(Math.round(stk))
+        : stk.toFixed(2);
+    var mid =
+      o.mid != null && isFinite(Number(o.mid))
+        ? " · mid ~$" + Number(o.mid).toFixed(2)
+        : "";
+    return esc(r) + " $" + esc(stks) + " · exp " + esc(String(o.expiration)) + esc(mid);
+  }
+
   function alertMetaLineHtml(a) {
     var sym = esc(String(a.symbol || a.ticker || "—").toUpperCase());
     var t = formatAlertTimeEt(a);
@@ -647,6 +812,10 @@ window.calculateIgnition = calculateIgnition;
           : "";
     var sc =
       a.score != null ? " · score " + esc(String(Math.round(Number(a.score)))) : "";
+    var optLn = alertOptionLine(a);
+    var optRow = optLn
+      ? '<div class="ap-contract">' + optLn + "</div>"
+      : "";
     return (
       '<div class="ap-time">' +
       sym +
@@ -654,7 +823,8 @@ window.calculateIgnition = calculateIgnition;
       esc(t) +
       und +
       sc +
-      "</div>"
+      "</div>" +
+      optRow
     );
   }
 
@@ -764,12 +934,24 @@ window.calculateIgnition = calculateIgnition;
           et = formatAlertTimeEt({ alertedAtIso: atIso });
         }
         if (et && et !== "—") {
+          var optSnap = snap.suggestedOption;
+          var optS = "";
+          if (
+            optSnap &&
+            optSnap.strike != null &&
+            optSnap.expiration
+          ) {
+            optS =
+              " · " +
+              alertOptionLine({ suggestedOption: optSnap });
+          }
           alertCtx =
             '<div class="ap-time tm-muted" style="margin-bottom:8px;">Signal time ' +
             esc(et) +
             (und != null && isFinite(Number(und))
               ? " · underlying $" + esc(Number(und).toFixed(2)) + " at alert"
               : "") +
+            optS +
             "</div>";
         }
         return (

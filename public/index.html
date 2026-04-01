@@ -159,28 +159,102 @@
     }
     .sohel-metric .ml { font-size: 0.55rem; color: var(--muted); font-family: "Space Mono", monospace; }
     .sohel-metric .mv { font-size: 1.1rem; font-weight: 700; color: var(--lime); }
-    .sohel-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-    @media (min-width: 420px) {
-      .sohel-grid { grid-template-columns: repeat(3, 1fr); }
-    }
-    .sohel-wl-tile {
-      border: 2px solid rgba(0, 240, 255, 0.28);
-      border-radius: 14px;
-      padding: 14px;
-      min-height: 100px;
+    /* Watchlist radar — vertical stack (tiered cards, ALIGN-style) */
+    .sohel-wl-stack { display: flex; flex-direction: column; gap: 20px; }
+    .sohel-wl-section-head {
       display: flex;
-      flex-direction: column;
+      align-items: center;
       justify-content: space-between;
-      background: rgba(0,0,0,0.35);
+      gap: 10px;
+      margin-bottom: 10px;
     }
-    .sohel-wl-sym { font-family: "Bebas Neue", sans-serif; font-size: 1.25rem; letter-spacing: 0.08em; color: var(--cyan); }
-    .sohel-wl-meta { font-size: 0.68rem; color: var(--muted); margin-top: 4px; }
-    .sohel-wl-score { font-family: "Space Mono", monospace; font-size: 0.72rem; color: var(--lime); margin-top: 8px; }
-    .sohel-wl-cat { font-size: 0.55rem; color: var(--amber); font-weight: 700; margin-top: 4px; }
+    .sohel-wl-pill {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 0.85rem;
+      letter-spacing: 0.14em;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 2px solid currentColor;
+    }
+    .sohel-wl-section--fire .sohel-wl-pill { color: #ff3b3b; box-shadow: 0 0 16px rgba(255, 59, 59, 0.25); }
+    .sohel-wl-section--heat .sohel-wl-pill { color: #ff9500; box-shadow: 0 0 14px rgba(255, 149, 0, 0.2); }
+    .sohel-wl-section--watch .sohel-wl-pill { color: var(--muted); border-color: rgba(200,200,210,0.35); }
+    .sohel-wl-sub { font-family: "Space Mono", monospace; font-size: 0.58rem; color: var(--muted); letter-spacing: 0.08em; }
+    .sohel-wl-cards { display: flex; flex-direction: column; gap: 12px; }
+    .sohel-radar-card {
+      position: relative;
+      display: flex;
+      border-radius: 16px;
+      overflow: hidden;
+      background: linear-gradient(135deg, rgba(20,20,24,0.98) 0%, rgba(10,10,12,0.99) 100%);
+      border: 1px solid rgba(255,255,255,0.06);
+      min-height: 88px;
+    }
+    .sohel-radar-accent {
+      width: 5px;
+      flex-shrink: 0;
+    }
+    .sohel-radar-card--fire .sohel-radar-accent { background: linear-gradient(180deg, #ff5555, #cc0000); box-shadow: 0 0 12px rgba(255,60,60,0.5); }
+    .sohel-radar-card--heat .sohel-radar-accent { background: linear-gradient(180deg, #ffb020, #ff6600); box-shadow: 0 0 10px rgba(255,149,0,0.35); }
+    .sohel-radar-card--watch .sohel-radar-accent { background: linear-gradient(180deg, #555, #333); }
+    .sohel-radar-body { flex: 1; padding: 14px 14px 12px 12px; }
+    .sohel-radar-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+    .sohel-radar-sym {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 1.65rem;
+      letter-spacing: 0.06em;
+      line-height: 1;
+    }
+    .sohel-radar-card--fire .sohel-radar-sym { color: #ff6b6b; text-shadow: 0 0 18px rgba(255,80,80,0.35); }
+    .sohel-radar-card--heat .sohel-radar-sym { color: #ffb347; text-shadow: 0 0 14px rgba(255,160,60,0.25); }
+    .sohel-radar-card--watch .sohel-radar-sym { color: var(--cyan); }
+    .sohel-radar-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; justify-content: flex-end; }
+    .sohel-badge {
+      font-family: "Space Mono", monospace;
+      font-size: 0.52rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid currentColor;
+      line-height: 1.2;
+    }
+    .sohel-badge--go { color: #ff4444; background: rgba(255,68,68,0.12); }
+    .sohel-badge--heat { color: #ff9500; background: rgba(255,149,0,0.12); }
+    .sohel-badge--cat { color: var(--amber); background: rgba(255,149,0,0.15); }
+    .sohel-badge--play { color: var(--cyan); background: rgba(0,240,255,0.1); }
+    .sohel-badge--dir { color: var(--magenta); background: rgba(255,0,255,0.08); }
+    .sohel-radar-score { text-align: right; min-width: 52px; }
+    .sohel-radar-score span {
+      font-family: "Bebas Neue", sans-serif;
+      font-size: 1.5rem;
+      display: block;
+      line-height: 1;
+    }
+    .sohel-radar-card--fire .sohel-radar-score span { color: #ff6b6b; }
+    .sohel-radar-card--heat .sohel-radar-score span { color: #ffaa44; }
+    .sohel-radar-card--watch .sohel-radar-score span { color: var(--muted); }
+    .sohel-radar-score--na span { color: var(--muted); font-size: 1.1rem; }
+    .sohel-radar-bar {
+      height: 4px;
+      margin-top: 6px;
+      border-radius: 2px;
+      background: linear-gradient(90deg, currentColor, transparent);
+      max-width: 100%;
+    }
+    .sohel-radar-card--fire .sohel-radar-bar { color: #ff4444; opacity: 0.85; }
+    .sohel-radar-card--heat .sohel-radar-bar { color: #ff9500; opacity: 0.85; }
+    .sohel-radar-card--watch .sohel-radar-bar { color: var(--cyan); opacity: 0.4; }
+    .sohel-radar-price { font-family: "Chakra Petch", sans-serif; font-size: 1rem; font-weight: 600; color: var(--text); }
+    .sohel-radar-opt {
+      margin-top: 8px;
+      font-family: "Space Mono", monospace;
+      font-size: 0.68rem;
+      color: var(--lime);
+      letter-spacing: 0.03em;
+      line-height: 1.35;
+    }
+    .sohel-radar-opt--muted { color: var(--muted); font-size: 0.62rem; }
     .sohel-alerts-list, .sohel-trades-list { display: flex; flex-direction: column; gap: 14px; }
     .ap-drive-card {
       border: 2px solid rgba(57, 255, 20, 0.35);
@@ -195,9 +269,16 @@
       font-size: 0.72rem;
       color: var(--cyan);
       letter-spacing: 0.04em;
+      margin-bottom: 6px;
+    }
+    .ap-contract {
+      font-family: "Space Mono", monospace;
+      font-size: 0.68rem;
+      color: var(--lime);
+      letter-spacing: 0.03em;
       margin-bottom: 10px;
       padding-bottom: 10px;
-      border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+      border-bottom: 1px solid rgba(57, 255, 20, 0.2);
     }
     .ap-hist { margin-top: 10px; font-size: 0.78rem; color: var(--muted); border-top: 1px solid rgba(0,240,255,0.15); padding-top: 10px; }
     .tm-muted { color: var(--muted); font-size: 0.8rem; }
@@ -293,7 +374,7 @@
     </div>
     <div class="sohel-watchlist">
       <h2>WATCHLIST RADAR</h2>
-      <div id="watchlist-grid" class="sohel-grid"></div>
+      <div id="watchlist-grid" class="sohel-wl-stack"></div>
     </div>
   </div>
 
@@ -313,6 +394,6 @@
   <div id="health-banner" class="sohel-health"></div>
 
   <!-- UI/JS deploy: (1) bump version in package.json (e.g. 1.1.1→1.1.2) — scripts/sync-version.js handles the rest automatically. -->
-  <script src="/ignition.js?v=1.1.2"></script>
+  <script src="/ignition.js?v=1.1.3"></script>
 </body>
 </html>
