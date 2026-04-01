@@ -93,9 +93,9 @@
       border-top: 1px solid rgba(0, 240, 255, 0.12);
     }
     .align-top-tab {
-      flex: 1 1 calc(25% - 8px);
-      min-width: 72px;
-      max-width: 120px;
+      flex: 1 1 calc(33.333% - 8px);
+      min-width: 88px;
+      max-width: 160px;
       min-height: 44px;
       padding: 10px 8px;
       border-radius: 12px;
@@ -119,14 +119,8 @@
       border-color: rgba(255, 0, 255, 0.55);
       box-shadow: 0 0 16px rgba(255, 0, 255, 0.2);
     }
-    .align-top-tab[data-sohel-top-tab="regime"].active {
-      color: var(--amber);
-      border-color: rgba(255, 149, 0, 0.55);
-      box-shadow: 0 0 14px rgba(255, 149, 0, 0.2);
-    }
-
     .align-regime-panel {
-      margin: 12px 14px 0;
+      margin: 0 0 18px;
       padding: 14px;
       border-radius: 16px;
       border: 1px solid rgba(57, 255, 20, 0.25);
@@ -159,6 +153,11 @@
     .sohel-metric { text-align: center; padding: 8px; border-radius: 8px; background: rgba(0,0,0,0.35); border: 1px solid rgba(57,255,20,0.12); }
     .sohel-metric .ml { font-size: 0.48rem; color: var(--muted); }
     .sohel-metric .mv { font-size: 0.95rem; font-weight: 700; color: var(--lime); }
+
+    .regime-brief-wrap { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(0,240,255,0.12); }
+    .regime-brief { font-size: 0.88rem; line-height: 1.45; color: var(--text); margin: 0 0 8px; }
+    .regime-brief:last-child { margin-bottom: 0; }
+    .regime-brief--dim { color: var(--muted); font-size: 0.82rem; }
 
     .align-main { padding: 16px 14px 8px; max-width: 520px; margin: 0 auto; }
     .align-page { display: none; }
@@ -495,20 +494,19 @@
       <span id="hdr-risk">RISK —</span>
       <span class="align-live-pill" id="hdr-live-pill">LIVE</span>
     </div>
-    <!-- SOHELATOR blueprint — LEARNING tab with AI progress tracking (Prompt 16): 4th tab = LEARNING -->
+    <!-- LIVE / HISTORY / LEARNING only — regime + watchlist live on LIVE tab -->
     <div class="align-top-tabs" role="tablist" aria-label="Main sections">
       <button type="button" class="align-top-tab active" data-sohel-top-tab="live" id="top-tab-live">LIVE</button>
       <button type="button" class="align-top-tab" data-sohel-top-tab="history" id="top-tab-history">HISTORY</button>
-      <button type="button" class="align-top-tab" data-sohel-top-tab="regime" id="top-tab-regime">REGIME</button>
       <button type="button" class="align-top-tab" data-sohel-top-tab="learning" id="top-tab-learning">LEARNING</button>
     </div>
   </header>
 
-  <div class="align-regime-panel" id="align-regime-panel">
-    <div id="align-regime-inner"></div>
-  </div>
-
   <main id="page-live" class="align-main align-page active">
+    <p class="hint" style="padding:0 0 8px;font-size:0.75rem;letter-spacing:0.06em;">WATCHLIST · FIRING / HEATING · OPEN TRADES</p>
+    <div class="align-regime-panel" id="align-regime-panel">
+      <div id="align-regime-inner"></div>
+    </div>
     <section class="align-sec align-sec--fire" aria-labelledby="firing-title">
       <div class="align-sec-bar" id="firing-title">
         <span>🔥 FIRING</span>
@@ -535,7 +533,7 @@
 
   <main id="page-history" class="align-main align-page">
     <h2 class="sohel-subh" style="margin-top:0;">HISTORY</h2>
-    <p class="hint" style="padding:0 0 12px;">Chronological alerts — mark ENTERED to log a trade.</p>
+    <p class="hint" style="padding:0 0 12px;">Chronological alerts from each scan.</p>
     <div id="history-list"></div>
   </main>
 
@@ -577,6 +575,6 @@
 
   <div id="health-banner" class="sohel-health"></div>
 
-  <script src="/ignition.js?v=1.1.6"></script>
+  <script src="/ignition.js?v=1.1.7"></script>
 </body>
 </html>

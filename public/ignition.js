@@ -432,43 +432,56 @@ window.calculateIgnition = calculateIgnition;
       });
   }
 
-  function grokHtml(j) {
-    if (!j || j.success === false || !Array.isArray(j.alerts) || !j.alerts.length) {
+  /** Short market-state copy only — full Grok / scanner dump removed from LIVE (watchlist) tab */
+  function regimeBriefHtml(j) {
+    if (!j || j.success === false) {
       return (
-        '<div class="regime-grok"><h3 class="sohel-subh">Grok brief</h3><p class="sohel-grok-body">' +
-        esc(
-          "Grok co-pilot text appears on expensive scans (ET window) when returned on alerts."
-        ) +
+        '<div class="regime-brief-wrap"><p class="regime-brief hint">' +
+        esc(j && j.error ? String(j.error) : "Waiting for scanner…") +
         "</p></div>"
       );
     }
-    var best = null;
-    var bestScore = -1;
-    j.alerts.forEach(function (a) {
-      var sc = Number(a.score) || 0;
-      if (a.aiCoPilot && sc >= bestScore) {
-        bestScore = sc;
-        best = a;
-      }
-    });
-    if (best && best.aiCoPilot) {
-      return (
-        '<div class="regime-grok"><h3 class="sohel-subh">Grok brief</h3><div class="sohel-grok-tag">TOP CO-PILOT · ' +
-        esc(best.symbol || "—") +
-        '</div><div class="sohel-grok-body">' +
-        esc(best.aiCoPilot).replace(/\n/g, "<br/>") +
-        "</div></div>"
-      );
+    var meta = j.meta || {};
+    var st = j.status || "ok";
+    var s1 = "";
+    if (st === "after_hours") {
+      s1 =
+        String(meta.optionsSessionNote || "").trim() ||
+        "US equity options are closed until the next session (9:30–16:00 ET Mon–Fri).";
+    } else if (st === "outside_window") {
+      s1 =
+        "Weekday cheap scan — AI co-pilot runs on expensive passes during 8:00–16:00 ET.";
+    } else {
+      s1 =
+        j.mode === "expensive"
+          ? "Session live — full scan with Grok on this pass when configured."
+          : "Session live — cheap scan; Grok summaries appear on expensive-window passes.";
     }
-    var any = j.alerts.find(function (a) {
-      return a.aiVerdict;
-    });
-    var txt = any
-      ? String(any.aiVerdict)
-      : "No Grok body this pass (cheap mode or outside Grok window).";
+    if (s1.length > 220) s1 = s1.slice(0, 217) + "…";
+    var n = Array.isArray(j.alerts) ? j.alerts.length : 0;
+    var b7 = meta.backtest7d;
+    var s2 =
+      "This refresh: " +
+      n +
+      " setup(s) on the board.";
+    if (b7 && b7.ev != null) {
+      s2 +=
+        " 7d model edge ~" +
+        Number(b7.ev).toFixed(2) +
+        ", ~" +
+        (b7.winRate != null
+          ? Math.round(Number(b7.winRate) * 100)
+          : "—") +
+        "% wins" +
+        (b7.totalSetups != null ? " over " + b7.totalSetups + " setups." : ".");
+    }
+    if (s2.length > 280) s2 = s2.slice(0, 277) + "…";
     return (
-      '<div class="regime-grok"><h3 class="sohel-subh">Grok brief</h3><p class="sohel-grok-body">' +
-      esc(txt) +
+      '<div class="regime-brief-wrap">' +
+      '<p class="regime-brief">' +
+      esc(s1) +
+      '</p><p class="regime-brief regime-brief--dim">' +
+      esc(s2) +
       "</p></div>"
     );
   }
@@ -726,8 +739,6 @@ window.calculateIgnition = calculateIgnition;
     }
 
     var meta = j.meta || {};
-    var b7 = meta.backtest7d;
-    var gh = meta.grokHealth || "—";
     var st = j.status || "ok";
     var pill =
       st === "after_hours"
@@ -736,47 +747,11 @@ window.calculateIgnition = calculateIgnition;
           ? "OUTSIDE 8–4 ET"
           : String(j.mode || "cheap").toUpperCase();
 
-    var lines = [];
-    lines.push(
-      "Mode: " + String(j.mode || "cheap") + (st === "outside_window" ? " (cheap outside window)" : "")
-    );
-    if (meta.optionsSessionNote) lines.push(String(meta.optionsSessionNote));
-    lines.push("Alerts: " + (Array.isArray(j.alerts) ? j.alerts.length : 0));
-    if (b7) {
-      lines.push(
-        "7d EV " +
-          (b7.ev != null ? Number(b7.ev).toFixed(3) : "—") +
-          " · WR " +
-          (b7.winRate != null ? Math.round(b7.winRate * 100) / 100 : "—")
-      );
-    }
-    lines.push("Grok: " + gh);
-
-    var metricsHtml = "";
-    if (b7) {
-      metricsHtml =
-        '<div class="sohel-metrics">' +
-        '<div class="sohel-metric"><span class="ml">7d EV</span><div class="mv">' +
-        esc(b7.ev != null ? Number(b7.ev).toFixed(2) : "—") +
-        '</div></div><div class="sohel-metric"><span class="ml">Win %</span><div class="mv">' +
-        esc(b7.winRate != null ? Math.round(b7.winRate * 100) + "%" : "—") +
-        '</div></div><div class="sohel-metric"><span class="ml">Setups</span><div class="mv">' +
-        esc(b7.totalSetups != null ? String(b7.totalSetups) : "—") +
-        "</div></div></div>";
-    }
-
     regimeEl.innerHTML =
       '<div id="sohel-regime-header" class="sohel-regime-top"><span class="sohel-pill">' +
       esc(pill) +
       '</span></div><div id="regime-spy-slot"><p class="hint">Loading SPY…</p></div>' +
-      grokHtml(j) +
-      '<div class="regime-scan"><h3 class="sohel-subh">Scanner summary</h3><p class="sohel-grok-body">' +
-      lines.map(function (L) {
-        return esc(L);
-      }).join("<br/>") +
-      "</p>" +
-      metricsHtml +
-      "</div>";
+      regimeBriefHtml(j);
 
     refreshSpyLevels();
     refreshHeaderQuotes();
@@ -1581,8 +1556,7 @@ window.calculateIgnition = calculateIgnition;
 
 /* ─────────────────────────────────────────────────────────────────────────────
    SOHELATOR blueprint — LEARNING tab with AI progress tracking (Prompt 16)
-   Appended after main IIFE: unified nav (LIVE / HISTORY / REGIME / LEARNING),
-   fetches /api/memory-data + historical_patterns.json, renders report + table.
+   Unified nav: LIVE (watchlist + regime strip) / HISTORY / LEARNING (3 top + 3 bottom).
    ───────────────────────────────────────────────────────────────────────────── */
 (function initSohelLearningPrompt16() {
   var MEMORY_URL = "/api/memory-data";
@@ -1619,26 +1593,12 @@ window.calculateIgnition = calculateIgnition;
       var el = document.getElementById(id);
       if (el) el.classList.remove("active");
     });
-    if (which === "regime") {
-      var nl = document.getElementById("nav-live");
-      if (nl) nl.classList.add("active");
-    } else {
-      var bid = mapBottom[which];
-      var nb = bid ? document.getElementById(bid) : null;
-      if (nb) nb.classList.add("active");
-    }
+    var bid = mapBottom[which];
+    var nb = bid ? document.getElementById(bid) : null;
+    if (nb) nb.classList.add("active");
   }
 
   function setUnifiedPage(which) {
-    if (which === "regime") {
-      setPageVisibility("live");
-      syncTabUi("regime");
-      requestAnimationFrame(function () {
-        var rp = document.getElementById("align-regime-panel");
-        if (rp) rp.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-      return;
-    }
     setPageVisibility(which);
     syncTabUi(which);
     if (which === "learning") fetchLearningIfStale(true);
