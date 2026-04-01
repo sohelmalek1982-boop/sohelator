@@ -23,6 +23,7 @@ const {
   buildCandidatePool,
 } = require("./lib/optionLiquidity");
 const { isTrustedTapeWindowEt } = require("./lib/tapeTrustedWindow");
+const { getScannerParams } = require("./lib/strategyParams");
 
 const BASE_WATCH = [
   "NVDA", "TSLA", "SPY", "QQQ", "AAPL", "AMD", "MSFT", "META", "GOOGL",
@@ -255,6 +256,8 @@ function detectIntradayStage(ctx, regimeThresholds = {}) {
     bullOk,
     bearOk,
     skipAdxChopGate,
+    bearConfirmedRsiLo,
+    bearConfirmedRsiHi,
   } = ctx;
   const rsiNum = Number(rsi14);
   const aboveVWAP = vwapDist > 0;
@@ -311,13 +314,9 @@ function detectIntradayStage(ctx, regimeThresholds = {}) {
       action: "BUY CALLS NOW",
     };
   }
-  if (
-    bearOk &&
-    !macdPos &&
-    !aboveVWAP &&
-    rsiNum >= 22 &&
-    rsiNum <= 52
-  ) {
+  const brLo = bearConfirmedRsiLo != null ? bearConfirmedRsiLo : 30;
+  const brHi = bearConfirmedRsiHi != null ? bearConfirmedRsiHi : 50;
+  if (bearOk && !macdPos && !aboveVWAP && rsiNum >= brLo && rsiNum <= brHi) {
     return {
       stage: "bear",
       stageLabel: "BEAR CONFIRMED",
@@ -922,11 +921,10 @@ async function runScan() {
   const ymd = (d) => d.toISOString().slice(0, 10);
 
   const regimeMinAdx = th.minADX ?? 20;
-  /** Loosen ADX gate vs regime (chop-prone days were filtering 100% before trend logic). */
-  const relaxedMinAdx = Math.max(18, regimeMinAdx - 5);
+  const sp = getScannerParams();
   const scanDiagnostics = {
     regimeMinAdx,
-    relaxedMinAdx,
+    scannerAdxRegimeOffset: sp.adxRegimeOffset,
     skippedAdxChop: 0,
     skippedStageNoAlert: 0,
     symbolsInUniverse: capped.length,
@@ -996,8 +994,19 @@ async function runScan() {
           let bear = 0;
           if (adxVal > 25) bear += 25;
           if (macdHist < 0) bear += 20;
-          if (rsi14 >= 30 && rsi14 <= 50) bear += 20;
-          else if (rsi14 < 30 && macdHist < 0 && vwapDist < 0) bear += 18;
+          if (
+            rsi14 >= sp.bearConfirmedRsiLo &&
+            rsi14 <= sp.bearConfirmedRsiHi
+          ) {
+            bear += 20;
+          } else if (
+            sp.bearOversoldScoreBonus > 0 &&
+            rsi14 < sp.bearOversoldRsiMax &&
+            macdHist < 0 &&
+            vwapDist < 0
+          ) {
+            bear += sp.bearOversoldScoreBonus;
+          }
           if (vwapDist < 0) bear += 20;
           if (bbB < 0.5) bear += 10;
           if (ema8 < ema21) bear += 5;
@@ -1031,16 +1040,29 @@ async function runScan() {
           const macdSlope = macdHist - macdHistPast;
 
           const quickVolX = volAvg > 0 ? lastVol / volAvg : 1;
-          let effMinAdx = relaxedMinAdx;
-          if (quickVolX >= 1.65) {
-            effMinAdx = Math.max(18, effMinAdx - 3);
+          let effMinAdx = regimeMinAdx - sp.adxRegimeOffset;
+          if (Number.isFinite(sp.adxGateFloor)) {
+            effMinAdx = Math.max(effMinAdx, sp.adxGateFloor);
+          }
+          if (
+            Number.isFinite(sp.volSurgeMult) &&
+            quickVolX >= sp.volSurgeMult &&
+            sp.volSurgeAdxSubtract > 0
+          ) {
+            effMinAdx -= sp.volSurgeAdxSubtract;
+            const floor = Number.isFinite(sp.adxGateFloor)
+              ? sp.adxGateFloor
+              : 1;
+            effMinAdx = Math.max(floor, effMinAdx);
           }
 
           const flushDown =
+            Number.isFinite(sp.flushDayChangePct) &&
             typeof change === "number" &&
-            change <= -2.5 &&
+            change <= sp.flushDayChangePct &&
             macdHist < 0 &&
-            vwapDist < -0.05;
+            Number.isFinite(sp.flushVwapDistPct) &&
+            vwapDist <= sp.flushVwapDistPct;
 
           const stageInfo = detectIntradayStage(
             {
@@ -1061,6 +1083,8 @@ async function runScan() {
               bullOk,
               bearOk,
               skipAdxChopGate: flushDown,
+              bearConfirmedRsiLo: sp.bearConfirmedRsiLo,
+              bearConfirmedRsiHi: sp.bearConfirmedRsiHi,
             },
             { ...th, minADX: effMinAdx }
           );

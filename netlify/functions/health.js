@@ -50,6 +50,14 @@ exports.handler = async (event) => {
     getJobHealth(),
     tradierClock(),
   ]);
+  const pipelineStatus = {
+    tradier: !!process.env.TRADIER_TOKEN,
+    tradierAccount: !!process.env.TRADIER_ACCOUNT_ID,
+    anthropic: !!process.env.ANTHROPIC_API_KEY,
+    telegram: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
+    email: !!(process.env.RESEND_API_KEY && process.env.ALERT_EMAIL),
+    webPush: !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
+  };
   return {
     statusCode: 200,
     headers,
@@ -57,6 +65,7 @@ exports.handler = async (event) => {
       ok: true,
       blobsConfigured,
       tradierConfigured: !!process.env.TRADIER_TOKEN,
+      pipelineStatus,
       jobHealth,
       marketClock: clock,
       at: Date.now(),

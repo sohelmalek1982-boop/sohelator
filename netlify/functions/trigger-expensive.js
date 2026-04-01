@@ -1,0 +1,115 @@
+/**
+ * SOHELATOR blueprint — scheduled expensive /api/scan (Prompt 7)
+ * Schedule: netlify.toml [functions."trigger-expensive"] — weekdays, every minute; ET slots filtered here.
+ * Exact ET: 8:15, 9:25, 9:45, 11:00, 14:00, 16:00 (America/New_York)
+ */
+
+const fetch = globalThis.fetch || require("node-fetch");
+
+function baseUrl() {
+  return String(process.env.URL || process.env.DEPLOY_PRIME_URL || "").replace(
+    /\/$/,
+    ""
+  );
+}
+
+function weekdayShortEt(d) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    weekday: "short",
+  }).format(d);
+}
+
+function isWeekdayEt(d) {
+  const w = weekdayShortEt(d);
+  return w !== "Sat" && w !== "Sun";
+}
+
+function minutesEt(d) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  }).formatToParts(d);
+  let h = 0;
+  let m = 0;
+  for (const p of parts) {
+    if (p.type === "hour") h = parseInt(p.value, 10);
+    if (p.type === "minute") m = parseInt(p.value, 10);
+  }
+  return h * 60 + m;
+}
+
+/** 8:15, 9:25, 9:45, 11:00, 14:00, 16:00 ET */
+const EXPENSIVE_SLOTS_ET = [495, 565, 585, 660, 840, 960];
+
+function isExpensiveMinuteEt(d) {
+  if (!isWeekdayEt(d)) return false;
+  return EXPENSIVE_SLOTS_ET.includes(minutesEt(d));
+}
+
+exports.handler = async () => {
+  const headers = { "Content-Type": "application/json" };
+  const base = baseUrl();
+  if (!base) {
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({
+        ok: false,
+        error: "URL / DEPLOY_PRIME_URL not set",
+        fn: "trigger-expensive",
+      }),
+    };
+  }
+
+  const now = new Date();
+  if (!isExpensiveMinuteEt(now)) {
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        ok: true,
+        skipped: true,
+        reason: "not_et_expensive_slot",
+        etMinute: minutesEt(now),
+        fn: "trigger-expensive",
+      }),
+    };
+  }
+
+  try {
+    const res = await fetch(`${base}/api/scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "expensive" }),
+    });
+    const j = await res.json().catch(() => ({}));
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        ok: true,
+        triggered: true,
+        http: res.status,
+        scanSuccess: !!(j && j.success),
+        alertCount: Array.isArray(j.alerts) ? j.alerts.length : 0,
+        mode: j.mode,
+        slotEtMin: minutesEt(now),
+        fn: "trigger-expensive",
+      }),
+    };
+  } catch (e) {
+    console.error("trigger-expensive", e);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({
+        ok: false,
+        error: String(e?.message || e),
+        fn: "trigger-expensive",
+      }),
+    };
+  }
+};

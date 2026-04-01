@@ -1,0 +1,31 @@
+{
+  "adxThreshold": 18,
+  "volIgnition": 1.75,
+  "prevVolIgnition": 1.5,
+  "sectorRSBonus": 20,
+  "minScore": 65,
+  "higherTFPenaltyMax": -15,
+  "evThreshold": 0.5,
+  "playTypeBonus": {
+    "SCALP": 0,
+    "SWING": 0,
+    "SCALP_SWING": 0
+  },
+  "scalpHorizonBars": 6,
+  "swingHorizonBars": 48,
+  "riskPctPerR": 0.25,
+  "patternWeights": {
+    "volRatio": 1,
+    "adx": 1,
+    "sectorRS": 1,
+    "gamma": 1
+  },
+  "paramWeights": {
+    "adxThreshold": 1,
+    "volIgnition": 1,
+    "prevVolIgnition": 1,
+    "sectorRSBonus": 1,
+    "minScore": 1,
+    "evThreshold": 1
+  }
+}

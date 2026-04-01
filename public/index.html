@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#07080d" />
+  <meta name="theme-color" content="#0a0a0a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>SOHELATOR</title>
@@ -14,26 +14,31 @@
   <link rel="manifest" href='data:application/json,{"name":"SOHELATOR","short_name":"SOHELATOR","display":"standalone","background_color":"%2307080d","theme_color":"%2307080d","start_url":"/"}' />
   <style>
     :root {
-      --bg: #060a0e;
-      --bg2: #0d1117;
-      --bg3: #111820;
-      --accent: #00e5ff;
-      --accent-soft: rgba(0, 229, 255, 0.14);
-      --lime: #00ff87;
-      --cyan: #00e5ff;
-      --green: #00ff87;
+      /* SOHELATOR blueprint — neon-dark base (Prompt 11) */
+      --neon-lime: #39ff14;
+      --neon-cyan: #00f0ff;
+      --neon-magenta: #ff00ff;
+      --neon-amber: #ff9500;
+      --bg: #0a0a0a;
+      --bg2: #0f0f0f;
+      --bg3: #141414;
+      --accent: var(--neon-cyan);
+      --accent-soft: rgba(0, 240, 255, 0.12);
+      --lime: var(--neon-lime);
+      --cyan: var(--neon-cyan);
+      --green: var(--neon-lime);
       --red: #ff3b5c;
-      --yellow: #ffd700;
-      --orange: #ff8c42;
+      --yellow: var(--neon-amber);
+      --orange: var(--neon-amber);
       --purple: #a855f7;
-      --magenta: #ff00aa;
-      --text: #eef8ff;
-      --muted: rgba(160, 200, 230, 0.52);
-      --section-muted: #1e3a4a;
-      --card: #0d1117;
-      --border: #1e2a36;
-      --border2: rgba(0, 229, 255, 0.22);
-      --hairline: rgba(0, 229, 255, 0.06);
+      --magenta: var(--neon-magenta);
+      --text: #e0e0e0;
+      --muted: rgba(200, 200, 210, 0.45);
+      --section-muted: #2a2a32;
+      --card: #111111;
+      --border: #2a2a2a;
+      --border2: rgba(0, 240, 255, 0.35);
+      --hairline: rgba(57, 255, 20, 0.08);
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-bot: env(safe-area-inset-bottom, 0px);
       --topbar-main-h: 52px;
@@ -50,9 +55,9 @@
       --radius-md: 10px;
       --radius-pill: 980px;
       --glass: blur(20px) saturate(160%);
-      --glow-cyan: 0 0 24px rgba(0, 242, 255, 0.22);
-      --glow-lime: 0 0 20px rgba(0, 255, 136, 0.35);
-      --glow-magenta: 0 0 22px rgba(255, 0, 170, 0.2);
+      --glow-cyan: 0 0 28px rgba(0, 240, 255, 0.45);
+      --glow-lime: 0 0 26px rgba(57, 255, 20, 0.5);
+      --glow-magenta: 0 0 24px rgba(255, 0, 255, 0.35);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html {
@@ -70,15 +75,15 @@
       -webkit-tap-highlight-color: transparent;
       overflow-x: hidden;
       overflow-y: hidden;
-      background: var(--bg);
+      background: #0a0a0a;
       max-width: 100vw;
     }
     body.term-app {
       background:
-        radial-gradient(ellipse 100% 65% at 50% -20%, rgba(0, 242, 255, 0.14) 0%, transparent 50%),
-        radial-gradient(ellipse 50% 40% at 100% 30%, rgba(0, 255, 136, 0.08) 0%, transparent 45%),
-        radial-gradient(ellipse 40% 35% at 0% 70%, rgba(255, 0, 170, 0.06) 0%, transparent 45%),
-        linear-gradient(180deg, #0a0b12 0%, var(--bg) 45%, #05060a 100%);
+        radial-gradient(ellipse 100% 55% at 50% -15%, rgba(0, 240, 255, 0.12) 0%, transparent 45%),
+        radial-gradient(ellipse 45% 35% at 100% 25%, rgba(57, 255, 20, 0.1) 0%, transparent 42%),
+        radial-gradient(ellipse 40% 30% at 0% 65%, rgba(255, 0, 255, 0.08) 0%, transparent 40%),
+        linear-gradient(180deg, #0d0d0d 0%, #0a0a0a 50%, #070707 100%);
     }
     body.term-app::before {
       content: "";
@@ -88,8 +93,8 @@
       pointer-events: none;
       opacity: 0.65;
       background-image:
-        linear-gradient(rgba(0, 242, 255, 0.07) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 242, 255, 0.07) 1px, transparent 1px);
+        linear-gradient(rgba(0, 240, 255, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(57, 255, 20, 0.05) 1px, transparent 1px);
       background-size: 20px 20px;
       mask-image: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.18) 50%, transparent 85%);
       -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.18) 50%, transparent 85%);
@@ -1552,6 +1557,629 @@
     .ind-ag-cell .ag-val.no { color: var(--ind-red); }
     .ind-ag-cell .ag-val.mid { color: var(--ind-yellow); }
     .ind-ag-cell .ag-note { font-family: "DM Sans", sans-serif; font-size: 12px; color: var(--ind-muted); line-height: 1.45; text-align: left; }
+
+    /* SOHELATOR blueprint — WHAT TO DO NOW Action Panel (Prompt 4); class names match prompt; styled without Tailwind */
+    #action-panel.bg-black,
+    #action-panel {
+      background: #050508;
+      border: 2px solid #a3e635;
+      border-radius: 1.5rem;
+      padding: 1.5rem;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+      max-width: 100%;
+    }
+    #action-panel h2.text-3xl,
+    #action-panel > h2 {
+      font-size: 1.65rem;
+      font-weight: 700;
+      color: #a3e635;
+      margin: 0 0 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      font-family: var(--font-bebas);
+      letter-spacing: 0.05em;
+    }
+    #panel-status {
+      font-size: 0.75rem;
+      font-weight: 600;
+      font-family: var(--font-data);
+      background: #18181b;
+      padding: 0.35rem 0.85rem;
+      border-radius: 999px;
+      color: #bef264;
+    }
+    #action-panel .ap-refresh-row {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 1rem;
+    }
+    #alert-cards.space-y-6 > * + * {
+      margin-top: 1.5rem;
+    }
+    .ap-drive-card {
+      font-family: var(--font-data);
+      font-size: 0.62rem;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      color: rgba(238, 248, 255, 0.95);
+      padding: 16px 18px;
+      border-radius: 14px;
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(163, 230, 53, 0.4);
+      max-height: 280px;
+      overflow-y: auto;
+    }
+    .ap-hist {
+      font-family: var(--font-body);
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(163, 230, 53, 0.15);
+      line-height: 1.45;
+    }
+
+    /* SOHELATOR blueprint — OPEN TRADES panel + trade management (Prompt 5); driving-friendly lime/zinc + amber panel */
+    #open-trades-panel.bg-black,
+    #open-trades-panel {
+      background: #050508;
+      border: 2px solid #fbbf24;
+      border-radius: 1.5rem;
+      padding: 1.5rem;
+      margin-top: 1.5rem;
+      margin-bottom: 0.75rem;
+      max-width: 100%;
+    }
+    #open-trades-panel h2.text-3xl,
+    #open-trades-panel > h2 {
+      font-size: 1.65rem;
+      font-weight: 700;
+      color: #fbbf24;
+      margin: 0 0 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      font-family: var(--font-bebas);
+      letter-spacing: 0.05em;
+    }
+    #open-status {
+      font-size: 0.75rem;
+      font-weight: 600;
+      font-family: var(--font-data);
+      background: #18181b;
+      padding: 0.35rem 0.85rem;
+      border-radius: 999px;
+      color: #fcd34d;
+    }
+    #open-trade-cards.space-y-6 > * + * {
+      margin-top: 1.5rem;
+    }
+    .tm-trade-wrap {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(163, 230, 53, 0.2);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .tm-btn-enter,
+    .tm-btn-action,
+    .tm-btn-exit {
+      font-family: var(--font-ui);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(163, 230, 53, 0.5);
+      background: rgba(0, 0, 0, 0.5);
+      color: #bef264;
+      cursor: pointer;
+    }
+    .tm-btn-enter:hover,
+    .tm-btn-action:hover {
+      background: rgba(163, 230, 53, 0.12);
+    }
+    .tm-btn-exit {
+      border-color: rgba(251, 191, 36, 0.55);
+      color: #fcd34d;
+    }
+    .tm-open-card {
+      font-family: var(--font-data);
+      font-size: 0.62rem;
+      line-height: 1.55;
+      color: rgba(238, 248, 255, 0.95);
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+    }
+    .tm-open-card .tm-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      margin-bottom: 8px;
+    }
+    .tm-open-card .tm-muted {
+      font-family: var(--font-body);
+      font-size: 0.68rem;
+      color: var(--muted);
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+    .tm-exit-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+    }
+    .tm-exit-row input {
+      font-family: var(--font-data);
+      font-size: 0.65rem;
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid #27272a;
+      background: #09090b;
+      color: var(--text);
+      width: 6rem;
+    }
+    .tm-exit-row select {
+      font-size: 0.65rem;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid #27272a;
+      background: #09090b;
+      color: #e4e4e7;
+    }
+
+    /* SOHELATOR blueprint — Final Status Footer (Prompt 7) */
+    #system-status.fixed,
+    #system-status {
+      position: fixed;
+      bottom: calc(1rem + var(--safe-bot));
+      right: 1rem;
+      z-index: 50;
+      max-width: min(calc(100vw - 2rem), 22rem);
+      background: #18181b;
+      border: 1px solid rgba(163, 230, 53, 0.35);
+      color: #bef264;
+      font-size: 0.65rem;
+      font-family: var(--font-data);
+      padding: 0.5rem 1rem;
+      border-radius: 1rem;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    #system-status .text-amber-400 {
+      color: #fbbf24;
+    }
+    #self-tuned {
+      color: #a3e635;
+    }
+
+    /* SOHELATOR blueprint — System Health + scan toast (Prompt 8) */
+    #health-banner.fixed,
+    #health-banner {
+      position: fixed;
+      bottom: calc(1rem + var(--safe-bot));
+      left: 1rem;
+      z-index: 50;
+      max-width: min(calc(100vw - 2rem), 20rem);
+      background: #18181b;
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      font-size: 0.65rem;
+      font-family: var(--font-data);
+      padding: 0.5rem 1rem;
+      border-radius: 1rem;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    #health-banner .text-lime-400 {
+      color: #bef264;
+    }
+    #scan-fail-toast {
+      position: fixed;
+      bottom: calc(5.5rem + var(--safe-bot));
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 60;
+      display: none;
+      background: rgba(127, 29, 29, 0.95);
+      color: #fecaca;
+      font-size: 0.72rem;
+      font-family: var(--font-ui);
+      padding: 0.65rem 1.25rem;
+      border-radius: 12px;
+      border: 1px solid rgba(248, 113, 113, 0.45);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      max-width: min(90vw, 22rem);
+      text-align: center;
+    }
+    #scan-fail-toast.is-visible {
+      display: block;
+    }
+
+    /* ========== SOHELATOR blueprint — full neon-dark + motion (Prompt 11) ========== */
+    @keyframes neon-pulse {
+      0%, 100% {
+        box-shadow: 0 0 12px rgba(57, 255, 20, 0.15), 0 0 24px rgba(0, 240, 255, 0.08);
+        opacity: 1;
+      }
+      50% {
+        box-shadow: 0 0 22px rgba(57, 255, 20, 0.35), 0 0 40px rgba(0, 240, 255, 0.18);
+        opacity: 0.97;
+      }
+    }
+    @keyframes neon-flash {
+      0% {
+        box-shadow: 0 0 0 0 rgba(57, 255, 20, 0.9), inset 0 0 0 1px rgba(57, 255, 20, 0.6);
+        border-color: rgba(57, 255, 20, 0.95);
+      }
+      40% {
+        box-shadow: 0 0 32px 4px rgba(0, 240, 255, 0.55), 0 0 48px 8px rgba(57, 255, 20, 0.35);
+        border-color: rgba(0, 240, 255, 0.85);
+      }
+      100% {
+        box-shadow: 0 0 12px rgba(57, 255, 20, 0.2);
+        border-color: rgba(57, 255, 20, 0.45);
+      }
+    }
+    @keyframes regime-flash {
+      0% {
+        filter: brightness(1.35);
+        box-shadow: 0 0 0 2px rgba(255, 0, 255, 0.5), 0 0 28px rgba(0, 240, 255, 0.4);
+      }
+      50% {
+        filter: brightness(1.15);
+        box-shadow: 0 0 0 1px rgba(57, 255, 20, 0.7), 0 0 36px rgba(255, 149, 0, 0.35);
+      }
+      100% {
+        filter: brightness(1);
+        box-shadow: none;
+      }
+    }
+    @keyframes neon-amber-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 1px rgba(255, 149, 0, 0.35), 0 0 16px rgba(255, 149, 0, 0.2);
+        border-color: rgba(255, 149, 0, 0.55);
+      }
+      50% {
+        box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.85), 0 0 28px rgba(255, 149, 0, 0.45);
+        border-color: rgba(255, 200, 80, 0.95);
+      }
+    }
+
+    body.term-app .main,
+    body.term-app #pages {
+      position: relative;
+      z-index: 1;
+    }
+
+    .card:not(.sohel-regime-card) {
+      background: #111111 !important;
+      border-color: rgba(57, 255, 20, 0.22) !important;
+      box-shadow: 0 0 0 1px rgba(0, 240, 255, 0.08), 0 8px 32px rgba(0, 0, 0, 0.55);
+      animation: neon-pulse 4.5s ease-in-out infinite;
+    }
+
+    .ap-drive-card {
+      font-size: 0.72rem !important;
+      line-height: 1.6 !important;
+      padding: 20px 22px !important;
+      min-height: 120px;
+      background: #111111 !important;
+      border: 2px solid rgba(57, 255, 20, 0.4) !important;
+      border-radius: 16px !important;
+      box-shadow: 0 0 16px rgba(57, 255, 20, 0.12), inset 0 1px 0 rgba(0, 240, 255, 0.06);
+      color: #e8e8e8 !important;
+    }
+    .ap-drive-card.neon-flash {
+      animation: neon-flash 0.8s ease-out !important;
+    }
+    .ap-hist {
+      border-top-color: rgba(0, 240, 255, 0.15) !important;
+      color: rgba(224, 224, 224, 0.72) !important;
+      font-size: 0.78rem !important;
+    }
+
+    #action-panel.bg-black,
+    #action-panel {
+      background: #111111 !important;
+      border: 2px solid rgba(57, 255, 20, 0.45) !important;
+      box-shadow: 0 0 24px rgba(57, 255, 20, 0.12), 0 0 40px rgba(0, 240, 255, 0.06);
+    }
+    #action-panel h2.text-3xl,
+    #action-panel > h2 {
+      color: var(--neon-lime) !important;
+      text-shadow: 0 0 18px rgba(57, 255, 20, 0.35);
+      font-size: 1.85rem !important;
+    }
+
+    #open-trades-panel.bg-black,
+    #open-trades-panel {
+      background: #111111 !important;
+      border: 2px solid rgba(255, 149, 0, 0.45) !important;
+      box-shadow: 0 0 20px rgba(255, 149, 0, 0.12);
+    }
+    #open-trades-panel h2.text-3xl,
+    #open-trades-panel > h2 {
+      color: var(--neon-amber) !important;
+      text-shadow: 0 0 16px rgba(255, 149, 0, 0.35);
+    }
+
+    .tm-open-card {
+      background: #111111 !important;
+      border: 2px solid rgba(255, 149, 0, 0.35) !important;
+      padding: 18px 20px !important;
+      font-size: 0.68rem !important;
+      min-height: 100px;
+    }
+    .tm-open-card.neon-amber-pulse {
+      animation: neon-amber-pulse 0.65s ease-out !important;
+    }
+
+    .sohel-regime-card {
+      background: linear-gradient(160deg, #111111 0%, #0a0a0a 100%) !important;
+      border: 2px solid rgba(0, 240, 255, 0.35) !important;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.1), 0 0 40px rgba(255, 0, 255, 0.06);
+      animation: neon-pulse 5s ease-in-out infinite;
+    }
+    .sohel-regime-head.regime-flash {
+      animation: regime-flash 0.85s ease-out;
+      border-radius: 12px;
+    }
+    .sohel-regime-title {
+      color: var(--neon-lime) !important;
+      text-shadow: 0 0 14px rgba(57, 255, 20, 0.4);
+      font-size: 1.5rem !important;
+    }
+    .sohel-regime-pill {
+      border-color: rgba(255, 0, 255, 0.35) !important;
+      color: var(--neon-cyan) !important;
+    }
+    .sohel-wl-tile {
+      background: #111111 !important;
+      border: 2px solid rgba(57, 255, 20, 0.32) !important;
+      min-height: 108px !important;
+      padding: 16px 18px !important;
+    }
+    .sohel-wl-sym {
+      color: #f0f0f0 !important;
+      text-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
+      font-size: 1.65rem !important;
+    }
+    .sohel-wl-score {
+      color: var(--neon-lime) !important;
+      font-size: 1.2rem !important;
+      font-weight: 700;
+    }
+
+    .sohel-tabbar {
+      background: linear-gradient(180deg, rgba(10, 10, 10, 0.98) 0%, rgba(10, 10, 10, 0.88) 90%, transparent 100%) !important;
+    }
+    .sohel-tab {
+      border-color: rgba(0, 240, 255, 0.2) !important;
+      background: #111111 !important;
+    }
+    .sohel-tab--active {
+      border-color: rgba(57, 255, 20, 0.75) !important;
+      color: var(--neon-lime) !important;
+      box-shadow: 0 0 20px rgba(57, 255, 20, 0.25), inset 0 0 20px rgba(57, 255, 20, 0.06);
+    }
+
+    .topbar {
+      background: rgba(10, 10, 10, 0.96) !important;
+      border-bottom-color: rgba(57, 255, 20, 0.2) !important;
+    }
+    .logo-text-mob {
+      color: var(--neon-cyan) !important;
+      text-shadow: 0 0 12px rgba(0, 240, 255, 0.35);
+    }
+    .logo-dot-live {
+      background: var(--neon-lime) !important;
+      box-shadow: 0 0 12px var(--neon-lime), 0 0 20px rgba(57, 255, 20, 0.5) !important;
+    }
+
+    #system-status {
+      border: 1px solid rgba(57, 255, 20, 0.35) !important;
+      background: #111111 !important;
+      animation: neon-pulse 6s ease-in-out infinite;
+    }
+    #health-banner {
+      border: 1px solid rgba(0, 240, 255, 0.3) !important;
+      background: #111111 !important;
+    }
+
+    .tm-btn-enter,
+    .tm-btn-action {
+      border-color: rgba(57, 255, 20, 0.55) !important;
+      color: var(--neon-lime) !important;
+      font-size: 0.78rem !important;
+      padding: 12px 16px !important;
+    }
+    .tm-btn-exit {
+      border-color: rgba(255, 149, 0, 0.55) !important;
+      color: var(--neon-amber) !important;
+    }
+
+    .command-hero.wait,
+    .command-hero {
+      border-color: rgba(0, 240, 255, 0.25) !important;
+    }
+
+    /* SOHELATOR blueprint — 3-tab layout (Prompt 9) */
+    .sohel-tabbar {
+      display: flex;
+      gap: 8px;
+      padding: 10px 0 16px;
+      margin: 0 0 4px;
+      position: sticky;
+      top: 0;
+      z-index: 15;
+      background: linear-gradient(180deg, rgba(6, 10, 14, 0.98) 0%, rgba(6, 10, 14, 0.92) 85%, transparent 100%);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .sohel-tab {
+      flex: 1;
+      min-height: 48px;
+      font-family: var(--font-bebas);
+      font-size: 1.05rem;
+      letter-spacing: 0.12em;
+      border-radius: 14px;
+      border: 2px solid rgba(39, 39, 42, 0.9);
+      background: rgba(9, 9, 11, 0.85);
+      color: rgba(228, 228, 231, 0.65);
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+    .sohel-tab:hover {
+      border-color: rgba(163, 230, 53, 0.35);
+      color: rgba(238, 248, 255, 0.9);
+    }
+    .sohel-tab--active {
+      border-color: rgba(163, 230, 53, 0.65);
+      color: #bef264;
+      background: rgba(163, 230, 53, 0.08);
+      box-shadow: 0 0 20px rgba(163, 230, 53, 0.12);
+    }
+    .sohel-tab:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px;
+    }
+    .sohel-tab-page[hidden] {
+      display: none !important;
+    }
+    .sohel-tab-page:not([hidden]) {
+      display: block;
+    }
+    .sohel-home-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .sohel-regime-card {
+      border: 1px solid rgba(163, 230, 53, 0.35);
+      border-radius: 18px;
+      padding: 18px 20px;
+      background: linear-gradient(145deg, rgba(0, 0, 0, 0.55) 0%, rgba(15, 20, 18, 0.75) 100%);
+    }
+    .sohel-regime-head,
+    .sohel-watchlist-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .sohel-regime-title {
+      font-family: var(--font-bebas);
+      font-size: 1.35rem;
+      letter-spacing: 0.08em;
+      color: #a3e635;
+      margin: 0;
+    }
+    .sohel-regime-pill {
+      font-size: 0.65rem;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #18181b;
+      color: #bef264;
+      border: 1px solid rgba(163, 230, 53, 0.3);
+    }
+    .sohel-regime-body {
+      font-family: var(--font-body);
+      font-size: 0.78rem;
+      line-height: 1.55;
+      color: rgba(238, 248, 255, 0.88);
+      margin: 0;
+    }
+    .sohel-regime-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .sohel-regime-metric {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(0, 229, 255, 0.12);
+      border-radius: 12px;
+      padding: 10px 12px;
+      text-align: center;
+    }
+    .sohel-regime-metric .lab {
+      font-size: 0.58rem;
+      font-family: var(--font-data);
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .sohel-regime-metric .val {
+      font-family: var(--font-data);
+      font-size: 0.95rem;
+      color: #00ff87;
+      margin-top: 4px;
+    }
+    .sohel-watchlist-section {
+      margin-bottom: 4px;
+    }
+    .sohel-watchlist-hint {
+      font-size: 0.6rem;
+      color: var(--muted);
+    }
+    .sohel-watchlist-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+      gap: 12px;
+    }
+    .sohel-wl-tile {
+      min-height: 96px;
+      padding: 14px 14px 12px;
+      border-radius: 16px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(163, 230, 53, 0.28);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .sohel-wl-sym {
+      font-family: var(--font-bebas);
+      font-size: 1.5rem;
+      letter-spacing: 0.06em;
+      color: #eef8ff;
+    }
+    .sohel-wl-meta {
+      font-family: var(--font-data);
+      font-size: 0.62rem;
+      color: rgba(190, 242, 100, 0.95);
+      line-height: 1.4;
+    }
+    .sohel-wl-score {
+      font-family: var(--font-data);
+      font-size: 1.1rem;
+      color: #00ff87;
+    }
+    #alerts-page #action-panel {
+      margin-top: 0;
+    }
+    #open-trades-page #open-trades-panel {
+      margin-top: 0;
+    }
   </style>
 </head>
 <body class="term-app">
@@ -1607,6 +2235,31 @@
     <div class="pages" id="pages">
       <!-- 0 SIGNAL -->
       <section class="page page--active" id="page-0">
+        <!-- SOHELATOR blueprint — 3-tab layout (Prompt 9) -->
+        <nav class="sohel-tabbar" id="sohel-tabbar" role="tablist" aria-label="Main views">
+          <button type="button" class="sohel-tab sohel-tab--active" role="tab" aria-selected="true" data-sohel-tab="home" id="tab-btn-home">HOME</button>
+          <button type="button" class="sohel-tab" role="tab" aria-selected="false" data-sohel-tab="alerts" id="tab-btn-alerts">ALERTS</button>
+          <button type="button" class="sohel-tab" role="tab" aria-selected="false" data-sohel-tab="trades" id="tab-btn-trades">OPEN TRADES</button>
+        </nav>
+
+        <div id="home-page" class="sohel-tab-page sohel-tab-page--active" role="tabpanel" aria-labelledby="tab-btn-home">
+        <div class="sohel-home-stack">
+          <div class="sohel-regime-card card" id="home-regime-card">
+            <div class="sohel-regime-head" id="home-regime-header">
+              <h2 class="sohel-regime-title">Today's regime</h2>
+              <span class="sohel-regime-pill font-mono" id="home-regime-pill">—</span>
+            </div>
+            <p id="home-regime-body" class="sohel-regime-body">Live tape summary loads with the scanner — pull to refresh or wait for the next poll.</p>
+          </div>
+          <div class="sohel-watchlist-section">
+            <div class="sohel-watchlist-head">
+              <h2 class="sohel-regime-title">Watchlist</h2>
+              <span class="sohel-watchlist-hint font-mono" id="home-watchlist-meta">Latest scan</span>
+            </div>
+            <div id="home-watchlist-grid" class="sohel-watchlist-grid" aria-live="polite"></div>
+          </div>
+        </div>
+
         <div class="play-radar-strip play-radar-in-page" id="playRadarStrip" aria-live="polite">
           <div class="row1">
             <span class="play-radar-label">Play radar</span>
@@ -1618,6 +2271,7 @@
             <button type="button" class="btn-tool btn-tool--glance" id="btnParkedMode" aria-pressed="false" title="Larger prices, scores, and buttons — tap again to return">BIG GLANCE</button>
           </div>
         </div>
+
         <div class="card hero command-hero wait" id="heroCard">
           <div class="command-hero-top">
             <div class="command-hero-left">
@@ -1672,8 +2326,8 @@
               <div class="hero-stat-hint muted-h" id="heroCvdHint">—</div>
             </div>
           </div>
-          <div class="hero-stat hero-stat-vol-full">
-            <div class="hero-stat-label">Volume (5m intraday)</div>
+          <div class="hero-stat hero-stat-vol-full" id="heroVolStat">
+            <div class="hero-stat-label">Volume (intraday)</div>
             <div class="hero-stat-val" id="stVol">—</div>
             <div class="hero-stat-hint muted-h" id="stVolHint">—</div>
           </div>
@@ -1782,6 +2436,48 @@
             <div class="trio-card"><h4>Exit when</h4><p id="actExit">—</p></div>
             <div class="trio-card"><h4>Stay out if</h4><p id="actStay">—</p></div>
           </div>
+
+        </div><!-- SOHELATOR blueprint — 3-tab layout: end #home-page -->
+
+        <div id="alerts-page" class="sohel-tab-page" role="tabpanel" aria-labelledby="tab-btn-alerts" hidden>
+        <!-- SOHELATOR blueprint — WHAT TO DO NOW Action Panel -->
+        <div id="action-panel" class="bg-black border border-lime-400 rounded-3xl p-6 mt-8">
+          <h2 class="text-3xl font-bold text-lime-400 mb-4 flex items-center gap-3">
+            🚀 ALL ALERTS
+            <span id="panel-status" class="text-sm font-mono bg-zinc-900 px-3 py-1 rounded-full text-lime-300">LIVE</span>
+          </h2>
+          <div class="ap-refresh-row">
+            <button type="button" class="btn-tool btn-tool--glance" id="btn-action-panel-refresh" title="Refresh scanner now">Refresh Now</button>
+          </div>
+          <p class="sohel-alerts-hint muted" style="font-size:0.72rem;margin-bottom:12px;line-height:1.45;">Newest first — multiple rows per symbol allowed.</p>
+          <div id="alert-cards" class="space-y-6"></div>
+        </div>
+        </div>
+
+        <div id="open-trades-page" class="sohel-tab-page" role="tabpanel" aria-labelledby="tab-btn-trades" hidden>
+        <!-- SOHELATOR blueprint — OPEN TRADES Management Panel (Prompt 5) -->
+        <div id="open-trades-panel" class="bg-black border border-amber-400 rounded-3xl p-6 mt-6">
+          <h2 class="text-3xl font-bold text-amber-400 mb-4 flex items-center gap-3">
+            📌 OPEN TRADES
+            <span id="open-status" class="text-sm font-mono bg-zinc-900 px-3 py-1 rounded-full text-amber-300">LIVE</span>
+          </h2>
+          <div id="open-trade-cards" class="space-y-6"></div>
+        </div>
+        </div>
+
+        <!-- SOHELATOR blueprint — Final Status Footer (Prompt 7) -->
+        <div id="system-status" class="fixed bottom-4 right-4 bg-zinc-900 text-lime-400 text-xs font-mono px-4 py-2 rounded-2xl shadow-xl flex items-center gap-2 z-50">
+          <span id="next-scan-time"></span>
+          <span class="text-amber-400">•</span>
+          <span id="self-tuned">Self-tuned nightly</span>
+        </div>
+
+        <!-- SOHELATOR blueprint — System Health (Prompt 8) -->
+        <div id="health-banner" class="fixed bottom-4 left-4 bg-zinc-900 text-xs font-mono px-4 py-2 rounded-2xl flex items-center gap-2 z-50">
+          <span id="health-text" class="text-lime-400">✓ All systems nominal</span>
+        </div>
+        <div id="scan-fail-toast" role="status" aria-live="polite">Scanner hasn’t succeeded in 10+ min — check connection or API.</div>
+
       </section>
 
       <!-- 1 INDS — interpreted (IV gauge + chain data still loaded on SIGNAL for IV) -->
@@ -1839,6 +2535,7 @@
       <!-- 5 SCAN — read-only intelligence feed -->
       <section class="page scan-tab-root" id="page-5">
         <div id="scanBlobsBanner" class="card" style="display:none;margin-bottom:14px;border-color:var(--yellow);background:rgba(255,204,0,0.09);padding:12px 14px;font-size:0.82rem;line-height:1.55;color:var(--text);"></div>
+        <div id="scanReadinessStrip" class="card" style="display:none;margin-bottom:12px;padding:11px 14px;font-size:0.76rem;line-height:1.55;color:var(--muted);border-color:var(--border2);background:var(--bg2);white-space:pre-line;"></div>
         <div class="scan-status-bar" id="scanStatusBar" aria-label="Today status">
           <span class="sb-seg"><span id="scanMktDot" class="scan-dot-off" aria-hidden="true"></span><span id="scanMktPill">—</span></span>
           <span class="sb-seg">LAST SCAN <span class="sb-val" id="scanLastScan">—</span></span>
@@ -1962,6 +2659,9 @@
       ticker: "NVDA",
       quote: null,
       candles5m: [],
+      candles1m: [],
+      /** "1M" or "5M" — which series drives intraday indicators when data loads. */
+      intradayTfLabel: "5M",
       tf: {},
       signal: "WAIT",
       signalDetail: "wait",
@@ -2008,7 +2708,37 @@
       ignitionHistory: [],
       _ignHistSym: null,
       indicators: null,
+      /** Mirrors server `getPublicStrategyParams` after fetch; null until loaded. */
+      strategyParams: null,
     };
+
+    /** Defaults match `netlify/functions/lib/strategyParams.js` (classical TA baseline). */
+    function defaultSignalParams() {
+      return {
+        adxChopMax: 20,
+        callRsiLo: 50,
+        callRsiHi: 70,
+        putRsiLo: 30,
+        putRsiHi: 50,
+        bbCallAbove: 0.5,
+        bbPutBelow: 0.5,
+      };
+    }
+
+    async function ensureStrategyParams() {
+      if (state.strategyParams) return;
+      try {
+        const r = await fetch("/api/strategy-params");
+        if (!r.ok) throw new Error("bad status");
+        state.strategyParams = await r.json();
+      } catch (e) {
+        state.strategyParams = {
+          version: 1,
+          signal: defaultSignalParams(),
+          scanner: {},
+        };
+      }
+    }
 
     const STAGE_DEFS = [
       { key: "setup_bull", icon: "🔍", label: "BULL SETUP", cls: "st-setup_bull" },
@@ -3436,31 +4166,26 @@
     }
 
     function computeSignal(adxVal, macdH, price, vwap, rsiVal, bbB) {
-      const belowVwap = vwap != null && price != null && price < vwap;
-      const macdNeg = macdH != null && macdH < 0;
-      const bbLo = bbB != null && bbB < 0.5;
-      /** ADX lags: big dumps often stay ADX&lt;20 while RSI is already oversold — old logic never fired puts. */
-      if (adxVal < 20) {
-        if (
-          macdNeg &&
-          belowVwap &&
-          rsiVal != null &&
-          rsiVal < 38 &&
-          bbB != null &&
-          bbB < 0.35
-        ) {
-          return { key: "BUY PUTS", detail: "puts" };
-        }
-        return { key: "WAIT", detail: "chop" };
-      }
-      if (macdH > 0 && price > vwap && rsiVal >= 50 && rsiVal <= 70 && bbB > 0.5)
-        return { key: "BUY CALLS", detail: "calls" };
+      const sig =
+        (state.strategyParams && state.strategyParams.signal) ||
+        defaultSignalParams();
+      const A = sig.adxChopMax != null ? sig.adxChopMax : 20;
+      if (adxVal < A) return { key: "WAIT", detail: "chop" };
       if (
-        macdNeg &&
-        belowVwap &&
-        rsiVal != null &&
-        ((rsiVal >= 25 && rsiVal <= 52) || (rsiVal < 25 && bbB != null && bbB < 0.2)) &&
-        bbLo
+        macdH > 0 &&
+        price > vwap &&
+        rsiVal >= sig.callRsiLo &&
+        rsiVal <= sig.callRsiHi &&
+        bbB > sig.bbCallAbove
+      ) {
+        return { key: "BUY CALLS", detail: "calls" };
+      }
+      if (
+        macdH < 0 &&
+        price < vwap &&
+        rsiVal >= sig.putRsiLo &&
+        rsiVal <= sig.putRsiHi &&
+        bbB < sig.bbPutBelow
       ) {
         return { key: "BUY PUTS", detail: "puts" };
       }
@@ -3475,7 +4200,7 @@
       return { n: Math.max(ups, downs), label: Math.max(ups, downs) + "/5" };
     }
 
-    /** Recent 5m bar range vs prior window — expansion often precedes large moves. */
+    /** Recent intraday bar range vs prior window — expansion often precedes large moves. */
     function computeVolatilityRegime(c5) {
       if (!c5 || c5.length < 8) return { label: "—", expanding: null, ratio: 1 };
       const n = Math.min(6, Math.floor(c5.length / 2));
@@ -3506,7 +4231,9 @@
         marketOpen,
         volRegime,
         sessionLabel,
+        intradayTfLabel: tfLblHint,
       } = ctx;
+      const barHint = (tfLblHint || "5m").toLowerCase();
       const n = tfAlign && typeof tfAlign.n === "number" ? tfAlign.n : 0;
       const tfPts = Math.round((n / 5) * 25);
       let setupPts = 12;
@@ -3558,7 +4285,7 @@
       else if (sig.detail === "puts") hints.push("put trigger");
       else if (sig.detail === "chop") hints.push("chop / no trigger");
 
-      if (volRegime.expanding === true) hints.push("5m range expanding");
+      if (volRegime.expanding === true) hints.push(barHint + " range expanding");
       else if (volRegime.expanding === false) hints.push("tight range");
 
       if (cvdSummary && cvdSummary.divergence && cvdSummary.divergence.divergence !== "NONE") {
@@ -3617,7 +4344,7 @@
         return {
           score: 0,
           tier: "COLD",
-          line: "Need more 5m bars",
+          line: "Need more intraday bars",
           volBarX: 1,
           rangeR: 1,
           trustedWindow: isTrustedTapeWindowEt(),
@@ -3694,8 +4421,8 @@
       };
     }
 
-    function renderTfStrip(dirs) {
-      const labels = ["5M", "15M", "1H", "4H", "DAY"];
+    function renderTfStrip(dirs, firstLabel) {
+      const labels = [firstLabel || "5M", "15M", "1H", "4H", "DAY"];
       const el = document.getElementById("tfStrip");
       el.innerHTML = labels.map((lb, i) => {
         const d = dirs[i] || "—";
@@ -4016,6 +4743,8 @@
       const {
         adxVal, macdH, rsiVal, bbB, vwapDist, vwap, price, sig,
       } = ctx;
+      const atrTf = (ctx.intradayTfLabel || "5M").toLowerCase();
+      const ibarLabel = atrTf + " bar";
 
       const adxOld = c5.length >= 40 ? adx(c5.slice(0, -6)) : adxVal;
       const adxSlope = adxVal - adxOld;
@@ -4063,7 +4792,7 @@
         adxMeaning = "Weak trend forming. Not strong enough to trade yet. Wait for ADX to break 25 before entering.";
         adxHold = "Wait — edge is thin for 1–3d options.";
         adxAction = "Do not add size; wait for ADX ≥ 25.";
-        adxWatch = "ADX crossing 25 on a closing 5m bar.";
+        adxWatch = "ADX crossing 25 on a closing " + ibarLabel + ".";
       } else if (a < 30) {
         adxPill = "TREND OK";
         adxPillCls = bullLeg === "Bull" ? "bull" : "bear";
@@ -4354,7 +5083,7 @@
           : 0;
       const atrLine1 =
         atrAbs > 0
-          ? "ATR of " + atrAbs.toFixed(3) + " means " + sym + " moves about " + atrPct.toFixed(2) + "% per day on average (14-bar on 5m proxy)."
+          ? "ATR of " + atrAbs.toFixed(3) + " means " + sym + " moves about " + atrPct.toFixed(2) + "% per day on average (14-bar on " + atrTf + " candles — not daily ATR)."
           : "ATR not available — need more candles.";
       const atrLine2 =
         sug0 && price > 0
@@ -4801,25 +5530,34 @@
     }
 
     async function loadMarketData() {
+      await ensureStrategyParams();
       const sym = state.ticker.toUpperCase();
       const triggeredByGo = state.justUserGo;
       state.justUserGo = false;
-      const [quote, c5, c15, c60, daily] = await Promise.all([
+      const [quote, c1, c5, c15, c60, daily] = await Promise.all([
         fetchQuote(sym),
+        fetchTimesales(sym, "1min"),
         fetchTimesales(sym, "5min"),
         fetchTimesales(sym, "15min"),
         fetchTimesales(sym, "1hour"),
         fetchHistoryDaily(sym),
       ]);
       state.quote = quote;
+      state.candles1m = c1;
       state.candles5m = c5;
-      const closes5 = c5.map((x) => x.c);
-      const rsiVal = rsi(closes5);
-      const macdH = macdHist(closes5);
-      const adxVal = adx(c5);
-      const bbB = bollingerPctB(closes5);
-      const vwap = vwapSession(c5);
-      const price = quote?.last || closes5[closes5.length - 1] || 0;
+      /** Need enough 1m bars for MACD/ADX/Bollinger; else keep 5m so math stays stable. */
+      const MIN_1M_BARS = 40;
+      const use1m = c1.length >= MIN_1M_BARS;
+      const cTape = use1m ? c1 : c5;
+      const intradayTfLabel = use1m ? "1M" : "5M";
+      state.intradayTfLabel = intradayTfLabel;
+      const closesTape = cTape.map((x) => x.c);
+      const rsiVal = rsi(closesTape);
+      const macdH = macdHist(closesTape);
+      const adxVal = adx(cTape);
+      const bbB = bollingerPctB(closesTape);
+      const vwap = vwapSession(cTape);
+      const price = quote?.last || closesTape[closesTape.length - 1] || 0;
       const vwapDist = vwap ? ((price - vwap) / vwap) * 100 : 0;
 
       state.fiveMinCandles = c5;
@@ -4833,8 +5571,8 @@
         adx: adxVal,
         adxPrev: pInd.adx != null ? pInd.adx : adxVal,
       };
-      if (typeof window.calculateIgnition === "function" && c5.length >= 5) {
-        const ign = window.calculateIgnition(candlesNormalizedForIgnition(c5), indForIgn);
+      if (typeof window.calculateIgnition === "function" && cTape.length >= 5) {
+        const ign = window.calculateIgnition(candlesNormalizedForIgnition(cTape), indForIgn);
         state.ignition = ign;
         renderIgnition(ign);
         pushIgnitionHistoryClient(ign, sym);
@@ -4847,7 +5585,7 @@
       } else {
         state.ignition = null;
         const igDesc = document.getElementById("ignDesc");
-        if (igDesc) igDesc.textContent = "Need at least 5 five-minute bars for ignition.";
+        if (igDesc) igDesc.textContent = "Need at least 5 intraday bars for ignition.";
       }
       state.indicators = {
         macd: macdH,
@@ -4860,17 +5598,17 @@
       };
 
       state.volumeAnalysis =
-        typeof window.analyzeVolumeForUi === "function" && c5.length >= 5
+        typeof window.analyzeVolumeForUi === "function" && cTape.length >= 5
           ? window.analyzeVolumeForUi(
-              c5.map((x) => ({ h: x.h, l: x.l, c: x.c, v: x.v || 0 })),
-              { last: price }
+              cTape.map((x) => ({ h: x.h, l: x.l, c: x.c, v: x.v || 0 })),
+              { last: price, barLabel: intradayTfLabel.toLowerCase() }
             )
           : null;
       const sig = computeSignal(adxVal, macdH, price, vwap, rsiVal, bbB);
       state.signal = sig.key;
       state.signalDetail = sig.detail;
 
-      const rsi2v = rsi(closes5, 2);
+      const rsi2v = rsi(closesTape, 2);
       renderStageStrip({
         adxVal,
         macdH,
@@ -4965,8 +5703,8 @@
       const h4closes = aggregateFromHourly(c60.map((x) => x.c), 4);
       const d4h = h4closes.length >= 25 ? tfDir(h4closes) : "—";
       const d1d = tfDir(daily.map((x) => x.c));
-      const d5 = tfDir(closes5);
-      const dirs = [d5, d15, d60, d4h, d1d];
+      const dIntra = tfDir(closesTape);
+      const dirs = [dIntra, d15, d60, d4h, d1d];
       state.tf = { dirs, align: alignCount(dirs) };
 
       document.getElementById("heroSym").textContent = sym;
@@ -5102,7 +5840,7 @@
         }
       }
 
-      const volReg = computeVolatilityRegime(c5);
+      const volReg = computeVolatilityRegime(cTape);
       const sessEt = getMarketSessionEt();
       const conf = computeTapeConfluence({
         sig,
@@ -5114,13 +5852,14 @@
         marketOpen: state.marketOpen,
         volRegime: volReg,
         sessionLabel: sessEt.label,
+        intradayTfLabel,
       });
       state.confluence = {
         score: conf.score,
         tier: conf.tier,
         line: conf.line,
       };
-      const tapeAct = computeTapeActivation(c5, va, sig, volReg, state.marketOpen);
+      const tapeAct = computeTapeActivation(cTape, va, sig, volReg, state.marketOpen);
       state.tapeActivation = {
         score: tapeAct.score,
         tier: tapeAct.tier,
@@ -5170,7 +5909,12 @@
         }
       }
 
-      renderTfStrip(dirs);
+      renderTfStrip(dirs, intradayTfLabel);
+      const volStatLbl = document.querySelector("#heroVolStat .hero-stat-label");
+      if (volStatLbl) {
+        volStatLbl.textContent =
+          "Volume (" + intradayTfLabel.toLowerCase() + " intraday)";
+      }
       document.getElementById("setupsList").innerHTML = buildSetups(sig, adxVal, rsiVal, macdH, bbB).map((s) =>
         `<div class="setup-row"><span class="setup-badge">${s.b}</span><div style="flex:1;font-size:0.8rem;">${s.d}</div><span class="setup-q">${s.q}</span></div>`
       ).join("");
@@ -5198,7 +5942,7 @@
 
       await renderInterpretedIndicatorsPage({
         sym,
-        c5,
+        c5: cTape,
         adxVal,
         macdH,
         rsiVal,
@@ -5207,6 +5951,7 @@
         vwap,
         price,
         sig,
+        intradayTfLabel,
       });
       if (triggeredByGo && sym) {
         void fetchResearchBrief(false, true);
@@ -6124,11 +6869,13 @@
               '<br/><span class="muted" style="font-size:0.72rem;line-height:1.45;display:inline-block;margin-top:8px;">Last scanner pass: ' +
               (diag.skippedAdxChop > 0
                 ? diag.skippedAdxChop +
-                  " name(s) under the ADX trend gate (regime " +
+                  " name(s) under the ADX trend gate (regime min " +
                   (diag.regimeMinAdx != null ? diag.regimeMinAdx : "—") +
-                  ", scanner used " +
-                  (diag.relaxedMinAdx != null ? diag.relaxedMinAdx : "—") +
-                  "+ with extra slack if 5m vol was hot). "
+                  "; per-symbol floor uses regime minus offset " +
+                  (diag.scannerAdxRegimeOffset != null
+                    ? diag.scannerAdxRegimeOffset
+                    : "0") +
+                  " from SCANNER_STAGE_ADX_REGIME_OFFSET, plus optional vol/flush env). "
                 : "") +
               "Short-term volume can spike while ADX stays low — that is still chop until trend confirms. " +
               (diag.skippedStageNoAlert > 0
@@ -6465,6 +7212,46 @@
         } else {
           blobBanner.style.display = "none";
           blobBanner.textContent = "";
+        }
+      }
+
+      const readyEl = document.getElementById("scanReadinessStrip");
+      if (readyEl) {
+        if (d.pipelineStatus) {
+          const p = d.pipelineStatus;
+          const a = [];
+          a.push(
+            d.blobsConfigured
+              ? "Storage: Netlify Blobs OK (reports, last scan, alert history, push subs)."
+              : "Storage: set NETLIFY_SITE_ID + NETLIFY_TOKEN or nothing from scheduled jobs will appear here."
+          );
+          a.push(
+            p.tradier
+              ? "Market data: TRADIER_TOKEN is set."
+              : "Market data: add TRADIER_TOKEN (and TRADIER_ACCOUNT_ID for trading paths)."
+          );
+          a.push(
+            p.anthropic
+              ? "AI briefs: ANTHROPIC_API_KEY set (9:25 / 9:55 / EOD copy)."
+              : "AI briefs: add ANTHROPIC_API_KEY or Claude sections may be empty."
+          );
+          const del = [];
+          if (p.telegram) del.push("Telegram");
+          if (p.email) del.push("email");
+          if (p.webPush) del.push("web push");
+          a.push(
+            del.length
+              ? "Alert channels: " + del.join(", ") + " — you can receive scanner alerts."
+              : "Alert channels: set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID and/or RESEND_API_KEY + ALERT_EMAIL; optional VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY for browser push."
+          );
+          a.push(
+            "Dynamic watchlist (SIGNAL tab): merges 9:25 bull/bear/avoid + 9:55 tickers + open alerts once scans have run and this feed updates (polls every ~60s)."
+          );
+          readyEl.textContent = a.join("\n\n");
+          readyEl.style.display = "block";
+        } else {
+          readyEl.style.display = "none";
+          readyEl.textContent = "";
         }
       }
 
@@ -6984,7 +7771,8 @@
     document.getElementById("trackerBannerGo").addEventListener("click", () => {
       document.getElementById("trackerActionBanner").style.display = "none";
       refreshMainTop();
-      setPage(3);
+      setPage(0);
+      if (typeof window.sohelSelectMainTab === "function") window.sohelSelectMainTab("alerts");
     });
     document.getElementById("trackerBannerDismiss").addEventListener("click", () => {
       sessionStorage.setItem("sohel_tracker_banner_dismissed", "1");

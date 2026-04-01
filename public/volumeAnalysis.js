@@ -1,5 +1,6 @@
 /**
- * Intraday 5m volume analysis — session candles only (US equities, NY calendar day).
+ * Intraday volume analysis — session candles only (US equities, NY calendar day).
+ * Works with any bar size (e.g. 1m or 5m). Pass `barLabel` in the second argument.
  * Ratios compare the current bar vs a recent intraday baseline (last 5 completed bars),
  * not multi-day / overnight aggregates.
  */
@@ -111,10 +112,13 @@ function detectCVDDivergence(norm, cvdArray) {
 }
 
 /**
- * @param {object[]} candles - raw OHLCV (5m), may include `time` / `t`
- * @param {object} _quote - reserved
+ * @param {object[]} candles - raw OHLCV, may include `time` / `t`
+ * @param {object} [opts] - `{ last?: number, barLabel?: string }` (barLabel e.g. "1m", "5m" for copy)
  */
-function analyzeVolume(candles, _quote) {
+function analyzeVolume(candles, opts) {
+  const o = opts && typeof opts === "object" ? opts : {};
+  const barLabel = (o.barLabel || "5m").toString();
+
   const normAll = normalizeCandles(candles);
   if (!normAll.length) return null;
 
@@ -177,11 +181,11 @@ function analyzeVolume(candles, _quote) {
     priceVolumeSignal = "BULLISH CONFIRMATION";
     priceVolumeInterpretation =
       `Price rising on ${currentVolRatio.toFixed(1)}x ` +
-      `recent intraday volume. Real participation on this 5m bar.`;
+      `recent intraday volume. Real participation on this ${barLabel} bar.`;
   } else if (priceUp && !volUp) {
     priceVolumeSignal = "WEAK MOVE";
     priceVolumeInterpretation =
-      `Price rising but volume is light vs recent 5m bars. ` +
+      `Price rising but volume is light vs recent ${barLabel} bars. ` +
       `No strong intraday conviction — move may fade.`;
   } else if (!priceUp && volUp) {
     priceVolumeSignal = "BEARISH CONFIRMATION";
@@ -224,7 +228,7 @@ function analyzeVolume(candles, _quote) {
     last5Vols.length >= 5 && last5Vols[4] < last5Vols[0] * 0.8;
   const hasVolumeDivergence = priceHigherHighs && volumeLowerHighs;
 
-  /** Session VWAP — only today's 5m bars. */
+  /** Session VWAP — today's session bars only. */
   let pvSum = 0;
   let vSum = 0;
   for (const c of norm) {
@@ -263,7 +267,7 @@ function analyzeVolume(candles, _quote) {
       urgency: "HIGH",
       message:
         `🔥 Intraday volume SURGE — ` +
-        `${currentVolRatio.toFixed(1)}x recent 5m avg. ` +
+        `${currentVolRatio.toFixed(1)}x recent ${barLabel} avg. ` +
         `Institutions active — strong confirmation.`,
       action: "ENTER OR ADD — high conviction move",
     });
@@ -274,7 +278,7 @@ function analyzeVolume(candles, _quote) {
       type: "SURGE_BEAR",
       urgency: "HIGH",
       message:
-        `🚨 SURGE on DOWN 5m bar — ` +
+        `🚨 SURGE on DOWN ${barLabel} bar — ` +
         `${currentVolRatio.toFixed(1)}x recent avg. ` +
         `Real selling pressure.`,
       action: "EXIT CALLS — heavy selling volume",
@@ -298,7 +302,7 @@ function analyzeVolume(candles, _quote) {
       urgency: "MEDIUM",
       message:
         `👀 Volume dry-up on pullback — ` +
-        `light vs recent 5m bars. Weak selling into dip.`,
+        `light vs recent ${barLabel} bars. Weak selling into dip.`,
       action: "WATCH FOR RE-ENTRY — weak pullback",
     });
   }
@@ -309,7 +313,7 @@ function analyzeVolume(candles, _quote) {
       urgency: "MEDIUM",
       message:
         `⚡ Intraday divergence — higher highs, ` +
-        `volume not confirming on 5m.`,
+        `volume not confirming on ${barLabel}.`,
       action: "TIGHTEN STOP — distribution signal",
     });
   }
@@ -399,7 +403,8 @@ function analyzeVolume(candles, _quote) {
       volumeTrend,
       hasVolumeDivergence,
       isClimaxVolume,
-      isVolumeDryUp
+      isVolumeDryUp,
+      barLabel
     ),
 
     interpretation: buildVolumeInterpretation(
@@ -412,7 +417,8 @@ function analyzeVolume(candles, _quote) {
       isVolumeDryUp,
       hasVolumeDivergence,
       vwapCrossVolume,
-      aboveVWAP
+      aboveVWAP,
+      barLabel
     ),
 
     cvdSummary,
@@ -427,10 +433,12 @@ function buildVolumeSummary(
   trend,
   divergence,
   climax,
-  dryUp
+  dryUp,
+  barLabel
 ) {
+  const bl = barLabel || "5m";
   const lines = [];
-  lines.push(`Intraday 5m volume: ${ratio.toFixed(1)}x recent bar avg (${signal})`);
+  lines.push(`Intraday ${bl} volume: ${ratio.toFixed(1)}x recent bar avg (${signal})`);
   lines.push(interp);
   if (alerts.length > 0) {
     lines.push("Volume alerts:");
@@ -449,13 +457,15 @@ function buildVolumeInterpretation(
   dryUp,
   divergence,
   vwapCross,
-  aboveVWAP
+  aboveVWAP,
+  barLabel
 ) {
+  const bl = barLabel || "5m";
   if (climax) {
     return {
       headline: "CLIMAX VOLUME — TAKE PROFITS",
       detail:
-        `Massive ${ratio.toFixed(1)}x recent 5m volume ` +
+        `Massive ${ratio.toFixed(1)}x recent ${bl} volume ` +
         `into the session high. Often marks a short-term exhaustion.`,
       color: "#ffd700",
       action: "TAKE PROFITS — potential top",
@@ -477,7 +487,7 @@ function buildVolumeInterpretation(
     return {
       headline: "VOLUME DIVERGENCE — WARNING",
       detail:
-        `Price pressing higher but 5m volume is fading. ` +
+        `Price pressing higher but ${bl} volume is fading. ` +
         `Participation not confirming the move.`,
       color: "#ffd700",
       action: "TIGHTEN STOP — smart money leaving",
@@ -499,7 +509,7 @@ function buildVolumeInterpretation(
     return {
       headline: "VWAP LOST ON VOLUME — EXIT",
       detail:
-        `Lost session VWAP on elevated 5m volume vs recent bars.`,
+        `Lost session VWAP on elevated ${bl} volume vs recent bars.`,
       color: "#ff3b5c",
       action: "EXIT NOW — VWAP lost",
     };
@@ -509,7 +519,7 @@ function buildVolumeInterpretation(
     return {
       headline: `VOLUME SURGE — ${ratio.toFixed(1)}x RECENT AVG`,
       detail:
-        `This 5m bar is printing well above the prior five completed bars — ` +
+        `This ${bl} bar is printing well above the prior five completed bars — ` +
         `real participation behind the push.`,
       color: "#00ff87",
       action: "HIGH CONVICTION — stay in trade",
@@ -540,7 +550,7 @@ function buildVolumeInterpretation(
 
   return {
     headline: `VOLUME ${ratio.toFixed(1)}x RECENT AVG`,
-    detail: `Vs prior five completed 5m bars, volume is ${
+    detail: `Vs prior five completed ${bl} bars, volume is ${
       ratio >= 1.5 ? "above" : ratio < 0.7 ? "well below" : "near"
     } average. ${
       trend === "RISING"

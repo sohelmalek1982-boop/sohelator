@@ -22,13 +22,22 @@ Trading UI (`public/`) and Netlify serverless functions: scanners, Tradier-backe
 | `SCAN_FORCE_SECRET` | Optional: `POST` scan-925 / scan-955 with `?force=<secret>` off-hours (see **Test scans off-hours**) |
 | `SCANNER_TRIGGER_SECRET` | Optional: required `X-Scanner-Secret` header for `POST /api/scan-now` when set |
 
+**Strategy thresholds (set from your backtests; defaults are textbook TA baselines)** — see `netlify/functions/lib/strategyParams.js` and **`GET /api/strategy-params`** (used by the UI so client and server stay aligned).
+
+| Prefix | Examples |
+|--------|----------|
+| `SIGNAL_` | `SIGNAL_ADX_CHOP_MAX`, `SIGNAL_CALL_RSI_LO` / `HI`, `SIGNAL_PUT_RSI_LO` / `HI`, `SIGNAL_BB_CALL_MIN`, `SIGNAL_BB_PUT_MAX` |
+| `SCANNER_` | `SCANNER_STAGE_ADX_REGIME_OFFSET`, `SCANNER_STAGE_VOL_SURGE_MULT`, `SCANNER_STAGE_VOL_SURGE_ADX_SUBTRACT`, `SCANNER_STAGE_ADX_GATE_FLOOR`, `SCANNER_BEAR_CONFIRMED_RSI_LO` / `HI`, `SCANNER_BEAR_OVERSOLD_RSI_MAX`, `SCANNER_BEAR_OVERSOLD_SCORE_BONUS`, `SCANNER_FLUSH_DAY_CHANGE_PCT`, `SCANNER_FLUSH_VWAP_DIST_PCT` |
+
+Unset optional scanner values (flush, vol surge, oversold bonus) stay **off** until you set them from data.
+
 Scheduled functions run in **UTC** (e.g. `scanner` every 5 min **13:00–21:59 UTC** Mon–Fri to cover US RTH). 9:25 / 9:55 jobs use `14:30` / `14:55` UTC (correct at **EST**; one hour later local time during **EDT**).
 
 Optional model overrides: `ANTHROPIC_MODEL_SCANNER`, `ANTHROPIC_MODEL_CHAT`, `ANTHROPIC_MODEL_RESEARCH`, `ANTHROPIC_MODEL_LEARN`.
 
 ## Scanner behavior (chop vs alerts)
 
-Stage logic uses a **relaxed ADX floor** versus raw regime thresholds (and a bit more slack when **last 5m volume** is elevated), so names are not all discarded as CHOP when the tape is quiet but volume spikes. **Alerts still require alert-eligible stages** (bull/bear/setup/fading with P&amp;L rule); pure chop never Telegrams. **`last_scan.scanDiagnostics`** in Blobs explains how many symbols were skipped on the ADX gate.
+Per-symbol ADX stage gate is **regime min ADX minus** `SCANNER_STAGE_ADX_REGIME_OFFSET` (default 0), with optional **volume-surge** slack and **flush-day** chop bypass only when you set the corresponding env vars. **Alerts still require alert-eligible stages** (bull/bear/setup/fading with P&amp;L rule); pure chop never Telegrams. **`last_scan.scanDiagnostics`** in Blobs counts ADX chop skips and records `scannerAdxRegimeOffset`.
 
 ## Trusted tape windows
 

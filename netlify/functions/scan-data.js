@@ -31,6 +31,18 @@ const cors = {
   "Access-Control-Allow-Methods": "GET, OPTIONS",
 };
 
+/** Booleans only — no secrets. Used by SCAN tab readiness strip. */
+function getPipelineStatus() {
+  return {
+    tradier: !!process.env.TRADIER_TOKEN,
+    tradierAccount: !!process.env.TRADIER_ACCOUNT_ID,
+    anthropic: !!process.env.ANTHROPIC_API_KEY,
+    telegram: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
+    email: !!(process.env.RESEND_API_KEY && process.env.ALERT_EMAIL),
+    webPush: !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
+  };
+}
+
 function emptyScanPayload(extra = {}) {
   return {
     scan925: null,
@@ -44,6 +56,7 @@ function emptyScanPayload(extra = {}) {
     blobsConfigured: false,
     blobsMessage:
       "Add NETLIFY_SITE_ID (Site settings → General → Site details) and NETLIFY_TOKEN (User settings → Applications → Personal access tokens with Blobs scope) in Netlify → Site → Environment variables. Without them, scheduled scans cannot save and this feed stays empty.",
+    pipelineStatus: getPipelineStatus(),
     ...extra,
   };
 }
@@ -122,6 +135,7 @@ exports.handler = async (event) => {
         marketClock,
         lastUpdated: Date.now(),
         blobsConfigured: true,
+        pipelineStatus: getPipelineStatus(),
       }),
     };
   } catch (e) {

@@ -49,6 +49,28 @@
 [functions."research-brief"]
   timeout = 60
 
+[functions."scan"]
+  timeout = 120
+
+[functions."premarket"]
+  timeout = 90
+
+[functions."nightly-learn"]
+  timeout = 120
+
+[functions."trigger"]
+  timeout = 60
+
+# SOHELATOR blueprint — Prompt 7: cheap 5-min monitor (ET RTH filtered in function)
+[functions."cheap-monitor"]
+  schedule = "*/5 * * * *"
+  timeout = 120
+
+# SOHELATOR blueprint — Prompt 7: expensive scan at exact ET slots (filtered in function)
+[functions."trigger-expensive"]
+  schedule = "* * * * 1-5"
+  timeout = 120
+
 [[redirects]]
   from = "/api/research-brief"
   to = "/.netlify/functions/research-brief"
@@ -157,6 +179,44 @@
 [[redirects]]
   from = "/api/memory-data"
   to = "/.netlify/functions/memory-data"
+  status = 200
+
+[[redirects]]
+  from = "/api/strategy-params"
+  to = "/.netlify/functions/strategy-params"
+  status = 200
+
+[[redirects]]
+  from = "/api/scan"
+  to = "/.netlify/functions/scan"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/premarket"
+  to = "/.netlify/functions/premarket"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/trigger"
+  to = "/.netlify/functions/trigger"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/nightly-learn"
+  to = "/.netlify/functions/nightly-learn"
+  status = 200
+
+[[redirects]]
+  from = "/api/cheap-monitor"
+  to = "/.netlify/functions/cheap-monitor"
+  status = 200
+
+[[redirects]]
+  from = "/api/trigger-expensive"
+  to = "/.netlify/functions/trigger-expensive"
   status = 200
 
 [[redirects]]

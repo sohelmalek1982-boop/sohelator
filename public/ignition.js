@@ -197,3 +197,1105 @@ function calculateIgnition(candles, indicators) {
 }
 
 window.calculateIgnition = calculateIgnition;
+
+/**
+ * SOHELATOR blueprint — new Action Panel wiring (Prompt 4)
+ * Polls POST /api/scan every 60s (mode: cheap), renders server drivingText (formatDrivingAlert),
+ * shows historical comparison per alert, Refresh Now + LIVE status. Does not modify calculateIgnition above.
+ */
+(function initSohelatorActionPanelPrompt4() {
+  var SCAN_URL = "/api/scan";
+  var POLL_MS = 60000;
+  var pollTimer = null;
+
+  function esc(s) {
+    if (s == null || s === "") return "";
+    var d = document.createElement("div");
+    d.textContent = String(s);
+    return d.innerHTML;
+  }
+
+  function setPanelStatus(label, ok) {
+    var el = document.getElementById("panel-status");
+    if (!el) return;
+    el.textContent = label;
+    el.style.color = ok ? "#bef264" : "#fbbf24";
+    el.style.border = ok ? "1px solid rgba(163,230,53,0.35)" : "1px solid rgba(251,191,36,0.4)";
+  }
+
+  function renderCards(alerts) {
+    var host = document.getElementById("alert-cards");
+    if (!host) return;
+
+    if (!alerts || !alerts.length) {
+      host.innerHTML =
+        '<p class="muted" style="font-size:0.8rem;line-height:1.5;margin:0;">No alerts above min score / EV gates — try Refresh after RTH or check API.</p>';
+      return;
+    }
+
+    host.innerHTML = alerts
+      .map(function (a) {
+        var drive = a.drivingText
+          ? esc(a.drivingText)
+          : "<span class=\"muted\">(no drivingText — server should return formatDrivingAlert string)</span>";
+        var hist = a.historicalSummary
+          ? "<div class=\"ap-hist\">Historical comparison: " + esc(a.historicalSummary) + "</div>"
+          : "";
+        return '<div class="ap-drive-card">' + drive + hist + "</div>";
+      })
+      .join("");
+  }
+
+  function fetchScan() {
+    if (!document.getElementById("alert-cards")) return;
+
+    setPanelStatus("…", true);
+    fetch(SCAN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "cheap" }),
+      cache: "no-store",
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (j) {
+        setPanelStatus("LIVE", true);
+        if (!j.success) {
+          document.getElementById("alert-cards").innerHTML =
+            '<p class="muted" style="font-size:0.8rem;">Scanner: ' + esc(j.error || "error") + "</p>";
+          return;
+        }
+        renderCards(j.alerts || []);
+      })
+      .catch(function (e) {
+        setPanelStatus("ERR", false);
+        var ac = document.getElementById("alert-cards");
+        if (ac)
+          ac.innerHTML =
+            '<p class="muted" style="font-size:0.8rem;">' + esc(e.message || String(e)) + "</p>";
+      });
+  }
+
+  function start() {
+    var btn = document.getElementById("btn-action-panel-refresh");
+    if (btn) {
+      btn.addEventListener("click", fetchScan);
+    }
+    fetchScan();
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(fetchScan, POLL_MS);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/**
+ * SOHELATOR blueprint — trade management layer (Prompt 5)
+ * Open trades panel, MARK ENTERED on alert cards, live P&L poll (30s), dynamic actions, log via /api/log-trade.
+ */
+(function initSohelatorTradeManagementPrompt5() {
+  var LOG_URL = "/api/log-trade";
+  var SCAN_HOOK = "/api/scan";
+  var POLL_MS = 30000;
+  var pollOpenTimer = null;
+
+  function esc(s) {
+    if (s == null || s === "") return "";
+    var d = document.createElement("div");
+    d.textContent = String(s);
+    return d.innerHTML;
+  }
+
+  function alertFromCardIndex(idx) {
+    var list = window.__sohelLastAlerts || [];
+    var a = list[idx] ? Object.assign({}, list[idx]) : {};
+    var sym = a.symbol || a.ticker;
+    if (!sym && a.drivingText) {
+      var m = String(a.drivingText).match(/\b([A-Z]{1,5})\b/);
+      if (m) sym = m[1];
+    }
+    if (sym) a.symbol = String(sym).toUpperCase();
+    return a;
+  }
+
+  function setOpenStatus(label, ok) {
+    var el = document.getElementById("open-status");
+    if (!el) return;
+    el.textContent = label;
+    el.style.color = ok ? "#fcd34d" : "#fb923c";
+    el.style.border = ok ? "1px solid rgba(251,191,36,0.35)" : "1px solid rgba(251,146,60,0.45)";
+  }
+
+  function renderOpenTrades(list) {
+    var host = document.getElementById("open-trade-cards");
+    if (!host) return;
+    if (!list || !list.length) {
+      host.innerHTML =
+        '<p class="tm-muted" style="margin:0;font-size:0.75rem;">No open trades — mark ENTERED from alerts above.</p>';
+      return;
+    }
+    host.innerHTML = list
+      .map(function (t) {
+        var sym = esc(t.symbol || "—");
+        var r = t.livePnlR != null ? Number(t.livePnlR).toFixed(3) : "—";
+        var pct = t.livePnlPct != null ? Number(t.livePnlPct).toFixed(2) : "—";
+        var g =
+          t.greeks && t.greeks.placeholder
+            ? "<div class=\"tm-muted\">Greeks: " + esc(t.greeks.note || "placeholder") + "</div>"
+            : "";
+        var actions = Array.isArray(t.actions) ? t.actions : [];
+        var actionHtml = actions
+          .map(function (act) {
+            return (
+              "<button type=\"button\" class=\"tm-btn-action\" data-tm-aid=\"" +
+              esc(act.id) +
+              "\" data-tm-tid=\"" +
+              esc(t.id) +
+              "\" title=\"" +
+              esc(act.reason || "") +
+              "\">" +
+              esc(act.label) +
+              "</button>"
+            );
+          })
+          .join("");
+        return (
+          "<div class=\"tm-open-card\" data-tm-open-id=\"" +
+          esc(t.id) +
+          "\">" +
+          "<div class=\"tm-row\"><strong>" +
+          sym +
+          "</strong> <span class=\"tm-muted\">P&amp;L ~" +
+          pct +
+          "% · " +
+          r +
+          "R</span> <span class=\"tm-muted\">@" +
+          esc(t.lastPrice != null ? t.lastPrice : "—") +
+          "</span></div>" +
+          g +
+          "<div class=\"tm-trade-wrap\" style=\"border-top-color:rgba(251,191,36,0.2);\">" +
+          actionHtml +
+          "</div>" +
+          "<div class=\"tm-exit-row\">" +
+          "<label class=\"tm-muted\">Exit</label>" +
+          "<input type=\"number\" step=\"0.01\" class=\"tm-exit-price\" data-tm-tid=\"" +
+          esc(t.id) +
+          "\" placeholder=\"px\" aria-label=\"Exit price\" />" +
+          "<select class=\"tm-exit-outcome\" data-tm-tid=\"" +
+          esc(t.id) +
+          "\">" +
+          "<option value=\"win\">win</option>" +
+          "<option value=\"loss\">loss</option>" +
+          "<option value=\"flat\">flat</option>" +
+          "</select>" +
+          "<button type=\"button\" class=\"tm-btn-exit\" data-tm-exit=\"" +
+          esc(t.id) +
+          "\">MARK EXITED</button>" +
+          "</div></div>"
+        );
+      })
+      .join("");
+
+    host.querySelectorAll(".tm-btn-exit").forEach(function (btn) {
+      btn.onclick = function () {
+        var tid = btn.getAttribute("data-tm-exit");
+        var card = btn.closest(".tm-open-card");
+        var inp = card ? card.querySelector(".tm-exit-price[data-tm-tid=\"" + tid + "\"]") : null;
+        var sel = card ? card.querySelector(".tm-exit-outcome[data-tm-tid=\"" + tid + "\"]") : null;
+        var px = inp && inp.value ? parseFloat(inp.value) : NaN;
+        if (!Number.isFinite(px)) {
+          alert("Enter a valid exit price.");
+          return;
+        }
+        var outcome = sel ? sel.value : "flat";
+        fetch(LOG_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "exited",
+            tradeId: tid,
+            exitPrice: px,
+            outcome: outcome,
+          }),
+          cache: "no-store",
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (j) {
+            if (!j.success) throw new Error(j.error || "exit failed");
+            renderOpenTrades(j.openTrades || []);
+          })
+          .catch(function (e) {
+            alert(String(e.message || e));
+          });
+      };
+    });
+  }
+
+  function fetchOpenTrades() {
+    fetch(LOG_URL, { method: "GET", cache: "no-store" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (j) {
+        setOpenStatus("LIVE", true);
+        renderOpenTrades(j.openTrades || []);
+      })
+      .catch(function () {
+        setOpenStatus("ERR", false);
+      });
+  }
+
+  function injectTradeControls() {
+    var cards = document.querySelectorAll("#alert-cards .ap-drive-card");
+    cards.forEach(function (card, idx) {
+      if (card.querySelector("[data-tm-injected]")) return;
+      var wrap = document.createElement("div");
+      wrap.setAttribute("data-tm-injected", "1");
+      wrap.className = "tm-trade-wrap";
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "tm-btn-enter";
+      btn.textContent = "MARK ENTERED";
+      btn.setAttribute("data-tm-idx", String(idx));
+      btn.onclick = function () {
+        var payload = alertFromCardIndex(idx);
+        if (!payload.symbol) {
+          alert("Could not detect symbol — wait for scan or refresh.");
+          return;
+        }
+        btn.disabled = true;
+        fetch(LOG_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "entered", alert: payload }),
+          cache: "no-store",
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (j) {
+            if (!j.success) throw new Error(j.error || "log failed");
+            wrap.innerHTML =
+              "<span class=\"tm-muted\" style=\"margin:0;\">Entered logged — see OPEN TRADES · " +
+              esc(j.trade && j.trade.id ? j.trade.id : "ok") +
+              "</span>";
+            renderOpenTrades(j.openTrades || []);
+          })
+          .catch(function (e) {
+            btn.disabled = false;
+            alert(String(e.message || e));
+          });
+      };
+      wrap.appendChild(btn);
+      card.appendChild(wrap);
+    });
+  }
+
+  var obs = new MutationObserver(function () {
+    injectTradeControls();
+  });
+  var ac = document.getElementById("alert-cards");
+  if (ac) {
+    obs.observe(ac, { childList: true, subtree: true });
+  }
+
+  var origFetch = window.fetch;
+  window.fetch = function (input, init) {
+    return origFetch.apply(this, arguments).then(function (res) {
+      try {
+        var u = typeof input === "string" ? input : input && input.url ? input.url : "";
+        if (u.indexOf(SCAN_HOOK) !== -1 && res && res.clone) {
+          res
+            .clone()
+            .json()
+            .then(function (j) {
+              if (j && j.alerts) window.__sohelLastAlerts = j.alerts;
+            })
+            .catch(function () {});
+        }
+      } catch (e1) {}
+      return res;
+    });
+  };
+
+  function startTm() {
+    injectTradeControls();
+    fetchOpenTrades();
+    if (pollOpenTimer) clearInterval(pollOpenTimer);
+    pollOpenTimer = setInterval(fetchOpenTrades, POLL_MS);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startTm);
+  } else {
+    startTm();
+  }
+})();
+
+/**
+ * SOHELATOR blueprint — Final polish (Prompt 7): notifications, next expensive ET countdown,
+ * open-trades refresh on new scan, self-tuned badge. Duplicates open-trade card HTML to refresh after /api/scan without editing Prompt 5.
+ */
+(function initSohelatorFinalPolishPrompt7() {
+  var LOG_URL = "/api/log-trade";
+  var SCAN_HOOK = "/api/scan";
+  var EXPENSIVE_SLOTS_ET_MIN = [495, 565, 585, 660, 840, 960];
+
+  function esc(s) {
+    if (s == null || s === "") return "";
+    var d = document.createElement("div");
+    d.textContent = String(s);
+    return d.innerHTML;
+  }
+
+  function minutesEt(d) {
+    var parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "numeric",
+      minute: "numeric",
+      hour12: false,
+    }).formatToParts(d);
+    var h = 0;
+    var m = 0;
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i].type === "hour") h = parseInt(parts[i].value, 10);
+      if (parts[i].type === "minute") m = parseInt(parts[i].value, 10);
+    }
+    return h * 60 + m;
+  }
+
+  function weekdayEt(d) {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      weekday: "short",
+    }).format(d);
+  }
+
+  function nextExpensiveLabel() {
+    var d = new Date();
+    var w = weekdayEt(d);
+    if (w === "Sat" || w === "Sun") {
+      return "Next expensive: Mon 8:15 ET";
+    }
+    var now = minutesEt(d);
+    var slots = EXPENSIVE_SLOTS_ET_MIN;
+    for (var i = 0; i < slots.length; i++) {
+      if (now < slots[i]) {
+        var hm = slots[i];
+        var hh = Math.floor(hm / 60);
+        var mm = hm % 60;
+        return "Next expensive scan in ~" + (slots[i] - now) + " min (" + hh + ":" + (mm < 10 ? "0" : "") + mm + " ET)";
+      }
+    }
+    return "Next expensive: tomorrow 8:15 ET";
+  }
+
+  function updateFooter() {
+    var el = document.getElementById("next-scan-time");
+    if (el) el.textContent = nextExpensiveLabel();
+    var st = document.getElementById("self-tuned");
+    if (st) st.textContent = "System self-tuned";
+  }
+
+  function requestNotifPermission() {
+    try {
+      if (typeof Notification === "undefined") return;
+      if (Notification.permission === "default") {
+        Notification.requestPermission().catch(function () {});
+      }
+    } catch (e) {}
+  }
+
+  function p7RenderOpenTrades(list) {
+    var host = document.getElementById("open-trade-cards");
+    if (!host) return;
+    if (!list || !list.length) {
+      host.innerHTML =
+        '<p class="tm-muted" style="margin:0;font-size:0.75rem;">No open trades — mark ENTERED from alerts above.</p>';
+      return;
+    }
+    host.innerHTML = list
+      .map(function (t) {
+        var sym = esc(t.symbol || "—");
+        var r = t.livePnlR != null ? Number(t.livePnlR).toFixed(3) : "—";
+        var pct = t.livePnlPct != null ? Number(t.livePnlPct).toFixed(2) : "—";
+        var g =
+          t.greeks && t.greeks.placeholder
+            ? "<div class=\"tm-muted\">Greeks: " + esc(t.greeks.note || "placeholder") + "</div>"
+            : "";
+        var actions = Array.isArray(t.actions) ? t.actions : [];
+        var actionHtml = actions
+          .map(function (act) {
+            return (
+              "<button type=\"button\" class=\"tm-btn-action\" data-tm-aid=\"" +
+              esc(act.id) +
+              "\" data-tm-tid=\"" +
+              esc(t.id) +
+              "\" title=\"" +
+              esc(act.reason || "") +
+              "\">" +
+              esc(act.label) +
+              "</button>"
+            );
+          })
+          .join("");
+        return (
+          "<div class=\"tm-open-card\" data-tm-open-id=\"" +
+          esc(t.id) +
+          "\">" +
+          "<div class=\"tm-row\"><strong>" +
+          sym +
+          "</strong> <span class=\"tm-muted\">P&amp;L ~" +
+          pct +
+          "% · " +
+          r +
+          "R</span> <span class=\"tm-muted\">@" +
+          esc(t.lastPrice != null ? t.lastPrice : "—") +
+          "</span></div>" +
+          g +
+          "<div class=\"tm-trade-wrap\" style=\"border-top-color:rgba(251,191,36,0.2);\">" +
+          actionHtml +
+          "</div>" +
+          "<div class=\"tm-exit-row\">" +
+          "<label class=\"tm-muted\">Exit</label>" +
+          "<input type=\"number\" step=\"0.01\" class=\"tm-exit-price\" data-tm-tid=\"" +
+          esc(t.id) +
+          "\" placeholder=\"px\" aria-label=\"Exit price\" />" +
+          "<select class=\"tm-exit-outcome\" data-tm-tid=\"" +
+          esc(t.id) +
+          "\">" +
+          "<option value=\"win\">win</option>" +
+          "<option value=\"loss\">loss</option>" +
+          "<option value=\"flat\">flat</option>" +
+          "</select>" +
+          "<button type=\"button\" class=\"tm-btn-exit\" data-tm-exit=\"" +
+          esc(t.id) +
+          "\">MARK EXITED</button>" +
+          "</div></div>"
+        );
+      })
+      .join("");
+
+    host.querySelectorAll(".tm-btn-exit").forEach(function (btn) {
+      btn.onclick = function () {
+        var tid = btn.getAttribute("data-tm-exit");
+        var card = btn.closest(".tm-open-card");
+        var inp = card ? card.querySelector(".tm-exit-price[data-tm-tid=\"" + tid + "\"]") : null;
+        var sel = card ? card.querySelector(".tm-exit-outcome[data-tm-tid=\"" + tid + "\"]") : null;
+        var px = inp && inp.value ? parseFloat(inp.value) : NaN;
+        if (!Number.isFinite(px)) {
+          alert("Enter a valid exit price.");
+          return;
+        }
+        var outcome = sel ? sel.value : "flat";
+        fetch(LOG_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "exited",
+            tradeId: tid,
+            exitPrice: px,
+            outcome: outcome,
+          }),
+          cache: "no-store",
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (j) {
+            if (!j.success) throw new Error(j.error || "exit failed");
+            p7RenderOpenTrades(j.openTrades || []);
+          })
+          .catch(function (e) {
+            alert(String(e.message || e));
+          });
+      };
+    });
+  }
+
+  function p7RefreshOpenTrades() {
+    fetch(LOG_URL, { method: "GET", cache: "no-store" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (j) {
+        p7RenderOpenTrades(j.openTrades || []);
+        var os = document.getElementById("open-status");
+        if (os) {
+          os.textContent = "LIVE";
+          os.style.color = "#fcd34d";
+        }
+      })
+      .catch(function () {});
+  }
+
+  function onScanPayload(j) {
+    if (!j || !j.alerts) return;
+    var maxS = 0;
+    var volMax = 0;
+    j.alerts.forEach(function (a) {
+      if (a.score > maxS) maxS = a.score;
+      var vr = Number(a.details && a.details.volRatio != null ? a.details.volRatio : a.volRatio || 0);
+      if (vr > volMax) volMax = vr;
+    });
+    var wild =
+      maxS >= 85 ||
+      volMax >= 3 ||
+      /catalyst|earnings|fda|news|gap|upgrade|breaking/i.test(JSON.stringify(j.alerts));
+    if (window.__sohelP7SkipFirstScanNotify == null) {
+      window.__sohelP7SkipFirstScanNotify = false;
+      window.__sohelLastScanPeak = maxS;
+      p7RefreshOpenTrades();
+      return;
+    }
+    var prev = window.__sohelLastScanPeak || 0;
+    window.__sohelLastScanPeak = maxS;
+    if (
+      wild &&
+      typeof Notification !== "undefined" &&
+      Notification.permission === "granted" &&
+      maxS > prev
+    ) {
+      try {
+        new Notification("SOHELATOR — alert spike", {
+          body: "Score up to " + Math.round(maxS) + " — review WHAT TO DO NOW",
+          tag: "sohel-p7-wild",
+        });
+      } catch (e) {}
+    }
+    p7RefreshOpenTrades();
+  }
+
+  var prevFetch = window.fetch;
+  window.fetch = function (input, init) {
+    return prevFetch.apply(this, arguments).then(function (res) {
+      try {
+        var u = typeof input === "string" ? input : input && input.url ? input.url : "";
+        if (u.indexOf(SCAN_HOOK) !== -1 && res && res.clone) {
+          res
+            .clone()
+            .json()
+            .then(onScanPayload)
+            .catch(function () {});
+        }
+      } catch (e1) {}
+      return res;
+    });
+  };
+
+  function startP7() {
+    requestNotifPermission();
+    updateFooter();
+    setInterval(updateFooter, 30000);
+    var sys = document.getElementById("system-status");
+    if (sys) {
+      sys.style.borderColor = "rgba(163, 230, 53, 0.4)";
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startP7);
+  } else {
+    startP7();
+  }
+})();
+
+/**
+ * SOHELATOR blueprint — System health banner + scan stale toast (Prompt 8)
+ */
+(function initSohelatorHealthPrompt8() {
+  var SCAN_HOOK = "/api/scan";
+  window.__sohelPageLoadAt = Date.now();
+  window.__sohelLastScanOkAt = null;
+  window.__sohelLastGrokHealth = "skipped";
+
+  function nextMonitorMinutes() {
+    var mod = Math.floor(Date.now() / 60000) % 5;
+    return mod === 0 ? 5 : 5 - mod;
+  }
+
+  function grokLabel(h) {
+    if (h === "ok") return "OK";
+    if (h === "fallback_cheap") return "OK (fallback)";
+    if (h === "error") return "ERROR";
+    if (h === "outside_window") return "WINDOW";
+    return "—";
+  }
+
+  function updateHealthBanner() {
+    var ht = document.getElementById("health-text");
+    if (!ht) return;
+    var grok = grokLabel(window.__sohelLastGrokHealth);
+    var line =
+      "Next scan ~" + nextMonitorMinutes() + " min · Last Grok: " + grok;
+    if (window.__sohelLastScanStatus === "outside_window") {
+      line += " · ET 8–4: window off (cheap)";
+    }
+    ht.textContent = line;
+    ht.style.color = grok === "ERROR" ? "#f87171" : "#bef264";
+  }
+
+  function checkScanStaleToast() {
+    var toast = document.getElementById("scan-fail-toast");
+    if (!toast) return;
+    var now = Date.now();
+    var okAt = window.__sohelLastScanOkAt;
+    var stale =
+      okAt == null
+        ? now - window.__sohelPageLoadAt > 600000
+        : now - okAt > 600000;
+    if (stale) {
+      toast.classList.add("is-visible");
+    } else {
+      toast.classList.remove("is-visible");
+    }
+  }
+
+  function onScanJson(res, j) {
+    if (res.ok && j && j.success !== false) {
+      window.__sohelLastScanOkAt = Date.now();
+    }
+    window.__sohelLastScanStatus = j && j.status;
+    if (j && j.meta && j.meta.grokHealth != null) {
+      window.__sohelLastGrokHealth = j.meta.grokHealth;
+    }
+    updateHealthBanner();
+    checkScanStaleToast();
+  }
+
+  var innerFetch = window.fetch;
+  window.fetch = function (input, init) {
+    return innerFetch.apply(this, arguments).then(function (res) {
+      try {
+        var u = typeof input === "string" ? input : input && input.url ? input.url : "";
+        if (u.indexOf(SCAN_HOOK) !== -1 && res && res.clone) {
+          res
+            .clone()
+            .json()
+            .then(function (j) {
+              onScanJson(res, j);
+            })
+            .catch(function () {});
+        }
+      } catch (e) {}
+      return res;
+    });
+  };
+
+  function startP8() {
+    updateHealthBanner();
+    checkScanStaleToast();
+    setInterval(function () {
+      updateHealthBanner();
+      checkScanStaleToast();
+    }, 15000);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startP8);
+  } else {
+    startP8();
+  }
+})();
+
+/**
+ * SOHELATOR blueprint — 3-tab layout (Prompt 9): HOME / ALERTS / OPEN TRADES,
+ * regime + watchlist on HOME, full alert list newest-first on ALERTS (no dedupe),
+ * outer fetch hook refreshes home + defers alert-cards after Prompt 4 render.
+ */
+(function initSohelatorThreeTabLayoutPrompt9() {
+  var SCAN_HOOK = "/api/scan";
+
+  function esc(s) {
+    if (s == null || s === "") return "";
+    var d = document.createElement("div");
+    d.textContent = String(s);
+    return d.innerHTML;
+  }
+
+  function selectTab(tabId) {
+    var map = { home: "home-page", alerts: "alerts-page", trades: "open-trades-page" };
+    document.querySelectorAll("#sohel-tabbar .sohel-tab").forEach(function (btn) {
+      var on = btn.getAttribute("data-sohel-tab") === tabId;
+      btn.classList.toggle("sohel-tab--active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    Object.keys(map).forEach(function (key) {
+      var el = document.getElementById(map[key]);
+      if (!el) return;
+      var show = key === tabId;
+      if (show) {
+        el.removeAttribute("hidden");
+        el.classList.add("sohel-tab-page--active");
+      } else {
+        el.setAttribute("hidden", "");
+        el.classList.remove("sohel-tab-page--active");
+      }
+    });
+  }
+
+  window.sohelSelectMainTab = selectTab;
+
+  function bindTabBar() {
+    var bar = document.getElementById("sohel-tabbar");
+    if (!bar) return;
+    bar.querySelectorAll(".sohel-tab").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-sohel-tab");
+        if (id) selectTab(id);
+      });
+    });
+  }
+
+  function renderHomeFromScan(j) {
+    var bodyEl = document.getElementById("home-regime-body");
+    var pill = document.getElementById("home-regime-pill");
+    var wlMeta = document.getElementById("home-watchlist-meta");
+    var grid = document.getElementById("home-watchlist-grid");
+    if (!bodyEl || !grid) return;
+
+    if (!j || j.success === false) {
+      bodyEl.textContent =
+        j && j.error
+          ? "Scanner: " + String(j.error)
+          : "Waiting for scanner…";
+      if (pill) pill.textContent = "—";
+      if (wlMeta) wlMeta.textContent = "—";
+      grid.innerHTML =
+        '<p class="muted" style="font-size:0.75rem;margin:0;">No watchlist data.</p>';
+      return;
+    }
+
+    var meta = j.meta || {};
+    var b7 = meta.backtest7d;
+    var gh = meta.grokHealth || "—";
+    var st = j.status || "ok";
+    if (pill) {
+      pill.textContent =
+        st === "outside_window" ? "OUTSIDE 8–4 ET" : String(j.mode || "cheap").toUpperCase();
+    }
+
+    var lines = [];
+    lines.push(
+      "Scanner mode: " + String(j.mode || "cheap") + (st === "outside_window" ? " (expensive → cheap outside window)" : "")
+    );
+    lines.push("Live alerts this pass: " + (Array.isArray(j.alerts) ? j.alerts.length : 0));
+    if (b7) {
+      lines.push(
+        "7d backtest sample — EV " +
+          (b7.ev != null ? Number(b7.ev).toFixed(3) : "—") +
+          ", WR " +
+          (b7.winRate != null ? Math.round(b7.winRate * 100) / 100 : "—") +
+          ", setups " +
+          (b7.totalSetups != null ? b7.totalSetups : "—")
+      );
+    }
+    lines.push("Grok health: " + gh);
+    if (meta.minScore != null) lines.push("Min score gate: " + meta.minScore);
+
+    var metricsHtml = "";
+    if (b7) {
+      metricsHtml =
+        '<div class="sohel-regime-metrics">' +
+        '<div class="sohel-regime-metric"><div class="lab">7d EV</div><div class="val">' +
+        esc(b7.ev != null ? Number(b7.ev).toFixed(2) : "—") +
+        '</div></div><div class="sohel-regime-metric"><div class="lab">Win %</div><div class="val">' +
+        esc(b7.winRate != null ? Math.round(b7.winRate * 100) + "%" : "—") +
+        '</div></div><div class="sohel-regime-metric"><div class="lab">Setups</div><div class="val">' +
+        esc(b7.totalSetups != null ? String(b7.totalSetups) : "—") +
+        "</div></div></div>";
+    }
+
+    bodyEl.innerHTML =
+      "<p class=\"sohel-regime-lede\" style=\"margin:0 0 12px;font-size:0.78rem;line-height:1.55;color:rgba(238,248,255,0.88);\">" +
+      lines.map(function (L) {
+        return esc(L);
+      }).join("<br/>") +
+      "</p>" +
+      metricsHtml;
+
+    if (wlMeta) {
+      wlMeta.textContent =
+        (Array.isArray(j.alerts) ? j.alerts.length : 0) + " names · tap ALERTS for full cards";
+    }
+
+    var alerts = Array.isArray(j.alerts) ? j.alerts : [];
+    if (!alerts.length) {
+      grid.innerHTML =
+        '<p class="muted" style="font-size:0.75rem;margin:0;">No setups passed gates — refresh after RTH.</p>';
+      return;
+    }
+
+    var sorted = alerts.slice().sort(function (a, b) {
+      return (Number(b.score) || 0) - (Number(a.score) || 0);
+    });
+    grid.innerHTML = sorted
+      .map(function (a) {
+        var sym = esc(a.symbol || "—");
+        var rawSym = String(a.symbol || "")
+          .toUpperCase()
+          .replace(/[^A-Z0-9.-]/g, "")
+          .slice(0, 8);
+        var sc = a.score != null ? Math.round(Number(a.score)) : "—";
+        var play = esc(a.playTypeLabel || a.playType || "—");
+        var dir = esc(a.direction || "—");
+        return (
+          '<div class="sohel-wl-tile" data-symbol="' +
+          rawSym +
+          '"><div><span class="sohel-wl-sym">' +
+          sym +
+          '</span><div class="sohel-wl-meta">' +
+          play +
+          " · " +
+          dir +
+          '</div></div><div class="sohel-wl-score">SCORE ' +
+          esc(String(sc)) +
+          "</div></div>"
+        );
+      })
+      .join("");
+  }
+
+  function refillAlertsNewestFirst(j) {
+    var host = document.getElementById("alert-cards");
+    if (!host || !j || j.success === false) return;
+
+    var alerts = Array.isArray(j.alerts) ? j.alerts : [];
+    if (!alerts.length) {
+      host.innerHTML =
+        '<p class="muted" style="font-size:0.8rem;line-height:1.5;margin:0;">No alerts above min score / EV gates — try Refresh after RTH or check API.</p>';
+      return;
+    }
+
+    var order = alerts.slice().reverse();
+
+    host.innerHTML = order
+      .map(function (a) {
+        var drive = a.drivingText
+          ? esc(a.drivingText)
+          : "<span class=\"muted\">(no drivingText)</span>";
+        var hist = a.historicalSummary
+          ? "<div class=\"ap-hist\">Historical comparison: " + esc(a.historicalSummary) + "</div>"
+          : "";
+        return '<div class="ap-drive-card">' + drive + hist + "</div>";
+      })
+      .join("");
+  }
+
+  function onScanJsonForTabs(res, j) {
+    try {
+      renderHomeFromScan(j);
+      setTimeout(function () {
+        refillAlertsNewestFirst(j);
+      }, 0);
+    } catch (e) {
+      console.warn("Prompt9 scan UI", e);
+    }
+  }
+
+  var innerFetchP9 = window.fetch;
+  window.fetch = function (input, init) {
+    return innerFetchP9.apply(this, arguments).then(function (res) {
+      try {
+        var u = typeof input === "string" ? input : input && input.url ? input.url : "";
+        if (u.indexOf(SCAN_HOOK) !== -1 && res && res.clone) {
+          res
+            .clone()
+            .json()
+            .then(function (j) {
+              onScanJsonForTabs(res, j);
+            })
+            .catch(function () {});
+        }
+      } catch (e1) {}
+      return res;
+    });
+  };
+
+  function startP9() {
+    bindTabBar();
+    selectTab("home");
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startP9);
+  } else {
+    startP9();
+  }
+})();
+
+/**
+ * SOHELATOR blueprint — neon motion: alert flash, regime flash, open-trade amber pulse (Prompt 11)
+ */
+(function initSohelatorNeonMotionPrompt11() {
+  var SCAN_HOOK = "/api/scan";
+  var LOG_HOOK = "/api/log-trade";
+
+  var prevAlertSig = null;
+  var prevRegSig = null;
+  var prevMaxScore = null;
+  var prevTradeSnap = {};
+
+  function flashAlertCards() {
+    var host = document.getElementById("alert-cards");
+    if (!host) return;
+    host.querySelectorAll(".ap-drive-card").forEach(function (el) {
+      el.classList.remove("neon-flash");
+    });
+    host.querySelectorAll(".ap-drive-card").forEach(function (el) {
+      void el.offsetWidth;
+      el.classList.add("neon-flash");
+      setTimeout(function () {
+        el.classList.remove("neon-flash");
+      }, 820);
+    });
+  }
+
+  function regimeFlash() {
+    var h = document.getElementById("home-regime-header");
+    if (!h) return;
+    h.classList.remove("regime-flash");
+    void h.offsetWidth;
+    h.classList.add("regime-flash");
+    setTimeout(function () {
+      h.classList.remove("regime-flash");
+    }, 900);
+  }
+
+  function digestAlerts(alerts) {
+    if (!Array.isArray(alerts)) return "";
+    return alerts
+      .map(function (a) {
+        return String(a.symbol || "") + ":" + String(Math.round(Number(a.score) || 0));
+      })
+      .join("|");
+  }
+
+  function digestRegime(j) {
+    if (!j || j.success === false) return "";
+    var m = j.meta || {};
+    var b = m.backtest7d || {};
+    return [
+      j.status || "",
+      j.mode || "",
+      m.grokHealth || "",
+      b.ev != null ? String(b.ev) : "",
+      b.winRate != null ? String(b.winRate) : "",
+      Array.isArray(j.alerts) ? j.alerts.length : 0,
+    ].join(";");
+  }
+
+  function onScanJson(j) {
+    if (!j || j.success === false) return;
+
+    var alerts = j.alerts || [];
+    var sig = digestAlerts(alerts);
+    var regSig = digestRegime(j);
+    var maxScore = alerts.reduce(function (m, a) {
+      return Math.max(m, Number(a.score) || 0);
+    }, 0);
+
+    if (prevAlertSig !== null && sig !== prevAlertSig) {
+      setTimeout(function () {
+        flashAlertCards();
+      }, 120);
+    }
+
+    if (prevRegSig !== null) {
+      if (regSig !== prevRegSig) {
+        regimeFlash();
+      } else if (
+        prevMaxScore !== null &&
+        maxScore > 85 &&
+        prevMaxScore <= 85
+      ) {
+        regimeFlash();
+      }
+    }
+
+    prevAlertSig = sig;
+    prevRegSig = regSig;
+    prevMaxScore = maxScore;
+  }
+
+  function pulseOpenTradeCard(tradeId) {
+    var id = String(tradeId || "").replace(/"/g, "");
+    if (!id) return;
+    var el = document.querySelector(
+      '#open-trade-cards .tm-open-card[data-tm-open-id="' + id + '"]'
+    );
+    if (!el) return;
+    el.classList.remove("neon-amber-pulse");
+    void el.offsetWidth;
+    el.classList.add("neon-amber-pulse");
+    setTimeout(function () {
+      el.classList.remove("neon-amber-pulse");
+    }, 700);
+  }
+
+  function onLogTradeJson(j) {
+    if (!j || !Array.isArray(j.openTrades)) return;
+    j.openTrades.forEach(function (t) {
+      var id = t.id;
+      if (!id) return;
+      var p = Number(t.livePnlPct) || 0;
+      var r = Number(t.livePnlR) || 0;
+      var ap = Math.abs(p);
+      var ar = Math.abs(r);
+      var prev = prevTradeSnap[id];
+      prevTradeSnap[id] = { p: p, r: r };
+
+      var bigLevel = ap >= 2.5 || ar >= 0.4;
+      var moved =
+        prev &&
+        (Math.abs(p - prev.p) >= 0.45 || Math.abs(r - prev.r) >= 0.12);
+
+      if (bigLevel && (moved || !prev)) {
+        requestAnimationFrame(function () {
+          pulseOpenTradeCard(id);
+        });
+      }
+    });
+  }
+
+  var innerFetchNeon = window.fetch;
+  window.fetch = function (input, init) {
+    return innerFetchNeon.apply(this, arguments).then(function (res) {
+      try {
+        var u =
+          typeof input === "string"
+            ? input
+            : input && input.url
+              ? input.url
+              : "";
+        if (res && res.clone) {
+          if (u.indexOf(SCAN_HOOK) !== -1) {
+            res
+              .clone()
+              .json()
+              .then(onScanJson)
+              .catch(function () {});
+          }
+          if (u.indexOf(LOG_HOOK) !== -1 && res.ok) {
+            res
+              .clone()
+              .json()
+              .then(onLogTradeJson)
+              .catch(function () {});
+          }
+        }
+      } catch (e) {}
+      return res;
+    });
+  };
+})();
