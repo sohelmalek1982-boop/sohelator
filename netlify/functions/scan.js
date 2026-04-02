@@ -49,9 +49,7 @@ const DEFAULT_UNIVERSE = [
 ];
 
 function priceBucket(last, mode) {
-  const p = Number(last) || 0;
-  if (mode === "expensive") return p >= 150;
-  return p < 150;
+  return true;
 }
 
 /** Same regime labels as backtester (blueprint). */
@@ -273,7 +271,7 @@ function worseGrokHealth(a, b) {
 /** Two expensive-model attempts, then one cheap-model fallback (Prompt 8). */
 async function callGrokExpensiveWithFallback(aiPrompt, maxTok) {
   const expensiveModel =
-    process.env.GROK_MODEL_EXPENSIVE || "grok-4.20-reasoning";
+    process.env.GROK_MODEL_EXPENSIVE || "grok-4.20-0309-reasoning";
   const cheapModel =
     process.env.GROK_MODEL_CHEAP || "grok-4-1-fast-reasoning";
   let lastErr;
@@ -293,6 +291,50 @@ async function callGrokExpensiveWithFallback(aiPrompt, maxTok) {
   } catch (e2) {
     throw lastErr || e2;
   }
+}
+
+const BATCH_GROK_MAX_TOK = 1500;
+
+/** Parse batched Grok reply: JSON array of { symbol, netVerdict, coPilot }. */
+function parseBatchedGrokVerdicts(rawText) {
+  const out = new Map();
+  if (!rawText || typeof rawText !== "string") return out;
+  let s = rawText.trim();
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) s = fence[1].trim();
+
+  const fillFromArray = (arr) => {
+    if (!Array.isArray(arr)) return;
+    for (const row of arr) {
+      const sym = String(row?.symbol || "").trim().toUpperCase();
+      if (!sym) continue;
+      out.set(sym, {
+        netVerdict: String(
+          row.netVerdict ?? row.NET_VERDICT ?? row.net_verdict ?? ""
+        ).trim(),
+        coPilot: String(
+          row.coPilot ?? row.co_pilot ?? row.notes ?? ""
+        ).trim(),
+      });
+    }
+  };
+
+  try {
+    fillFromArray(JSON.parse(s));
+    if (out.size) return out;
+  } catch {
+    /* bracket slice */
+  }
+  const i = s.indexOf("[");
+  const j = s.lastIndexOf("]");
+  if (i >= 0 && j > i) {
+    try {
+      fillFromArray(JSON.parse(s.slice(i, j + 1)));
+    } catch {
+      /* ignore */
+    }
+  }
+  return out;
 }
 
 export const handler = async (event) => {
@@ -353,14 +395,6 @@ export const handler = async (event) => {
   try {
     await applyOptimizedParams(true);
 
-    /** Warm similarity index for findSimilarSetups (7d fast pass). */
-    let backtest7 = null;
-    try {
-      backtest7 = await runBacktest(7);
-    } catch (e) {
-      console.warn("scan.js runBacktest(7) optional:", e?.message || e);
-    }
-
     const P0 = getOptimizedParams();
     if (!optionsRth && !forceAlertsAfterHours) {
       return {
@@ -390,13 +424,7 @@ export const handler = async (event) => {
                   .map((s) => String(s || "").trim().toUpperCase())
                   .filter(Boolean)
               : [],
-            backtest7d: backtest7
-              ? {
-                  ev: backtest7.ev,
-                  winRate: backtest7.winRate,
-                  totalSetups: backtest7.totalSetups,
-                }
-              : null,
+            backtest7d: null,
             optionsSession: "after_hours",
             optionsSessionNote:
               "Equity options session is 9:30–16:00 ET Mon–Fri — alerts paused.",
@@ -404,6 +432,14 @@ export const handler = async (event) => {
           alerts: [],
         }),
       };
+    }
+
+    /** Warm similarity index for findSimilarSetups (7d fast pass). */
+    let backtest7 = null;
+    try {
+      backtest7 = await runBacktest(7);
+    } catch (e) {
+      console.warn("scan.js runBacktest(7) optional:", e?.message || e);
     }
 
     const extraSyms = Array.isArray(body.extraSymbols)
@@ -445,7 +481,10 @@ export const handler = async (event) => {
       if (pa !== pb) return pa - pb;
       return (Number(b.last) || 0) - (Number(a.last) || 0);
     });
-    const take = sortedFiltered.slice(0, 12);
+    const take =
+      scanMode === "expensive"
+        ? sortedFiltered.slice(0, 4)
+        : sortedFiltered.slice(0, 10);
 
     const P = getOptimizedParams();
     const scalpH = Math.max(3, Math.round(num(P.scalpHorizonBars, 6)));
@@ -527,69 +566,94 @@ export const handler = async (event) => {
         console.warn("scan suggestAtmOption", symbol, e?.message || e);
       }
 
-      /* GROK_API_KEY — Prompt 8: ET window + 2× expensive + cheap fallback */
-      if (scanMode === "expensive" && process.env.GROK_API_KEY) {
-        try {
-          const priorityHit = prioritySyms.has(setup.symbol);
-          const catBlock =
-            catalystNewsSummary
-              ? `
-
-Recent market headlines (catalyst context for the session):
-${catalystNewsSummary}
-${
-  priorityHit
-    ? `This symbol (${setup.symbol}) appeared in our universe ∩ headline scan. If a *fresh* catalyst in the text clearly supports a tactical trade in ${setup.symbol}, your NET VERDICT line MUST begin exactly: HIGH-PROBABILITY CATALYST PLAY —`
-    : `If a headline clearly ties a *fresh* catalyst to ${setup.symbol}, your NET VERDICT line MUST begin exactly: HIGH-PROBABILITY CATALYST PLAY —`
-}
-Otherwise use a normal conviction NET VERDICT (no catalyst prefix).`
-              : "";
-
-          const aiPrompt = `You are SOHELATOR's aggressive co-pilot. Lead with system signal. Never veto unless score <40. End with single-line NET VERDICT.
-
-System setup (JSON):
-${JSON.stringify({
-  symbol: setup.symbol,
-  score: setup.score,
-  edge: setup.edge,
-  playTypeLabel: setup.playTypeLabel,
-  direction: setup.direction,
-  entry: setup.entry,
-  stop: setup.stop,
-  target: setup.target,
-  historicalSummary: setup.historicalSummary,
-  ev: setup.ev,
-  projectedEv: setup.projectedEv,
-  rulesAiVerdict: setup.aiVerdict,
-})}
-${catBlock}
-
-Respond with a few short lines, then exactly one line: NET VERDICT: <one line>`;
-
-          const { text: grokOut, health: gh } = await callGrokExpensiveWithFallback(
-            aiPrompt,
-            1200
-          );
-          grokHealthAgg = worseGrokHealth(grokHealthAgg, gh);
-          setup.aiCoPilot = grokOut;
-          const netMatch = grokOut.match(/NET VERDICT:\s*(.+)/i);
-          setup.aiVerdict = netMatch
-            ? netMatch[1].trim()
-            : grokOut
-                .trim()
-                .split("\n")
-                .filter(Boolean)
-                .pop() || grokOut;
-        } catch (e) {
-          console.warn("scan.js Grok (all attempts failed):", e?.message || e);
-          grokHealthAgg = worseGrokHealth(grokHealthAgg, "error");
-          setup.aiCoPilot = `Grok unavailable: ${e?.message || e}`;
-        }
-      }
-
       setup.drivingText = formatDrivingAlert(setup);
 
       alerts.push(setup);
+    }
+
+    /* Expensive: one batched Grok call for all alerts (Netlify timeout — was N sequential calls). */
+    if (scanMode === "expensive" && process.env.GROK_API_KEY && alerts.length) {
+      try {
+        const setupsPayload = alerts.map((setup) => ({
+          symbol: setup.symbol,
+          score: setup.score,
+          edge: setup.edge,
+          playTypeLabel: setup.playTypeLabel,
+          direction: setup.direction,
+          entry: setup.entry,
+          stop: setup.stop,
+          target: setup.target,
+          historicalSummary: setup.historicalSummary,
+          ev: setup.ev,
+          projectedEv: setup.projectedEv,
+          rulesAiVerdict: setup.aiVerdict,
+        }));
+
+        const priorityInBatch = [
+          ...new Set(
+            alerts
+              .filter((a) => prioritySyms.has(a.symbol))
+              .map((a) => a.symbol)
+          ),
+        ];
+
+        const catBlock =
+          catalystNewsSummary
+            ? `
+
+Recent market headlines (catalyst context for the session):
+${catalystNewsSummary}
+
+Symbols in this batch that appeared in universe ∩ headline scan: ${priorityInBatch.length ? priorityInBatch.join(", ") : "(none)"}.
+For any such symbol, if a *fresh* catalyst in the text clearly supports a tactical trade in that symbol, that symbol's netVerdict MUST begin exactly: HIGH-PROBABILITY CATALYST PLAY —
+For other symbols, if a headline clearly ties a *fresh* catalyst to that symbol, the same prefix applies.
+Otherwise use a normal conviction netVerdict (no catalyst prefix).`
+            : "";
+
+        const symList = alerts.map((a) => a.symbol).join(", ");
+        const aiPrompt = `You are SOHELATOR's aggressive co-pilot. Analyze ALL setups below in one reply.
+
+Rules:
+- Lead with system signal per symbol; never veto unless that symbol's score < 40.
+- coPilot: a few short lines per symbol. netVerdict: exactly one conviction line (do not prefix with "NET VERDICT:").
+
+Setups (JSON array):
+${JSON.stringify(setupsPayload)}
+${catBlock}
+
+Respond with ONLY a valid JSON array (no markdown fences). One object per symbol with fields: symbol (string), netVerdict (string), coPilot (string). Include every symbol: ${symList}.`;
+
+        const { text: grokOut, health: gh } = await callGrokExpensiveWithFallback(
+          aiPrompt,
+          BATCH_GROK_MAX_TOK
+        );
+        grokHealthAgg = worseGrokHealth(grokHealthAgg, gh);
+        const verdictMap = parseBatchedGrokVerdicts(grokOut);
+        for (const setup of alerts) {
+          const sym = String(setup.symbol || "").trim().toUpperCase();
+          const row = verdictMap.get(sym);
+          if (row) {
+            if (row.coPilot) setup.aiCoPilot = row.coPilot;
+            if (row.netVerdict) setup.aiVerdict = row.netVerdict;
+          } else if (verdictMap.size > 0) {
+            setup.aiCoPilot = `Grok batch: missing entry for ${sym}`;
+          } else {
+            setup.aiCoPilot = `Grok batch: could not parse JSON (${String(grokOut || "").length} chars)`;
+          }
+        }
+        for (const a of alerts) {
+          a.drivingText = formatDrivingAlert(a);
+        }
+      } catch (e) {
+        console.warn("scan.js batched Grok failed:", e?.message || e);
+        grokHealthAgg = worseGrokHealth(grokHealthAgg, "error");
+        for (const setup of alerts) {
+          setup.aiCoPilot = `Grok unavailable: ${e?.message || e}`;
+        }
+        for (const a of alerts) {
+          a.drivingText = formatDrivingAlert(a);
+        }
+      }
     }
 
     /* SOHELATOR blueprint — ALL alerts to Telegram (user wants to review everything) (Prompt 19) */
