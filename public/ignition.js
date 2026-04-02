@@ -200,9 +200,8 @@ window.calculateIgnition = calculateIgnition;
 
 
 /**
- * ALIGN.ICS v3 DOM: #page-live|history, #align-regime-inner, #align-firing-cards,
- * #align-heating-cards, #align-live-list, #history-list, #health-banner
- * SOHELATOR blueprint — full ALIGN.ICS v3 template adoption (Prompt 15)
+ * HUD v1 DOM: #page-hud-* , #hud-tactical-cards, #hud-scan-regime-inner, #hud-positions-list,
+ * #hud-logged-trades, #hud-alert-log, #health-banner
  */
 (function initSohelatorVerbatimNeon() {
   var SCAN_URL = "/api/scan";
@@ -216,6 +215,508 @@ window.calculateIgnition = calculateIgnition;
   var pollScanTimer = null;
   var pollOpenTimer = null;
   var spyLevelsTimer = null;
+  var hudClockTimer = null;
+  var positionTtiTimer = null;
+
+  function timeInTrade(openedAt) {
+    var ms = Date.now() - new Date(openedAt).getTime();
+    if (!isFinite(ms) || ms < 0) return "—";
+    var h = Math.floor(ms / 3600000);
+    var m = Math.floor((ms % 3600000) / 60000);
+    return h > 0 ? h + "h " + m + "m" : m + "m";
+  }
+
+  function formatAlertTime(iso) {
+    if (!iso) return "—";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "—";
+    var now = new Date();
+    var sameDay = d.toDateString() === now.toDateString();
+    if (sameDay) return d.toTimeString().slice(0, 8);
+    return (
+      d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+      " " +
+      d.toTimeString().slice(0, 5)
+    );
+  }
+
+  function showHudPage(which) {
+    var w = which === "learning" ? "brief" : which;
+    var ids = {
+      home: "page-hud-home",
+      pos: "page-hud-pos",
+      scan: "page-hud-scan",
+      brief: "page-hud-brief",
+      sys: "page-hud-sys",
+    };
+    Object.keys(ids).forEach(function (k) {
+      var el = document.getElementById(ids[k]);
+      if (el) el.classList.toggle("active", k === w);
+    });
+    document.querySelectorAll(".hud-bottom-nav button[data-hud-tab]").forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-hud-tab") === w);
+    });
+  }
+  window.__sohelShowHudPage = showHudPage;
+
+  function tickHudClock() {
+    var el = document.getElementById("hud-clock");
+    if (!el) return;
+    var parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date());
+    var hh = "";
+    var mm = "";
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i].type === "hour") hh = parts[i].value;
+      if (parts[i].type === "minute") mm = parts[i].value;
+    }
+    el.textContent = hh + ":" + mm;
+  }
+
+  function updateHudScanLast() {
+    var span = document.getElementById("hud-scan-last");
+    if (!span) return;
+    var okAt = window.__sohelLastScanOkAt;
+    if (okAt == null) {
+      span.textContent = "—";
+      return;
+    }
+    var parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date(okAt));
+    var t = "";
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i].type === "hour" || parts[i].type === "minute" || parts[i].type === "second") {
+        t += (t ? ":" : "") + parts[i].value;
+      }
+    }
+    span.textContent = t + " ET";
+  }
+
+  var CHECKPOINTS = [
+    { key: "premarket", t: "08:30", lab: "PRE", slotMin: 8 * 60 + 30 },
+    { key: "scan-925", t: "09:25", lab: "OPEN", slotMin: 9 * 60 + 25 },
+    { key: "scan-955", t: "09:55", lab: "MID-AM", slotMin: 9 * 60 + 55 },
+    { key: "cheap-monitor", t: "11:00", lab: "MID", slotMin: 11 * 60 },
+    { key: "scanner", t: "13:00", lab: "PM", slotMin: 13 * 60 },
+    { key: "cheap-monitor2", t: "15:00", lab: "LATE", slotMin: 15 * 60 },
+    { key: "scan-eod", t: "16:05", lab: "EOD", slotMin: 16 * 60 + 5 },
+  ];
+
+  function ymdEt(ms) {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(ms));
+  }
+
+  function renderCheckpointStrip(jobHealth, premarketAsOfMs, lastScanMs) {
+    var host = document.getElementById("hud-checkpoint-strip");
+    if (!host) return;
+    var now = Date.now();
+    var todayYmd = ymdEt(now);
+    function lastOkMs(key) {
+      if (key === "premarket" && premarketAsOfMs) {
+        return ymdEt(premarketAsOfMs) === todayYmd ? premarketAsOfMs : 0;
+      }
+      if (key === "cheap-monitor2") {
+        var j = jobHealth && jobHealth["cheap-monitor"];
+        return j && j.lastOk && ymdEt(j.lastOk) === todayYmd && minutesEt(new Date(j.lastOk)) >= 14 * 60 + 30
+          ? j.lastOk
+          : 0;
+      }
+      if (key === "cheap-monitor") {
+        var j2 = jobHealth && jobHealth["cheap-monitor"];
+        if (!j2 || !j2.lastOk || ymdEt(j2.lastOk) !== todayYmd) return 0;
+        var m = minutesEt(new Date(j2.lastOk));
+        if (m >= 10 * 60 + 30 && m < 14 * 60 + 30) return j2.lastOk;
+        return 0;
+      }
+      var row = jobHealth && jobHealth[key];
+      return row && row.lastOk && ymdEt(row.lastOk) === todayYmd ? row.lastOk : 0;
+    }
+    function minutesEt(d) {
+      var parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "numeric",
+        hour12: false,
+      }).formatToParts(d);
+      var h = 0;
+      var m = 0;
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i].type === "hour") h = parseInt(parts[i].value, 10);
+        if (parts[i].type === "minute") m = parseInt(parts[i].value, 10);
+      }
+      return h * 60 + m;
+    }
+    var nowMin = minutesEt(new Date());
+    var done = CHECKPOINTS.map(function (c) {
+      var ok = 0;
+      if (c.key === "scanner" && lastScanMs && ymdEt(lastScanMs) === todayYmd) {
+        var sm = minutesEt(new Date(lastScanMs));
+        if (sm >= 12 * 60 + 15 && sm <= 14 * 60 + 45) ok = lastScanMs;
+      }
+      if (!ok) ok = lastOkMs(c.key);
+      return { slotMin: c.slotMin, ok: ok, lab: c.lab, t: c.t };
+    });
+    var nextIdx = -1;
+    var i;
+    for (i = 0; i < done.length; i++) {
+      if (!done[i].ok && nowMin >= done[i].slotMin - 5) {
+        nextIdx = i;
+        break;
+      }
+    }
+    if (nextIdx < 0) {
+      for (i = 0; i < done.length; i++) {
+        if (!done[i].ok) {
+          nextIdx = i;
+          break;
+        }
+      }
+    }
+    var html = "";
+    for (var n = 0; n < CHECKPOINTS.length; n++) {
+      var c = CHECKPOINTS[n];
+      if (n > 0) html += '<div class="hud-cp-line"></div>';
+      var cls = "hud-cp-node";
+      if (done[n].ok) cls += " hud-cp-node--done";
+      else if (n === nextIdx) cls += " hud-cp-node--next";
+      html +=
+        '<div class="' +
+        cls +
+        '"><div class="hud-cp-pip"></div><div class="hud-cp-time">' +
+        esc(c.t) +
+        '</div><div class="hud-cp-label">' +
+        esc(c.lab) +
+        "</div></div>";
+    }
+    host.innerHTML = html;
+  }
+
+  function fetchHudAuxiliary() {
+    fetch("/api/premarket", { cache: "no-store" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (snap) {
+        if (snap && snap.asOf) {
+          preAs = Date.parse(snap.asOf) || 0;
+          window.__sohelPremarketAsOf = preAs;
+        }
+        var body = document.getElementById("hud-intel-body");
+        var tm = document.getElementById("hud-intel-time");
+        var brief = snap && snap.aiBrief ? String(snap.aiBrief) : "";
+        if (body) {
+          body.textContent = brief || "(No Grok brief yet.)";
+          body.style.whiteSpace = "pre-wrap";
+        }
+        if (tm && snap && snap.asOf) {
+          tm.textContent = formatAlertTime(snap.asOf);
+        }
+        fetch("/api/health", { cache: "no-store" })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (h) {
+            var jh = (h && h.jobHealth) || {};
+            renderCheckpointStrip(
+              jh,
+              window.__sohelPremarketAsOf,
+              window.__sohelLastScanOkAt
+            );
+            window.__sohelLastHealthJson = h;
+          })
+          .catch(function () {
+            renderCheckpointStrip({}, window.__sohelPremarketAsOf, window.__sohelLastScanOkAt);
+          });
+      })
+      .catch(function () {
+        renderCheckpointStrip({}, 0, window.__sohelLastScanOkAt);
+      });
+  }
+
+  window.__sohelFetchSysHealth = function () {
+    var pre = document.getElementById("hud-sys-health-json");
+    fetch("/api/health", { cache: "no-store" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (h) {
+        if (pre) pre.textContent = JSON.stringify(h, null, 2);
+        window.__sohelLastHealthJson = h;
+        renderCheckpointStrip(
+          (h && h.jobHealth) || {},
+          window.__sohelPremarketAsOf,
+          window.__sohelLastScanOkAt
+        );
+      })
+      .catch(function (e) {
+        if (pre) pre.textContent = String(e.message || e);
+      });
+  };
+
+  function updateRegimeBadgeFromScan(j) {
+    var badge = document.getElementById("hud-regime-badge");
+    var txt = document.getElementById("hud-regime-text");
+    if (!badge || !txt || !j || !Array.isArray(j.alerts)) return;
+    var list = j.alerts.filter(function (a) {
+      return (Number(a.score) || 0) >= 65;
+    });
+    if (!list.length) {
+      badge.classList.remove("hud-regime--bull", "hud-regime--bear");
+      badge.classList.add("hud-regime--neutral");
+      txt.textContent = "—";
+      return;
+    }
+    list.sort(function (a, b) {
+      return (Number(b.score) || 0) - (Number(a.score) || 0);
+    });
+    var top = list[0];
+    var bull = String(top.direction || "").toLowerCase() !== "short";
+    badge.classList.remove("hud-regime--bull", "hud-regime--bear", "hud-regime--neutral");
+    if (bull) {
+      badge.classList.add("hud-regime--bull");
+      txt.textContent = "BULL";
+    } else {
+      badge.classList.add("hud-regime--bear");
+      txt.textContent = "BEAR";
+    }
+  }
+
+  function renderHudStats(j) {
+    var n = !j || !Array.isArray(j.alerts) ? 0 : j.alerts.length;
+    var elA = document.getElementById("hud-stat-alerts");
+    var elW = document.getElementById("hud-stat-win");
+    var elE = document.getElementById("hud-stat-edge");
+    var elS = document.getElementById("hud-stat-setups");
+    var b7 = j && j.meta && j.meta.backtest7d;
+    if (elA) elA.textContent = String(n);
+    if (elW)
+      elW.textContent =
+        b7 && b7.winRate != null ? Math.round(Number(b7.winRate) * 100) + "%" : "—";
+    if (elE)
+      elE.textContent =
+        b7 && b7.ev != null ? Number(b7.ev).toFixed(2) : "—";
+    if (elS)
+      elS.textContent =
+        b7 && b7.totalSetups != null ? String(b7.totalSetups) : "—";
+  }
+
+  function renderSessionPnlFromPositions(positions) {
+    var el = document.getElementById("hud-session-pnl");
+    if (!el) return;
+    if (!positions || !positions.length) {
+      el.textContent = "$0.00";
+      el.classList.remove("hud-hero-pnl--neg");
+      return;
+    }
+    var sum = 0;
+    positions.forEach(function (p) {
+      var st = String(p.status || "");
+      if (st.indexOf("EXIT") !== -1) return;
+      sum += Number(p.pnlDollar) || 0;
+    });
+    var s = (sum >= 0 ? "+" : "") + "$" + Math.abs(sum).toFixed(2);
+    el.textContent = sum < 0 ? "-" + "$" + Math.abs(sum).toFixed(2) : s;
+    el.classList.toggle("hud-hero-pnl--neg", sum < 0);
+  }
+
+  function posAccentFromStatus(status) {
+    var s = String(status || "");
+    if (s.indexOf("EXIT") !== -1) return "exit";
+    if (s.indexOf("DANGER") !== -1) return "danger";
+    if (s.indexOf("LIVE") !== -1) return "live";
+    return "hold";
+  }
+
+  function renderPositionTrackerList(positions) {
+    var host = document.getElementById("hud-positions-list");
+    if (!host) return;
+    if (!positions || !positions.length) {
+      host.innerHTML = '<p class="hint">No open positions in tracker.</p>';
+      return;
+    }
+    var open = positions.filter(function (p) {
+      return String(p.status || "").indexOf("EXIT") === -1;
+    });
+    if (!open.length) {
+      host.innerHTML = '<p class="hint">No active positions (all exited).</p>';
+      return;
+    }
+    host.innerHTML = open
+      .map(function (p) {
+        var sym = esc(String(p.symbol || "—").toUpperCase());
+        var pct = p.pnlPct != null && isFinite(Number(p.pnlPct)) ? Number(p.pnlPct).toFixed(2) : "—";
+        var acc = posAccentFromStatus(p.status);
+        var acCls =
+          acc === "live"
+            ? "hud-pos-ac--live"
+            : acc === "danger"
+              ? "hud-pos-ac--danger"
+              : acc === "exit"
+                ? "hud-pos-ac--exit"
+                : "hud-pos-ac--hold";
+        var barCls =
+          acc === "live"
+            ? "hud-pos-bar--live"
+            : acc === "danger"
+              ? "hud-pos-bar--danger"
+              : acc === "exit"
+                ? "hud-pos-bar--exit"
+                : "hud-pos-bar--hold";
+        var dir = String(p.direction || "long").toUpperCase();
+        var ent = p.entryPrice != null ? fmtPx(p.entryPrice) : "—";
+        var now = p.currentPrice != null ? fmtPx(p.currentPrice) : "—";
+        var opt =
+          p.suggestedOption && p.suggestedOption.description
+            ? esc(String(p.suggestedOption.description))
+            : "";
+        var opened = p.openedAtIso || p.openedAt;
+        var tti = timeInTrade(opened);
+        var prog = Math.min(100, Math.max(4, 50 + (Number(p.pnlPct) || 0) * 2));
+        return (
+          '<div class="hud-pos-card" data-pos-id="' +
+          esc(p.id) +
+          '"><div class="hud-pos-ac ' +
+          acCls +
+          '"></div><div class="hud-pos-in"><div class="hud-pos-row1"><span class="hud-pos-sym">' +
+          sym +
+          '</span><span class="hud-pos-pnl ' +
+          (Number(p.pnlPct) < 0 ? "hud-pos-pnl--neg" : "") +
+          '">' +
+          esc(pct) +
+          '%</span></div><div class="hud-pos-detail">' +
+          esc(dir) +
+          " · ENTRY " +
+          esc(ent) +
+          " · NOW " +
+          esc(now) +
+          (opt ? " · " + opt : "") +
+          '</div><div class="hud-pos-meta"><span class="hud-pill">' +
+          esc(String(p.status || "—")) +
+          '</span><span class="hud-pos-tti" data-opened-at="' +
+          esc(String(opened || "")) +
+          '">IN TRADE · ' +
+          esc(tti) +
+          '</span></div><div class="hud-pos-bar ' +
+          barCls +
+          '"><i style="width:' +
+          prog +
+          '%"></i></div></div></div>'
+        );
+      })
+      .join("");
+  }
+
+  function updateAllPositionTimeInTrade() {
+    document.querySelectorAll(".hud-pos-tti[data-opened-at]").forEach(function (el) {
+      var o = el.getAttribute("data-opened-at");
+      el.textContent = "IN TRADE · " + timeInTrade(o);
+    });
+  }
+
+  function fetchPositionTracker() {
+    fetch("/api/position-tracker", { cache: "no-store" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (j) {
+        var list = (j && j.positions) || [];
+        window.__sohelPositionTrackerList = list;
+        renderPositionTrackerList(list);
+        renderSessionPnlFromPositions(list);
+      })
+      .catch(function () {
+        var host = document.getElementById("hud-positions-list");
+        if (host) host.innerHTML = '<p class="hint">Position tracker unavailable.</p>';
+      });
+  }
+
+  function alertIsoFromTrackerRow(a) {
+    if (a.alertedAtIso) return a.alertedAtIso;
+    if (a.timestamp != null && isFinite(Number(a.timestamp))) {
+      return new Date(Number(a.timestamp)).toISOString();
+    }
+    return "";
+  }
+
+  function renderHudAlertLog(rows) {
+    var host = document.getElementById("hud-alert-log");
+    if (!host) return;
+    if (!rows || !rows.length) {
+      host.innerHTML = '<p class="hint">No alert history in blob store yet.</p>';
+      return;
+    }
+    var sorted = rows.slice().sort(function (a, b) {
+      var ta = Number(a.timestamp) || 0;
+      var tb = Number(b.timestamp) || 0;
+      return tb - ta;
+    });
+    host.innerHTML = sorted
+      .map(function (a) {
+        var iso = alertIsoFromTrackerRow(a);
+        var ts = formatAlertTime(iso || (a.timestamp ? new Date(Number(a.timestamp)).toISOString() : ""));
+        var sym = esc(String(a.ticker || a.symbol || "—").toUpperCase());
+        var sc = a.score != null ? Math.round(Number(a.score)) : "—";
+        var px =
+          a.underlyingAtAlert != null && isFinite(Number(a.underlyingAtAlert))
+            ? Number(a.underlyingAtAlert).toFixed(2)
+            : a.price != null
+              ? Number(a.price).toFixed(2)
+              : "—";
+        var isPut =
+          a.direction === "put" ||
+          String(a.option && a.option.optType || "").toLowerCase() === "put";
+        var isCall =
+          a.direction === "call" ||
+          String(a.option && a.option.optType || "").toLowerCase() === "call";
+        var side = isPut ? "SHORT" : isCall ? "LONG" : "SKIP";
+        var bcls =
+          side === "LONG" ? "hud-log-badge--long" : side === "SHORT" ? "hud-log-badge--short" : "hud-log-badge--skip";
+        return (
+          '<div class="hud-log-row" data-alert-log="1"><span class="hud-log-ts">' +
+          esc(ts) +
+          '</span><span class="hud-log-sym">' +
+          sym +
+          '</span><span class="hud-log-meta">SCR ' +
+          esc(String(sc)) +
+          " · $" +
+          esc(px) +
+          '</span><span class="hud-log-badge ' +
+          bcls +
+          '">' +
+          esc(side) +
+          "</span></div>"
+        );
+      })
+      .join("");
+  }
+
+  function fetchHudAlertTracker() {
+    fetch("/api/alert-tracker", { cache: "no-store" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (j) {
+        renderHudAlertLog((j && j.alerts) || []);
+      })
+      .catch(function () {
+        var host = document.getElementById("hud-alert-log");
+        if (host) host.innerHTML = '<p class="hint">Alert tracker unavailable.</p>';
+      });
+  }
 
   var scanStatusLabel = "—";
   var scanStatusOk = true;
@@ -399,37 +900,8 @@ window.calculateIgnition = calculateIgnition;
     var pill = document.getElementById("hdr-live-pill");
     if (!pill) return;
     pill.textContent = scanStatusOk ? "LIVE" : "WARN";
-    pill.classList.toggle("align-live-pill--warn", !scanStatusOk);
-  }
-
-  function showNavPage(which) {
-    var live = document.getElementById("page-live");
-    var hist = document.getElementById("page-history");
-    var bL = document.getElementById("nav-live");
-    var bH = document.getElementById("nav-history");
-    var onL = which === "live";
-    if (live) live.classList.toggle("active", onL);
-    if (hist) hist.classList.toggle("active", !onL);
-    if (bL) bL.classList.toggle("active", onL);
-    if (bH) bH.classList.toggle("active", !onL);
-  }
-
-  window.sohelSelectMainTab = function (k) {
-    if (k === "alerts" || k === "history") showNavPage("history");
-    else showNavPage("live");
-  };
-
-  function bindNav() {
-    var l = document.getElementById("nav-live");
-    var h = document.getElementById("nav-history");
-    if (l)
-      l.addEventListener("click", function () {
-        showNavPage("live");
-      });
-    if (h)
-      h.addEventListener("click", function () {
-        showNavPage("history");
-      });
+    pill.style.color = scanStatusOk ? "#00ff88" : "#ffaa00";
+    pill.style.borderColor = scanStatusOk ? "rgba(0,255,136,0.5)" : "rgba(255,170,0,0.6)";
   }
 
   /** Short market-state copy only — full Grok / scanner dump removed from LIVE (watchlist) tab */
@@ -487,53 +959,14 @@ window.calculateIgnition = calculateIgnition;
   }
 
   function renderHomeFromScan(j) {
-    /* SOHELATOR blueprint — full ALIGN.ICS v3 template adoption (Prompt 15): regime + FIRING/HEATING buckets */
-    var regimeEl = document.getElementById("align-regime-inner");
-    var fireHost = document.getElementById("align-firing-cards");
-    var heatHost = document.getElementById("align-heating-cards");
-    var fireSub = document.getElementById("firing-sub");
-    var heatSub = document.getElementById("heating-sub");
-    if (!regimeEl || !fireHost || !heatHost) return;
+    var regimeEl = document.getElementById("hud-scan-regime-inner");
+    var tacHost = document.getElementById("hud-tactical-cards");
+    var badge = document.getElementById("nav-hud-home-badge");
+    if (!regimeEl || !tacHost) return;
 
     var FIRING_MIN = 80;
     var HEATING_MIN = 60;
     var HEATING_MAX = 79;
-
-    function formatExpShort(iso) {
-      if (!iso) return "—";
-      var d = new Date(iso + "T12:00:00Z");
-      if (isNaN(d.getTime())) return esc(String(iso).slice(0, 10));
-      return esc(
-        new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(d)
-      );
-    }
-
-    function pctFromTo(from, to) {
-      if (
-        from == null ||
-        to == null ||
-        !isFinite(Number(from)) ||
-        !isFinite(Number(to)) ||
-        Number(from) === 0
-      ) {
-        return "—";
-      }
-      var p = ((Number(to) - Number(from)) / Math.abs(Number(from))) * 100;
-      return (p >= 0 ? "+" : "") + p.toFixed(1) + "%";
-    }
-
-    function watchingSinceLine(a) {
-      if (!a || !a.alertedAtIso) return "";
-      var ms = Date.parse(a.alertedAtIso);
-      if (!ms) return "";
-      var s = new Intl.DateTimeFormat("en-US", {
-        timeZone: "America/New_York",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      }).format(new Date(ms));
-      return "WATCHING SINCE " + s + " ET";
-    }
 
     function indTagsHtml(a) {
       if (!a || !a.details) return "";
@@ -583,144 +1016,87 @@ window.calculateIgnition = calculateIgnition;
       );
     }
 
-    function levelsGridHtml(a) {
-      if (!a) return "";
-      var last = a.last;
-      var ent = a.entry;
-      var st = a.stop;
-      var tgt = a.target;
-      var eStr =
-        ent != null && isFinite(Number(ent)) ? "$" + Number(ent).toFixed(2) : "—";
-      var sStr =
-        st != null && isFinite(Number(st)) ? "$" + Number(st).toFixed(2) : "—";
-      var tStr =
-        tgt != null && isFinite(Number(tgt)) ? "$" + Number(tgt).toFixed(2) : "—";
-      return (
-        '<div class="sohel-levels-grid">' +
-        '<div class="sohel-lv"><span class="sohel-lv-lab">ENTRY</span><span class="sohel-lv-val">' +
-        esc(eStr) +
-        '</span><div class="sohel-lv-sub">' +
-        esc(last != null ? pctFromTo(last, ent) + " vs last" : "On signal") +
-        '</div></div><div class="sohel-lv sohel-lv--target"><span class="sohel-lv-lab">TARGET</span><span class="sohel-lv-val">' +
-        esc(tStr) +
-        '</span><div class="sohel-lv-sub">' +
-        esc(last != null ? pctFromTo(last, tgt) + " vs last" : "—") +
-        '</div></div><div class="sohel-lv sohel-lv--stop"><span class="sohel-lv-lab">STOP</span><span class="sohel-lv-val">' +
-        esc(sStr) +
-        '</span><div class="sohel-lv-sub">' +
-        esc(last != null ? pctFromTo(last, st) + " vs last" : "—") +
-        "</div></div></div>"
-      );
-    }
-
-    function optionPlayBarHtml(a) {
-      var o = a && a.suggestedOption;
-      if (!o || o.strike == null) return "";
-      var letter = String(o.right || "").toLowerCase() === "put" ? "P" : "C";
-      var stk = Number(o.strike);
-      var play =
-        (Math.abs(stk - Math.round(stk)) < 1e-6
-          ? String(Math.round(stk))
-          : stk.toFixed(2)) + letter;
-      var mid =
-        o.mid != null && isFinite(Number(o.mid))
-          ? "$" + Number(o.mid).toFixed(2)
-          : "—";
-      var del =
-        o.delta != null && isFinite(Number(o.delta))
-          ? Number(o.delta).toFixed(2)
-          : "—";
-      return (
-        '<div class="sohel-opt-playbar">' +
-        '<div class="sohel-opt-cell"><span class="sohel-opt-lab">PLAY</span><span class="sohel-opt-val">' +
-        esc(play) +
-        '</span></div><div class="sohel-opt-cell"><span class="sohel-opt-lab">PRICE</span><span class="sohel-opt-val">' +
-        esc(mid) +
-        '</span></div><div class="sohel-opt-cell"><span class="sohel-opt-lab">EXP</span><span class="sohel-opt-val">' +
-        formatExpShort(o.expiration) +
-        '</span></div><div class="sohel-opt-cell"><span class="sohel-opt-lab">DELTA</span><span class="sohel-opt-val">' +
-        esc(del) +
-        "</span></div></div>"
-      );
-    }
-
-    function priceChgRowHtml(a) {
-      if (!a) return "";
-      var last =
-        a.last != null && isFinite(Number(a.last)) ? Number(a.last) : null;
-      var lastStr = last != null ? "$" + last.toFixed(2) : "—";
-      var bp = a.barChgPct;
-      var chgCls = "align-chg-flat";
-      var chgTxt = "—";
-      if (bp != null && isFinite(Number(bp))) {
-        var p = Number(bp);
-        chgCls =
-          p > 0.02 ? "align-chg-up" : p < -0.02 ? "align-chg-down" : "align-chg-flat";
-        var absD = last && isFinite(last) ? (Math.abs(p) / 100) * last : 0;
-        chgTxt =
-          (p >= 0 ? "+" : "") +
-          p.toFixed(2) +
-          "%" +
-          (absD > 0 ? " (~$" + absD.toFixed(2) + ")" : "");
-      }
-      return (
-        '<div class="align-price-row"><span class="align-price">' +
-        esc(lastStr) +
-        '</span><span class="align-chg ' +
-        chgCls +
-        '">' +
-        esc(chgTxt) +
-        "</span></div>"
-      );
-    }
-
-    function alignSetupCardHtml(a, bucket, idx) {
-      var tier = bucket === "firing" ? "fire" : "heat";
+    function hudTacticalCardHtml(a, idx) {
       var sym = esc(String(a.symbol || "—").toUpperCase());
       var sc = a.score != null ? Math.round(Number(a.score)) : 0;
-      var meta = watchingSinceLine(a);
-      var goTags =
-        bucket === "firing"
-          ? '<span class="align-tag align-tag--go">GO GO GO</span>'
-          : '<span class="align-tag align-tag--heat">HEATING</span>';
-      var setupTag = '<span class="align-tag align-tag--setup">SETTING UP</span>';
-      var txt = String((a.aiVerdict || "") + (a.drivingText || ""));
-      if (/HIGH-PROBABILITY CATALYST/i.test(txt)) {
-        setupTag +=
-          '<span class="align-tag align-tag--go" style="border-color:var(--amber);color:var(--amber)">CATALYST</span>';
+      var tierCls = sc >= 80 ? "hud-tcard--hi" : sc >= 65 ? "hud-tcard--mid" : "hud-tcard--lo";
+      var long = String(a.direction || "long").toLowerCase() !== "short";
+      var dirTag = long
+        ? '<span class="hud-tag hud-tag--dir-long">LONG</span>'
+        : '<span class="hud-tag hud-tag--dir-short">SHORT</span>';
+      var play = esc(String(a.playTypeLabel || a.playType || "SETUP"));
+      var pt = a.last != null && isFinite(Number(a.last)) ? "$" + Number(a.last).toFixed(2) : "—";
+      var ms = a.alertedAt || (a.alertedAtIso ? Date.parse(a.alertedAtIso) : 0);
+      var timeStr = "—";
+      if (ms) {
+        timeStr =
+          new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/New_York",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+          }).format(new Date(ms)) + " ET";
       }
-      var opt = optionPlayBarHtml(a);
-      if (!opt) {
-        opt =
-          '<div class="sohel-opt-playbar"><div class="sohel-opt-cell" style="grid-column:1/-1"><span class="sohel-opt-lab">OPTION</span><span class="sohel-opt-val" style="color:var(--muted);font-size:0.65rem">Chain n/a — refresh</span></div></div>';
+      var verdict = String(a.aiVerdict || a.drivingText || "").trim();
+      if (verdict.length > 480) verdict = verdict.slice(0, 477) + "…";
+      var ent = a.entry != null && isFinite(Number(a.entry)) ? "$" + Number(a.entry).toFixed(2) : "—";
+      var stp = a.stop != null && isFinite(Number(a.stop)) ? "$" + Number(a.stop).toFixed(2) : "—";
+      var tg = a.target != null && isFinite(Number(a.target)) ? "$" + Number(a.target).toFixed(2) : "—";
+      var o = a.suggestedOption;
+      var optLine;
+      if (o && o.strike != null && o.expiration) {
+        var letter = String(o.right || "").toLowerCase() === "put" ? "P" : "C";
+        var stk = Number(o.strike);
+        var playS =
+          (Math.abs(stk - Math.round(stk)) < 1e-6 ? String(Math.round(stk)) : stk.toFixed(2)) + letter;
+        var mid =
+          o.mid != null && isFinite(Number(o.mid)) ? "$" + Number(o.mid).toFixed(2) : "—";
+        var del =
+          o.delta != null && isFinite(Number(o.delta)) ? Number(o.delta).toFixed(2) : "—";
+        optLine =
+          '<div class="hud-tcard-opt">' +
+          esc(playS) +
+          " · exp " +
+          esc(String(o.expiration)) +
+          " · mid " +
+          esc(mid) +
+          " · Δ" +
+          esc(del) +
+          "</div>";
+      } else {
+        optLine =
+          '<div class="hud-tcard-opt" style="opacity:0.65">Option chain n/a — refresh scan</div>';
       }
       return (
-        '<div class="align-card align-card--' +
-        tier +
-        '"><div class="align-card-ac"></div><div class="align-card-body"><div class="align-card-head"><div><div class="align-sym">' +
+        '<div class="hud-tcard ' +
+        tierCls +
+        '"><div class="hud-tcard-ac"></div><div class="hud-tcard-in"><div class="hud-tcard-score">' +
+        esc(String(sc)) +
+        '</div><div class="hud-tcard-head"><span class="hud-tcard-sym">' +
         sym +
-        '</div>' +
-        (meta ? '<div class="align-meta">' + esc(meta) + "</div>" : "") +
-        '</div><div class="align-tags">' +
-        goTags +
-        setupTag +
-        "</div></div>" +
-        priceChgRowHtml(a) +
-        '<div class="align-prog"><i style="width:' +
-        Math.min(100, Math.max(4, sc)) +
-        '%"></i></div>' +
+        '</span><div class="hud-tcard-px">' +
+        esc(pt) +
+        "<br/>" +
+        esc(timeStr) +
+        '</div></div><div class="hud-tcard-tags">' +
+        dirTag +
+        '<span class="hud-tag">' +
+        play +
+        '</span></div><div class="hud-tcard-verdict">' +
+        esc(verdict || "(no verdict)") +
+        '</div><div class="hud-est-grid"><div class="hud-est"><span class="k">ENTRY</span><div class="v">' +
+        esc(ent) +
+        '</div></div><div class="hud-est hud-est--stop"><span class="k">STOP</span><div class="v">' +
+        esc(stp) +
+        '</div></div><div class="hud-est hud-est--tgt"><span class="k">TARGET</span><div class="v">' +
+        esc(tg) +
+        "</div></div></div>" +
+        optLine +
         indTagsHtml(a) +
-        levelsGridHtml(a) +
-        opt +
-        '<div class="align-actions">' +
-        '<button type="button" class="align-btn-enter" data-sohel-enter="' +
-        bucket +
-        ":" +
+        '<div class="hud-tcard-actions"><button type="button" class="hud-btn-enter" data-sohel-enter="tactical:' +
         idx +
-        '">ENTER NOW</button>' +
-        '<button type="button" class="align-btn-wait" data-sohel-wait="1">WAIT RETEST</button>' +
-        '<button type="button" class="align-btn-skip">SKIP</button>' +
-        "</div></div></div>"
+        '">ENTER NOW</button><button type="button" class="hud-btn-wait" data-sohel-wait="1">WAIT RETEST</button><button type="button" class="hud-btn-skip">SKIP</button></div></div></div>'
       );
     }
 
@@ -729,12 +1105,14 @@ window.calculateIgnition = calculateIgnition;
         '<div id="sohel-regime-header"></div><p class="hint">' +
         esc(j && j.error ? "Scanner: " + String(j.error) : "Waiting for scanner…") +
         "</p>";
-      fireHost.innerHTML = "";
-      heatHost.innerHTML = "";
-      if (fireSub) fireSub.textContent = "0 ACTIVE";
-      if (heatSub) heatSub.textContent = "0 BUILDING";
+      tacHost.innerHTML = "";
+      if (badge) {
+        badge.setAttribute("data-count", "0");
+        badge.textContent = "0";
+      }
       window.__sohelAlignFiring = [];
       window.__sohelAlignHeating = [];
+      window.__sohelTacticalList = [];
       return;
     }
 
@@ -758,18 +1136,20 @@ window.calculateIgnition = calculateIgnition;
 
     var alerts = Array.isArray(j.alerts) ? j.alerts : [];
     if (st === "after_hours") {
-      fireHost.innerHTML =
+      tacHost.innerHTML =
         '<p class="hint">' +
         esc(
           meta.optionsSessionNote ||
             "Options session closed — 9:30–16:00 ET Mon–Fri."
         ) +
         "</p>";
-      heatHost.innerHTML = "";
-      if (fireSub) fireSub.textContent = "0 ACTIVE";
-      if (heatSub) heatSub.textContent = "0 BUILDING";
+      if (badge) {
+        badge.setAttribute("data-count", "0");
+        badge.textContent = "0";
+      }
       window.__sohelAlignFiring = [];
       window.__sohelAlignHeating = [];
+      window.__sohelTacticalList = [];
       return;
     }
 
@@ -792,28 +1172,24 @@ window.calculateIgnition = calculateIgnition;
     window.__sohelAlignFiring = firing;
     window.__sohelAlignHeating = heating;
 
-    if (fireSub) fireSub.textContent = firing.length + " ACTIVE";
-    if (heatSub) heatSub.textContent = heating.length + " BUILDING";
+    var tactical = firing.concat(heating).sort(function (a, b) {
+      return (Number(b.score) || 0) - (Number(a.score) || 0);
+    });
+    window.__sohelTacticalList = tactical;
 
-    fireHost.innerHTML = firing.length
-      ? firing
+    var nActive = tactical.length;
+    if (badge) {
+      badge.setAttribute("data-count", String(nActive));
+      badge.textContent = String(nActive);
+    }
+
+    tacHost.innerHTML = tactical.length
+      ? tactical
           .map(function (a, i) {
-            return alignSetupCardHtml(a, "firing", i);
+            return hudTacticalCardHtml(a, i);
           })
           .join("")
-      : '<p class="hint">No FIRING setups (score &lt; ' + FIRING_MIN + ").</p>";
-
-    heatHost.innerHTML = heating.length
-      ? heating
-          .map(function (a, i) {
-            return alignSetupCardHtml(a, "heating", i);
-          })
-          .join("")
-      : '<p class="hint">No HEATING setups (need ' +
-        HEATING_MIN +
-        "–" +
-        HEATING_MAX +
-        ").</p>";
+      : '<p class="hint">No tactical setups (need score ≥ ' + HEATING_MIN + ").</p>";
   }
   function formatAlertTimeEt(a) {
     var ms = 0;
@@ -838,17 +1214,6 @@ window.calculateIgnition = calculateIgnition;
       second: "2-digit",
       hour12: true,
     }).format(new Date(ms)) + " ET";
-  }
-
-  function alertTimeMs(a) {
-    if (a.alertedAt != null && isFinite(Number(a.alertedAt))) {
-      return Number(a.alertedAt);
-    }
-    var iso = Date.parse(a.alertedAtIso || "") || 0;
-    if (iso) return iso;
-    return (
-      Date.parse(a.ts || a.timestamp || a.createdAt || a.alertAt || "") || 0
-    );
   }
 
   function alertOptionLine(a) {
@@ -880,83 +1245,6 @@ window.calculateIgnition = calculateIgnition;
     );
   }
 
-  function alertMetaLineHtml(a) {
-    var sym = esc(String(a.symbol || a.ticker || "—").toUpperCase());
-    var t = formatAlertTimeEt(a);
-    var und =
-      a.underlyingAtAlert != null && isFinite(Number(a.underlyingAtAlert))
-        ? " · underlying $" + esc(Number(a.underlyingAtAlert).toFixed(2))
-        : a.last != null && isFinite(Number(a.last))
-          ? " · last $" + esc(Number(a.last).toFixed(2))
-          : "";
-    var sc =
-      a.score != null ? " · score " + esc(String(Math.round(Number(a.score)))) : "";
-    var optLn = alertOptionLine(a);
-    var optRow = optLn
-      ? '<div class="ap-contract">' + optLn + "</div>"
-      : "";
-    return (
-      '<div class="ap-time">' +
-      sym +
-      " · " +
-      esc(t) +
-      und +
-      sc +
-      "</div>" +
-      optRow
-    );
-  }
-
-  function renderAlertsPage(j) {
-    var host = document.getElementById("history-list");
-    if (!host) return;
-    if (!j || j.success === false) {
-      window.__sohelAlertsDisplayed = [];
-      host.innerHTML =
-        '<p class="hint">' + esc(j && j.error ? String(j.error) : "No scan yet.") + "</p>";
-      return;
-    }
-    var meta = j.meta || {};
-    var alerts = Array.isArray(j.alerts) ? j.alerts : [];
-    if (!alerts.length) {
-      window.__sohelAlertsDisplayed = [];
-      var emptyMsg =
-        j.status === "after_hours"
-          ? meta.optionsSessionNote ||
-            "After hours — no optionable session (9:30–16:00 ET Mon–Fri)."
-          : "No alerts this pass.";
-      host.innerHTML = '<p class="hint">' + esc(emptyMsg) + "</p>";
-      return;
-    }
-    var order = alerts.slice().sort(function (a, b) {
-      var ta = alertTimeMs(a);
-      var tb = alertTimeMs(b);
-      if (ta !== tb) return ta - tb;
-      var sa = String(a.symbol || "").localeCompare(String(b.symbol || ""));
-      if (sa !== 0) return sa;
-      return (Number(a.score) || 0) - (Number(b.score) || 0);
-    });
-    window.__sohelAlertsDisplayed = order;
-    /* SOHELATOR blueprint — ALL alerts to Telegram (user wants to review everything) (Prompt 19): prominent timestamp on HISTORY / alerts list */
-    host.innerHTML = order
-      .map(function (a) {
-        var ts = formatAlertTimeEt(a);
-        var tsLine =
-          '<div class="ap-alert-ts" style="font-family:Space Mono,monospace;font-size:0.8rem;font-weight:700;color:#00f0ff;letter-spacing:0.04em;margin-bottom:10px;text-shadow:0 0 12px rgba(0,240,255,0.25);">ALERT · ' +
-          esc(ts) +
-          "</div>";
-        var metaLn = alertMetaLineHtml(a);
-        var drive = a.drivingText
-          ? esc(a.drivingText)
-          : "<span class=\"tm-muted\">(no drivingText)</span>";
-        var hist = a.historicalSummary
-          ? "<div class=\"ap-hist\">" + esc(a.historicalSummary) + "</div>"
-          : "";
-        return '<div class="ap-drive-card">' + tsLine + metaLn + drive + hist + "</div>";
-      })
-      .join("");
-  }
-
   function setPanelStatus(label, ok) {
     scanStatusLabel = label;
     scanStatusOk = ok;
@@ -971,10 +1259,8 @@ window.calculateIgnition = calculateIgnition;
   }
 
   function renderOpenTrades(list) {
-    var host = document.getElementById("align-live-list");
-    var sub = document.getElementById("live-sub");
+    var host = document.getElementById("hud-logged-trades");
     if (!host) return;
-    if (sub) sub.textContent = (list && list.length ? list.length : 0) + " OPEN";
     if (!list || !list.length) {
       host.innerHTML =
         '<p class="tm-muted" style="margin:0;">No open trades logged.</p>';
@@ -1139,9 +1425,29 @@ window.calculateIgnition = calculateIgnition;
   function applyScanPayload(j, res) {
     if (j && j.alerts) window.__sohelLastAlerts = j.alerts;
     setPanelStatus(res && res.ok ? "SCAN OK" : "SCAN HTTP", !!(res && res.ok));
+    if (res && res.ok && j && j.success !== false) {
+      window.__sohelLastScanOkAt = Date.now();
+    }
     updateRiskPillFromScan(j);
+    renderHudStats(j);
+    updateRegimeBadgeFromScan(j);
     renderHomeFromScan(j);
-    renderAlertsPage(j);
+    updateHudScanLast();
+    fetchHudAlertTracker();
+    fetchPositionTracker();
+    fetch("/api/health", { cache: "no-store" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (h) {
+        window.__sohelLastHealthJson = h;
+        renderCheckpointStrip(
+          (h && h.jobHealth) || {},
+          window.__sohelPremarketAsOf,
+          window.__sohelLastScanOkAt
+        );
+      })
+      .catch(function () {});
   }
 
   function pullScan() {
@@ -1162,7 +1468,7 @@ window.calculateIgnition = calculateIgnition;
       })
       .catch(function (e) {
         setPanelStatus("SCAN ERR", false);
-        var host = document.getElementById("history-list");
+        var host = document.getElementById("hud-alert-log");
         if (host)
           host.innerHTML =
             '<p class="hint">' + esc(e.message || String(e)) + "</p>";
@@ -1354,9 +1660,9 @@ window.calculateIgnition = calculateIgnition;
   }
 
   function flashAlertCards() {
-    var host = document.getElementById("history-list");
+    var host = document.getElementById("hud-alert-log");
     if (!host) return;
-    host.querySelectorAll(".ap-drive-card").forEach(function (el) {
+    host.querySelectorAll(".hud-log-row").forEach(function (el) {
       el.classList.remove("neon-flash");
       void el.offsetWidth;
       el.classList.add("neon-flash");
@@ -1403,7 +1709,7 @@ window.calculateIgnition = calculateIgnition;
     var id = String(tradeId || "").replace(/"/g, "");
     if (!id) return;
     var el = document.querySelector(
-      '#align-live-list .tm-open-card[data-tm-open-id="' + id + '"]'
+      '#hud-logged-trades .tm-open-card[data-tm-open-id="' + id + '"]'
     );
     if (!el) return;
     el.classList.remove("neon-amber-pulse");
@@ -1471,14 +1777,23 @@ window.calculateIgnition = calculateIgnition;
   };
 
   function start() {
-    /* SOHELATOR blueprint — full ALIGN.ICS v3 template adoption (Prompt 15) */
-    bindNav();
-    showNavPage("live");
+    showHudPage("home");
     refreshHeaderQuotes();
+    tickHudClock();
+    if (hudClockTimer) clearInterval(hudClockTimer);
+    hudClockTimer = setInterval(tickHudClock, 1000);
+    fetchHudAuxiliary();
+    fetchPositionTracker();
+    fetchHudAlertTracker();
+    if (positionTtiTimer) clearInterval(positionTtiTimer);
+    positionTtiTimer = setInterval(updateAllPositionTimeInTrade, 60000);
+    setInterval(fetchPositionTracker, 60000);
+    setInterval(fetchHudAlertTracker, 120000);
+    setInterval(fetchHudAuxiliary, 900000);
 
-    var pageLive = document.getElementById("page-live");
-    if (pageLive) {
-      pageLive.addEventListener("click", function (e) {
+    var pageHome = document.getElementById("page-hud-home");
+    if (pageHome) {
+      pageHome.addEventListener("click", function (e) {
         var ent = e.target.closest("[data-sohel-enter]");
         if (ent) {
           var raw = ent.getAttribute("data-sohel-enter") || "";
@@ -1486,11 +1801,13 @@ window.calculateIgnition = calculateIgnition;
           var bucket = idxColon >= 0 ? raw.slice(0, idxColon) : "";
           var i = idxColon >= 0 ? parseInt(raw.slice(idxColon + 1), 10) : NaN;
           var list =
-            bucket === "firing"
-              ? window.__sohelAlignFiring
-              : bucket === "heating"
-                ? window.__sohelAlignHeating
-                : null;
+            bucket === "tactical"
+              ? window.__sohelTacticalList
+              : bucket === "firing"
+                ? window.__sohelAlignFiring
+                : bucket === "heating"
+                  ? window.__sohelAlignHeating
+                  : null;
           var a = list && !isNaN(i) ? list[i] : null;
           if (!a || !a.symbol) {
             alert("No alert payload — refresh scan.");
@@ -1571,37 +1888,20 @@ window.calculateIgnition = calculateIgnition;
     return d.innerHTML;
   }
 
-  function setPageVisibility(which) {
-    var live = document.getElementById("page-live");
-    var hist = document.getElementById("page-history");
-    var learn = document.getElementById("learning-page");
-    var onL = which === "live";
-    var onH = which === "history";
-    var onG = which === "learning";
-    if (live) live.classList.toggle("active", onL);
-    if (hist) hist.classList.toggle("active", onH);
-    if (learn) learn.classList.toggle("active", onG);
-  }
-
-  function syncTabUi(which) {
-    document.querySelectorAll(".align-top-tab").forEach(function (b) {
-      var t = b.getAttribute("data-sohel-top-tab");
-      b.classList.toggle("active", t === which);
-    });
-    var mapBottom = { live: "nav-live", history: "nav-history", learning: "nav-learning" };
-    ["nav-live", "nav-history", "nav-learning"].forEach(function (id) {
-      var el = document.getElementById(id);
-      if (el) el.classList.remove("active");
-    });
-    var bid = mapBottom[which];
-    var nb = bid ? document.getElementById(bid) : null;
-    if (nb) nb.classList.add("active");
-  }
-
   function setUnifiedPage(which) {
-    setPageVisibility(which);
-    syncTabUi(which);
-    if (which === "learning") fetchLearningIfStale(true);
+    var w =
+      which === "live"
+        ? "home"
+        : which === "history"
+          ? "scan"
+          : which === "learning"
+            ? "brief"
+            : which;
+    if (typeof window.__sohelShowHudPage === "function") window.__sohelShowHudPage(w);
+    if (w === "brief") fetchLearningIfStale(true);
+    if (w === "sys" && typeof window.__sohelFetchSysHealth === "function") {
+      window.__sohelFetchSysHealth();
+    }
   }
 
   function rebindNavButton(id, which) {
@@ -1788,21 +2088,16 @@ window.calculateIgnition = calculateIgnition;
   }
 
   function wirePrompt16() {
-    rebindNavButton("nav-live", "live");
-    rebindNavButton("nav-history", "history");
-    rebindNavButton("nav-learning", "learning");
-
-    document.querySelectorAll("[data-sohel-top-tab]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var w = btn.getAttribute("data-sohel-top-tab");
-        if (w) setUnifiedPage(w);
-      });
-    });
+    rebindNavButton("nav-hud-home", "home");
+    rebindNavButton("nav-hud-pos", "pos");
+    rebindNavButton("nav-hud-scan", "scan");
+    rebindNavButton("nav-hud-brief", "brief");
+    rebindNavButton("nav-hud-sys", "sys");
 
     window.sohelSelectMainTab = function (k) {
-      if (k === "alerts" || k === "history") setUnifiedPage("history");
-      else if (k === "learning") setUnifiedPage("learning");
-      else setUnifiedPage("live");
+      if (k === "alerts" || k === "history") setUnifiedPage("scan");
+      else if (k === "learning") setUnifiedPage("brief");
+      else setUnifiedPage("home");
     };
 
     var refL = document.getElementById("btn-learning-refresh");
