@@ -211,17 +211,23 @@ function computeSetupScoreCore(bars, symbol, dailyBars, params = {}) {
   const cur = b.length - 1;
   const prev = b.length - 2;
 
-  const recentVols = b.slice(-6, -1).map((x) => x.volume);
+  const recentVols = b.slice(-21, -1).map((x) => x.volume);
   const volAvg =
     recentVols.length > 0
       ? recentVols.reduce((a, v) => a + v, 0) / recentVols.length
       : 1;
+  const volFloor = 50000;
+  const effectiveAvg = Math.max(volAvg, volFloor);
   const curVol = b[cur].volume || 0;
   const prevVol = b[prev].volume || 0;
-  const prevAvg = b.length >= 7 ? b.slice(-7, -2).reduce((a, x) => a + x.volume, 0) / 5 : volAvg;
+  const prevAvg =
+    b.length >= 22
+      ? b.slice(-22, -2).reduce((a, x) => a + x.volume, 0) / 20
+      : effectiveAvg;
+  const effectivePrevAvg = Math.max(prevAvg, volFloor);
 
-  const volRatio = volAvg > 0 ? curVol / volAvg : 1;
-  const prevVolRatio = prevAvg > 0 ? prevVol / prevAvg : 1;
+  const volRatio = effectiveAvg > 0 ? curVol / effectiveAvg : 1;
+  const prevVolRatio = effectivePrevAvg > 0 ? prevVol / effectivePrevAvg : 1;
 
   let score = 50;
 
