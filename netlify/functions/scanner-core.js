@@ -8,7 +8,7 @@ const {
   normalizeIgnitionForContext,
 } = require("./lib/sohelContext");
 const { calculateRegime } = require("./lib/marketRegime");
-const { getMemoryContext, recordAlertSnapshot } = require("./lib/memory");
+const { getMemoryContext, recordAlertSnapshot } = require("./lib/memory.cjs");
 const { predictSetup, calculateRetestEntry } = require("./lib/predictive");
 const { calculateUrgency, buildTelegramMessage } = require("./lib/urgency");
 const { recommendSize } = require("./lib/sizing");

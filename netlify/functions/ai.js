@@ -1,7 +1,7 @@
 const fetch = require("node-fetch");
 const { withSohelContext, buildTradingContext } = require("./lib/sohelContext");
 const { getMasterAnalysis } = require("./lib/masterAnalysis");
-const { getMemoryContext } = require("./lib/memory");
+const { getMemoryContext } = require("./lib/memory.cjs");
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

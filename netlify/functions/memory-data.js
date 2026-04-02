@@ -2,7 +2,7 @@ const {
   getMemoryContext,
   getMemoryStore,
   buildAlertSnapshotPayload,
-} = require("./lib/memory");
+} = require("./lib/memory.cjs");
 const { getMasterAnalysis } = require("./lib/masterAnalysis");
 const { forecastSetup } = require("./lib/forecast");
 const { getStore } = require("@netlify/blobs");

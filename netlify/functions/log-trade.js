@@ -4,15 +4,14 @@
  * GET: open trades + live P&L (trade-manager)
  */
 
-import { createRequire } from "module";
 import {
   markEntered,
   markExited,
   getOpenTrades,
 } from "../../src/lib/trade-manager.js";
+import memory from "./lib/memory.cjs";
 
-const require = createRequire(import.meta.url);
-const { recordTrade } = require("./lib/memory.js");
+const { recordTrade } = memory;
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

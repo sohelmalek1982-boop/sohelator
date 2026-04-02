@@ -5,7 +5,7 @@
 const fetch = require("node-fetch");
 const { getStore } = require("@netlify/blobs");
 const { getMasterAnalysis } = require("./lib/masterAnalysis");
-const { getMemoryContext } = require("./lib/memory");
+const { getMemoryContext } = require("./lib/memory.cjs");
 const { withSohelContext, buildTradingContext } = require("./lib/sohelContext");
 
 const cors = {

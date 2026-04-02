@@ -5,7 +5,7 @@ const { withSohelContext, buildTradingContext } = require("./lib/sohelContext");
 const {
   getMemoryContext,
   getMemoryStore,
-} = require("./lib/memory");
+} = require("./lib/memory.cjs");
 const {
   analyzePatterns,
   finalizePatterns,
