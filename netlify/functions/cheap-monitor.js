@@ -5,12 +5,12 @@
  *   POST /api/scan with suppressTelegram:true; this function relays every alert score≥65 (deduped) using the same body format as scan.js.
  *
  * Schedule: netlify.toml — cron every five minutes — this function gates:
- *   • Weekday RTH 8:00–16:00 ET: every run → cheap scan + wild wakeup (score ≥85, vol ≥3×, text catalyst)
+ *   • Weekday RTH 8:00–16:00 ET: every run → cheap scan + wild wakeup (score ≥72, vol ≥2.5×, text catalyst)
  *   • Weekday after-hours 16:01–20:00 ET: at most once per ET clock hour → cheap scan with Tradier news,
  *     symbols in our universe mentioned in headlines get priority; body forwards catalyst text for Grok.
  *
  * Netlify: URL / DEPLOY_PRIME_URL, TRADIER_TOKEN (news + scan), GROK via expensive /api/scan,
- * NETLIFY_SITE_ID + NETLIFY_TOKEN (debounce blob), VAPID_* (push via lib/pushAll).
+ * NETLIFY_SITE_ID + NETLIFY_TOKEN (debounce blob + alert-cooldowns), VAPID_* (push via lib/pushAll).
  */
 
 const fetch = globalThis.fetch || require("node-fetch");
@@ -122,14 +122,60 @@ function hasCatalyst(a) {
 
 function isWild(a) {
   return (
-    Number(a?.score || 0) >= 85 ||
-    volRatioOf(a) >= 3 ||
+    Number(a?.score || 0) >= 72 ||
+    volRatioOf(a) >= 2.5 ||
     hasCatalyst(a)
   );
 }
 
 /* ─── Prompt 19 — mirror scan.js Telegram formatting (keep in sync with netlify/functions/scan.js) ─── */
 const TELEGRAM_ALERT_MIN_SCORE = 65;
+
+const ALERT_COOLDOWNS_BLOB_KEY = "alert-cooldowns";
+const ALERT_TELEGRAM_COOLDOWN_MS = 20 * 60 * 1000;
+const ALERT_TELEGRAM_SCORE_JUMP = 5;
+
+function cheapMonitorBlobStore() {
+  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return null;
+  return getStore({
+    name: "sohelator-cheap-monitor",
+    siteID: process.env.NETLIFY_SITE_ID,
+    token: process.env.NETLIFY_TOKEN,
+  });
+}
+
+/** @returns {Promise<Record<string, { score: number, firedAt: number }>>} */
+async function getAlertCooldowns() {
+  const store = cheapMonitorBlobStore();
+  if (!store) return {};
+  try {
+    const data = await store.get(ALERT_COOLDOWNS_BLOB_KEY, { type: "json" });
+    if (data && typeof data === "object" && !Array.isArray(data)) return data;
+    return {};
+  } catch (e) {
+    console.warn("cheap-monitor getAlertCooldowns", e?.message || e);
+    return {};
+  }
+}
+
+async function setAlertCooldown(symbol, score) {
+  const store = cheapMonitorBlobStore();
+  if (!store) return;
+  const sym = String(symbol || "").trim().toUpperCase();
+  if (!sym) return;
+  const s = Math.round(Number(score) || 0);
+  try {
+    let prev = await store.get(ALERT_COOLDOWNS_BLOB_KEY, { type: "json" });
+    if (!prev || typeof prev !== "object" || Array.isArray(prev)) prev = {};
+    const next = {
+      ...prev,
+      [sym]: { score: s, firedAt: Date.now() },
+    };
+    await store.setJSON(ALERT_COOLDOWNS_BLOB_KEY, next);
+  } catch (e) {
+    console.warn("cheap-monitor setAlertCooldown", e?.message || e);
+  }
+}
 
 function volRatioOfAlertP19(a) {
   return Number(a?.details?.volRatio ?? a?.volRatio ?? 0);
@@ -184,8 +230,11 @@ function buildTelegramPrompt19Message(a) {
   const entryStr = Number.isFinite(ent) ? ent.toFixed(2) : "—";
   const stopStr = Number.isFinite(st) ? st.toFixed(2) : "—";
   const tgtStr = Number.isFinite(tg) ? tg.toFixed(2) : "—";
-  let grok = String(a.aiVerdict || "").replace(/\s+/g, " ").trim();
-  if (grok.length > 240) grok = grok.slice(0, 237) + "…";
+  let grok = String(a.aiCoPilot || a.aiVerdict || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (grok.length > 600) grok = grok.slice(0, 597) + "…";
+  const plan = String(a.plan || "").trim();
   const histLine = historicalMatchesShortP19(a);
 
   const hi = [];
@@ -205,6 +254,7 @@ function buildTelegramPrompt19Message(a) {
     `Play: ENTRY @ ${entryStr}\n` +
     `Stop: ${stopStr} | Target: ${tgtStr}\n` +
     `Grok: ${grok || "—"}\n` +
+    `Plan: ${plan || "—"}\n` +
     `Historical: ${histLine}`
   );
 }
@@ -213,16 +263,27 @@ async function relayPrompt19Telegrams(alerts, dedupeSet) {
   const bot = process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TELEGRAM_CHAT_ID;
   if (!bot || !chat || !Array.isArray(alerts)) return;
+  const cooldowns = await getAlertCooldowns();
   for (let i = 0; i < alerts.length; i++) {
     const a = alerts[i];
     if (Number(a.score) < TELEGRAM_ALERT_MIN_SCORE) continue;
+    const sym = String(a.symbol || "").trim().toUpperCase();
+    const newScore = Math.round(Number(a.score) || 0);
+    const prev = sym ? cooldowns[sym] : null;
+    if (prev && typeof prev.firedAt === "number") {
+      const within =
+        Date.now() - prev.firedAt < ALERT_TELEGRAM_COOLDOWN_MS;
+      const lastScore = Math.round(Number(prev.score) || 0);
+      const scoreJumped = newScore >= lastScore + ALERT_TELEGRAM_SCORE_JUMP;
+      if (within && !scoreJumped) continue;
+    }
     const k = `${a.symbol}|${Math.round(Number(a.score))}|${a.alertedAt || ""}|${String(a.alertedAtIso || "")}`;
     if (dedupeSet.has(k)) continue;
     dedupeSet.add(k);
     const text = String(buildTelegramPrompt19Message(a) || "").trim().slice(0, 3900);
     if (!text) continue;
     try {
-      await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
+      const tgRes = await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -231,9 +292,16 @@ async function relayPrompt19Telegrams(alerts, dedupeSet) {
           disable_web_page_preview: true,
         }),
       });
+      if (!tgRes.ok) {
+        console.warn("cheap-monitor Prompt19 Telegram http", tgRes.status);
+        continue;
+      }
     } catch (e) {
       console.warn("cheap-monitor Prompt19 Telegram:", e?.message || e);
+      continue;
     }
+    cooldowns[sym] = { score: newScore, firedAt: Date.now() };
+    await setAlertCooldown(sym, newScore);
     await new Promise((r) => setTimeout(r, 300));
   }
 }
@@ -448,10 +516,10 @@ exports.handler = async () => {
         if (
           prev &&
           prev.fp === fp &&
-          t - Number(prev.at || 0) < 25 * 60 * 1000
+          t - Number(prev.at || 0) < 10 * 60 * 1000
         ) {
           doExpensive = false;
-          out.expensiveSkipped = "debounced_25m";
+          out.expensiveSkipped = "debounced_10m";
         } else {
           await store.setJSON("exp_debounce", { fp, at: t });
         }

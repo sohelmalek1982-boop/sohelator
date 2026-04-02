@@ -210,8 +210,11 @@ function buildTelegramPrompt19Message(a) {
   const entryStr = Number.isFinite(ent) ? ent.toFixed(2) : "—";
   const stopStr = Number.isFinite(st) ? st.toFixed(2) : "—";
   const tgtStr = Number.isFinite(tg) ? tg.toFixed(2) : "—";
-  let grok = String(a.aiVerdict || "").replace(/\s+/g, " ").trim();
-  if (grok.length > 240) grok = grok.slice(0, 237) + "…";
+  let grok = String(a.aiCoPilot || a.aiVerdict || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (grok.length > 600) grok = grok.slice(0, 597) + "…";
+  const plan = String(a.plan || "").trim();
   const histLine = historicalMatchesShort(a);
 
   const hi = [];
@@ -231,6 +234,7 @@ function buildTelegramPrompt19Message(a) {
     `Play: ENTRY @ ${entryStr}\n` +
     `Stop: ${stopStr} | Target: ${tgtStr}\n` +
     `Grok: ${grok || "—"}\n` +
+    `Plan: ${plan || "—"}\n` +
     `Historical: ${histLine}`
   );
 }
@@ -293,9 +297,9 @@ async function callGrokExpensiveWithFallback(aiPrompt, maxTok) {
   }
 }
 
-const BATCH_GROK_MAX_TOK = 1500;
+const BATCH_GROK_MAX_TOK = 2500;
 
-/** Parse batched Grok reply: JSON array of { symbol, netVerdict, coPilot }. */
+/** Parse batched Grok reply: JSON array of { symbol, analysis, risks, plan, netVerdict }. */
 function parseBatchedGrokVerdicts(rawText) {
   const out = new Map();
   if (!rawText || typeof rawText !== "string") return out;
@@ -308,12 +312,16 @@ function parseBatchedGrokVerdicts(rawText) {
     for (const row of arr) {
       const sym = String(row?.symbol || "").trim().toUpperCase();
       if (!sym) continue;
+      const analysisRaw = String(row.analysis ?? "").trim();
+      const coPilotFallback = String(
+        row.coPilot ?? row.co_pilot ?? row.notes ?? ""
+      ).trim();
       out.set(sym, {
+        analysis: analysisRaw || coPilotFallback,
+        risks: String(row.risks ?? "").trim(),
+        plan: String(row.plan ?? "").trim(),
         netVerdict: String(
           row.netVerdict ?? row.NET_VERDICT ?? row.net_verdict ?? ""
-        ).trim(),
-        coPilot: String(
-          row.coPilot ?? row.co_pilot ?? row.notes ?? ""
         ).trim(),
       });
     }
@@ -611,17 +619,25 @@ Otherwise use a normal conviction netVerdict (no catalyst prefix).`
             : "";
 
         const symList = alerts.map((a) => a.symbol).join(", ");
-        const aiPrompt = `You are SOHELATOR's aggressive co-pilot. Analyze ALL setups below in one reply.
+        const aiPrompt = `You are SOHELATOR's aggressive trading co-pilot. Market is live. Analyze each setup below and return actionable intelligence.
+
+For each symbol provide:
+- analysis: 2-3 lines covering trend context, key level behavior, and why this setup has edge RIGHT NOW
+- risks: 1 line on what invalidates this trade
+- plan: specific action — scale in, wait for pullback, full size, avoid, etc.
+- netVerdict: one conviction line starting with LONG, SHORT, WAIT, or AVOID
 
 Rules:
-- Lead with system signal per symbol; never veto unless that symbol's score < 40.
-- coPilot: a few short lines per symbol. netVerdict: exactly one conviction line (do not prefix with "NET VERDICT:").
+- Never veto unless score < 40
+- Be specific, not generic — mention actual price levels from the data
+- If direction is short and daily trend is down, that is confluence — say so
+- If score >= 90 lead with HIGH CONVICTION
 
-Setups (JSON array):
+Setups:
 ${JSON.stringify(setupsPayload)}
 ${catBlock}
 
-Respond with ONLY a valid JSON array (no markdown fences). One object per symbol with fields: symbol (string), netVerdict (string), coPilot (string). Include every symbol: ${symList}.`;
+Respond ONLY with a valid JSON array. One object per symbol with fields: symbol, analysis, risks, plan, netVerdict. Include every symbol: ${symList}.`;
 
         const { text: grokOut, health: gh } = await callGrokExpensiveWithFallback(
           aiPrompt,
@@ -633,8 +649,16 @@ Respond with ONLY a valid JSON array (no markdown fences). One object per symbol
           const sym = String(setup.symbol || "").trim().toUpperCase();
           const row = verdictMap.get(sym);
           if (row) {
-            if (row.coPilot) setup.aiCoPilot = row.coPilot;
+            if (row.analysis) setup.grokAnalysis = row.analysis;
+            if (row.risks) setup.grokRisks = row.risks;
+            setup.plan = String(row.plan || "").trim();
+            if (setup.plan) setup.grokPlan = setup.plan;
             if (row.netVerdict) setup.aiVerdict = row.netVerdict;
+            const parts = [];
+            if (row.analysis) parts.push(`Analysis: ${row.analysis}`);
+            if (row.risks) parts.push(`Risks: ${row.risks}`);
+            if (row.plan) parts.push(`Plan: ${row.plan}`);
+            if (parts.length) setup.aiCoPilot = parts.join("\n");
           } else if (verdictMap.size > 0) {
             setup.aiCoPilot = `Grok batch: missing entry for ${sym}`;
           } else {
