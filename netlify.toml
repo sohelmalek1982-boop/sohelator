@@ -24,12 +24,15 @@
   node_bundler = "esbuild"
 
 [functions."scan-925"]
+  schedule = "25 13 * * 1-5"
   timeout = 60
 
 [functions."scan-955"]
+  schedule = "55 13 * * 1-5"
   timeout = 60
 
 [functions."scan-eod"]
+  schedule = "0 19 * * 1-5"
   timeout = 60
 
 [functions."scanner-core"]
@@ -60,6 +63,7 @@
   timeout = 120
 
 [functions."premarket"]
+  schedule = "30 12 * * 1-5"
   timeout = 90
 
 [functions."nightly-learn"]
@@ -73,9 +77,9 @@
   schedule = "*/5 * * * *"
   timeout = 120
 
-# SOHELATOR blueprint — Prompt 7: expensive scan at exact ET slots (filtered in function)
+# Expensive scan — 17:00 UTC ≈ 1:00 PM ET (EST); ET slot filter still in trigger-expensive.js
 [functions."trigger-expensive"]
-  schedule = "* * * * 1-5"
+  schedule = "0 17 * * 1-5"
   timeout = 120
 
 [[redirects]]
