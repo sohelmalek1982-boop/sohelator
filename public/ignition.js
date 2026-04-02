@@ -228,16 +228,12 @@ window.calculateIgnition = calculateIgnition;
 
   function formatAlertTime(iso) {
     if (!iso) return "—";
-    var d = new Date(iso);
+    const d = new Date(iso);
     if (isNaN(d.getTime())) return "—";
-    var now = new Date();
-    var sameDay = d.toDateString() === now.toDateString();
-    if (sameDay) return d.toTimeString().slice(0, 8);
-    return (
-      d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
-      " " +
-      d.toTimeString().slice(0, 5)
-    );
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    if (sameDay) return d.toTimeString().slice(0,8);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + d.toTimeString().slice(0, 5);
   }
 
   function showHudPage(which) {
@@ -514,6 +510,31 @@ window.calculateIgnition = calculateIgnition;
         b7 && b7.totalSetups != null ? String(b7.totalSetups) : "—";
   }
 
+  function etCalendarYmd(ms) {
+    if (ms == null || !isFinite(Number(ms))) return "";
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(Number(ms)));
+  }
+
+  function isPositionTrackerTerminated(p) {
+    var s = String(p.status || "").trim();
+    return /^EXIT|^CLOSED/.test(s);
+  }
+
+  function positionVisibleThisSession(p) {
+    var today = etCalendarYmd(Date.now());
+    if (!isPositionTrackerTerminated(p)) return true;
+    var od = etCalendarYmd(p.openedAt);
+    var cd = etCalendarYmd(
+      p.closedAt != null ? p.closedAt : p.lastUpdated
+    );
+    return od === today || cd === today;
+  }
+
   function renderSessionPnlFromPositions(positions) {
     var el = document.getElementById("hud-session-pnl");
     if (!el) return;
@@ -524,8 +545,7 @@ window.calculateIgnition = calculateIgnition;
     }
     var sum = 0;
     positions.forEach(function (p) {
-      var st = String(p.status || "");
-      if (st.indexOf("EXIT") !== -1) return;
+      if (isPositionTrackerTerminated(p)) return;
       sum += Number(p.pnlDollar) || 0;
     });
     var s = (sum >= 0 ? "+" : "") + "$" + Math.abs(sum).toFixed(2);
@@ -545,83 +565,150 @@ window.calculateIgnition = calculateIgnition;
     var host = document.getElementById("hud-positions-list");
     if (!host) return;
     if (!positions || !positions.length) {
-      host.innerHTML = '<p class="hint">No open positions in tracker.</p>';
+      host.innerHTML = '<p class="hint">No positions in tracker.</p>';
       return;
     }
-    var open = positions.filter(function (p) {
-      return String(p.status || "").indexOf("EXIT") === -1;
+    var session = positions.filter(positionVisibleThisSession);
+    var active = session.filter(function (p) {
+      return !isPositionTrackerTerminated(p);
     });
-    if (!open.length) {
-      host.innerHTML = '<p class="hint">No active positions (all exited).</p>';
+    var closed = session.filter(function (p) {
+      return isPositionTrackerTerminated(p);
+    });
+    closed.sort(function (a, b) {
+      return (
+        Number(b.closedAt || b.lastUpdated || 0) -
+        Number(a.closedAt || a.lastUpdated || 0)
+      );
+    });
+    if (!active.length && !closed.length) {
+      host.innerHTML =
+        '<p class="hint">No positions for today\'s session in tracker.</p>';
       return;
     }
-    host.innerHTML = open
-      .map(function (p) {
-        var sym = esc(String(p.symbol || "—").toUpperCase());
-        var pct = p.pnlPct != null && isFinite(Number(p.pnlPct)) ? Number(p.pnlPct).toFixed(2) : "—";
-        var acc = posAccentFromStatus(p.status);
-        var acCls =
-          acc === "live"
-            ? "hud-pos-ac--live"
-            : acc === "danger"
-              ? "hud-pos-ac--danger"
-              : acc === "exit"
-                ? "hud-pos-ac--exit"
-                : "hud-pos-ac--hold";
-        var barCls =
-          acc === "live"
-            ? "hud-pos-bar--live"
-            : acc === "danger"
-              ? "hud-pos-bar--danger"
-              : acc === "exit"
-                ? "hud-pos-bar--exit"
-                : "hud-pos-bar--hold";
-        var dir = String(p.direction || "long").toUpperCase();
-        var ent = p.entryPrice != null ? fmtPx(p.entryPrice) : "—";
-        var now = p.currentPrice != null ? fmtPx(p.currentPrice) : "—";
-        var opt =
-          p.suggestedOption && p.suggestedOption.description
-            ? esc(String(p.suggestedOption.description))
-            : "";
-        var opened = p.openedAtIso || p.openedAt;
-        var tti = timeInTrade(opened);
-        var prog = Math.min(100, Math.max(4, 50 + (Number(p.pnlPct) || 0) * 2));
-        return (
-          '<div class="hud-pos-card" data-pos-id="' +
-          esc(p.id) +
-          '"><div class="hud-pos-ac ' +
-          acCls +
-          '"></div><div class="hud-pos-in"><div class="hud-pos-row1"><span class="hud-pos-sym">' +
-          sym +
-          '</span><span class="hud-pos-pnl ' +
-          (Number(p.pnlPct) < 0 ? "hud-pos-pnl--neg" : "") +
-          '">' +
-          esc(pct) +
-          '%</span></div><div class="hud-pos-detail">' +
-          esc(dir) +
-          " · ENTRY " +
-          esc(ent) +
-          " · NOW " +
-          esc(now) +
-          (opt ? " · " + opt : "") +
-          '</div><div class="hud-pos-meta"><span class="hud-pill">' +
-          esc(String(p.status || "—")) +
-          '</span><span class="hud-pos-tti" data-opened-at="' +
-          esc(String(opened || "")) +
-          '">IN TRADE · ' +
-          esc(tti) +
-          '</span></div><div class="hud-pos-bar ' +
-          barCls +
-          '"><i style="width:' +
-          prog +
-          '%"></i></div></div></div>'
-        );
-      })
-      .join("");
+    function cardActive(p) {
+      var sym = esc(String(p.symbol || "—").toUpperCase());
+      var pct = p.pnlPct != null && isFinite(Number(p.pnlPct)) ? Number(p.pnlPct).toFixed(2) : "—";
+      var acc = posAccentFromStatus(p.status);
+      var acCls =
+        acc === "live"
+          ? "hud-pos-ac--live"
+          : acc === "danger"
+            ? "hud-pos-ac--danger"
+            : acc === "exit"
+              ? "hud-pos-ac--exit"
+              : "hud-pos-ac--hold";
+      var barCls =
+        acc === "live"
+          ? "hud-pos-bar--live"
+          : acc === "danger"
+            ? "hud-pos-bar--danger"
+            : acc === "exit"
+              ? "hud-pos-bar--exit"
+              : "hud-pos-bar--hold";
+      var dir = String(p.direction || "long").toUpperCase();
+      var ent = p.entryPrice != null ? fmtPx(p.entryPrice) : "—";
+      var now = p.currentPrice != null ? fmtPx(p.currentPrice) : "—";
+      var opt =
+        p.suggestedOption && p.suggestedOption.description
+          ? esc(String(p.suggestedOption.description))
+          : "";
+      var opened = p.openedAtIso || p.openedAt;
+      var tti = timeInTrade(opened);
+      var prog = Math.min(100, Math.max(4, 50 + (Number(p.pnlPct) || 0) * 2));
+      return (
+        '<div class="hud-pos-card" data-pos-id="' +
+        esc(p.id) +
+        '"><div class="hud-pos-ac ' +
+        acCls +
+        '"></div><div class="hud-pos-in"><div class="hud-pos-row1"><span class="hud-pos-sym">' +
+        sym +
+        '</span><span class="hud-pos-pnl ' +
+        (Number(p.pnlPct) < 0 ? "hud-pos-pnl--neg" : "") +
+        '">' +
+        esc(pct) +
+        '%</span></div><div class="hud-pos-detail">' +
+        esc(dir) +
+        " · ENTRY " +
+        esc(ent) +
+        " · NOW " +
+        esc(now) +
+        (opt ? " · " + opt : "") +
+        '</div><div class="hud-pos-meta"><span class="hud-pill">' +
+        esc(String(p.status || "—")) +
+        '</span><span class="hud-pos-tti" data-opened-at="' +
+        esc(String(opened || "")) +
+        '">IN TRADE · ' +
+        esc(tti) +
+        '</span></div><div class="hud-pos-bar ' +
+        barCls +
+        '"><i style="width:' +
+        prog +
+        '%"></i></div></div></div>'
+      );
+    }
+    function cardClosed(p) {
+      var sym = esc(String(p.symbol || "—").toUpperCase());
+      var fp =
+        p.finalPnlPct != null && isFinite(Number(p.finalPnlPct))
+          ? Number(p.finalPnlPct)
+          : Number(p.pnlPct) || 0;
+      var win = fp >= 0;
+      var acCls = win ? "hud-pos-ac--closed-win" : "hud-pos-ac--closed-loss";
+      var barCls = win ? "hud-pos-bar--closed-win" : "hud-pos-bar--closed-loss";
+      var dir = String(p.direction || "long").toUpperCase();
+      var ent = p.entryPrice != null ? fmtPx(p.entryPrice) : "—";
+      var now = p.currentPrice != null ? fmtPx(p.currentPrice) : "—";
+      var reason = p.closedReason ? esc(String(p.closedReason).slice(0, 160)) : "";
+      var opened = p.openedAtIso || p.openedAt;
+      var bigPct =
+        (fp >= 0 ? "+" : "") + fp.toFixed(1) + "%";
+      var pnlCls = win ? "" : " hud-pos-closed-pnl--neg";
+      return (
+        '<div class="hud-pos-card hud-pos-card--closed" data-pos-id="' +
+        esc(p.id) +
+        '"><div class="hud-pos-ac ' +
+        acCls +
+        '"></div><div class="hud-pos-in"><div class="hud-pos-row1"><span class="hud-pos-sym">' +
+        sym +
+        '</span></div><div class="hud-pos-closed-pnl' +
+        pnlCls +
+        '">' +
+        esc("CLOSED " + bigPct) +
+        '</div><div class="hud-pos-detail hud-pos-detail--dim">' +
+        esc(dir) +
+        " · ENTRY " +
+        esc(ent) +
+        " · EXIT " +
+        esc(now) +
+        (reason ? "<br/>" + reason : "") +
+        '</div><div class="hud-pos-meta"><span class="hud-pill">' +
+        esc(String(p.status || "CLOSED")) +
+        '</span><span class="hud-pos-tti" data-terminated="1" data-opened-at="' +
+        esc(String(opened || "")) +
+        '">SESSION</span></div><div class="hud-pos-bar ' +
+        barCls +
+        '"><i style="width:100%"></i></div></div></div>'
+      );
+    }
+    var parts = [];
+    if (active.length) {
+      parts.push(
+        '<p class="hud-pos-subh">ACTIVE</p>' + active.map(cardActive).join("")
+      );
+    }
+    if (closed.length) {
+      parts.push(
+        '<p class="hud-pos-subh">CLOSED (SESSION)</p>' +
+          closed.map(cardClosed).join("")
+      );
+    }
+    host.innerHTML = parts.join("") || '<p class="hint">—</p>';
   }
 
   function updateAllPositionTimeInTrade() {
     document.querySelectorAll(".hud-pos-tti[data-opened-at]").forEach(function (el) {
+      if (el.getAttribute("data-terminated") === "1") return;
       var o = el.getAttribute("data-opened-at");
       el.textContent = "IN TRADE · " + timeInTrade(o);
     });
@@ -669,6 +756,28 @@ window.calculateIgnition = calculateIgnition;
         var iso = alertIsoFromTrackerRow(a);
         var ts = formatAlertTime(iso || (a.timestamp ? new Date(Number(a.timestamp)).toISOString() : ""));
         var sym = esc(String(a.ticker || a.symbol || "—").toUpperCase());
+        if (a.grokPositionAudit) {
+          var act = esc(String(a.grokAction || "—").toUpperCase());
+          var fp =
+            a.finalPnlPct != null && isFinite(Number(a.finalPnlPct))
+              ? Number(a.finalPnlPct).toFixed(2) + "%"
+              : "—";
+          var rs = esc(String(a.grokReason || "").slice(0, 140));
+          return (
+            '<div class="hud-log-row hud-log-row--grok" data-alert-log="1"><span class="hud-log-ts">' +
+            esc(ts) +
+            '</span><span class="hud-log-sym">' +
+            sym +
+            '</span><span class="hud-log-meta">GROK ' +
+            act +
+            " · " +
+            esc(fp) +
+            (rs ? " · " + rs : "") +
+            '</span><span class="hud-log-badge hud-log-badge--grok">' +
+            esc(act) +
+            "</span></div>"
+          );
+        }
         var sc = a.score != null ? Math.round(Number(a.score)) : "—";
         var px =
           a.underlyingAtAlert != null && isFinite(Number(a.underlyingAtAlert))

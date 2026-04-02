@@ -131,6 +131,380 @@ function isWild(a) {
 /* ─── Prompt 19 — mirror scan.js Telegram formatting (keep in sync with netlify/functions/scan.js) ─── */
 const TELEGRAM_ALERT_MIN_SCORE = 65;
 
+/** After each scan: refresh P&L on open positions, log new alerts as positions (blob). */
+async function runPositionSync(cheapAlerts, expAlerts) {
+  try {
+    const pt = await import("./position-tracker.js");
+    await pt.updatePositions();
+    const bySym = new Map();
+    for (const a of cheapAlerts || []) {
+      if (a?.symbol) {
+        bySym.set(String(a.symbol).trim().toUpperCase(), a);
+      }
+    }
+    for (const a of expAlerts || []) {
+      if (a?.symbol) {
+        bySym.set(String(a.symbol).trim().toUpperCase(), a);
+      }
+    }
+    for (const a of bySym.values()) {
+      if (Number(a.score) >= TELEGRAM_ALERT_MIN_SCORE) {
+        await pt.logAlertAsPosition(a);
+      }
+    }
+  } catch (e) {
+    console.warn("cheap-monitor position-tracker", e?.message || e);
+  }
+}
+
+/** Grok autonomous manager — same blob store as alert dedupe (sohelator-cheap-monitor). */
+const POSITION_GROK_COOLDOWN_KEY = "position-grok-cooldowns";
+const POSITION_GROK_COOLDOWN_MS = 15 * 60 * 1000;
+const POSITION_GROK_PNL_JUMP = 0.8;
+const GROK_POSITION_MODEL = "grok-4-1-fast-reasoning";
+
+async function getPositionGrokCooldowns() {
+  const store = cheapMonitorBlobStore();
+  if (!store) return {};
+  try {
+    const data = await store.get(POSITION_GROK_COOLDOWN_KEY, { type: "json" });
+    if (data && typeof data === "object" && !Array.isArray(data)) return data;
+    return {};
+  } catch (e) {
+    console.warn("cheap-monitor getPositionGrokCooldowns", e?.message || e);
+    return {};
+  }
+}
+
+async function setPositionGrokCooldownRecord(posId, pnlPct) {
+  const store = cheapMonitorBlobStore();
+  if (!store) return;
+  const id = String(posId || "");
+  if (!id) return;
+  try {
+    let prev = await store.get(POSITION_GROK_COOLDOWN_KEY, { type: "json" });
+    if (!prev || typeof prev !== "object" || Array.isArray(prev)) prev = {};
+    await store.setJSON(POSITION_GROK_COOLDOWN_KEY, {
+      ...prev,
+      [id]: { at: Date.now(), pnlPct: Number(pnlPct) || 0 },
+    });
+  } catch (e) {
+    console.warn("cheap-monitor setPositionGrokCooldownRecord", e?.message || e);
+  }
+}
+
+function positionGrokCooldownAllows(cooldowns, posId, pnlPct) {
+  const row = cooldowns[String(posId)];
+  if (!row || typeof row.at !== "number") return true;
+  const age = Date.now() - row.at;
+  if (age >= POSITION_GROK_COOLDOWN_MS) return true;
+  const lastP = Number(row.pnlPct) || 0;
+  if (Math.abs((Number(pnlPct) || 0) - lastP) > POSITION_GROK_PNL_JUMP) return true;
+  return false;
+}
+
+function volRatioFromCheapAlerts(cheapAlerts, symbol) {
+  const sym = String(symbol || "").trim().toUpperCase();
+  if (!sym || !Array.isArray(cheapAlerts)) return null;
+  for (let i = 0; i < cheapAlerts.length; i++) {
+    const a = cheapAlerts[i];
+    if (String(a.symbol || "").trim().toUpperCase() !== sym) continue;
+    const v = volRatioOf(a);
+    if (Number.isFinite(v) && v > 0) return v;
+  }
+  return null;
+}
+
+function formatTimeInTradeMs(openedAt) {
+  const ms = Date.now() - Number(openedAt || 0);
+  if (!Number.isFinite(ms) || ms < 0) return "0m";
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function parseGrokPositionDecision(text) {
+  const t = String(text || "").trim();
+  const m = t.match(/^(CLOSE|ADD|HOLD)\s*\|\s*([\s\S]+)$/im);
+  if (!m) return null;
+  return { action: m[1].toUpperCase(), reason: m[2].trim().replace(/\s+/g, " ").slice(0, 500) };
+}
+
+async function sendTelegramPlain(text) {
+  const bot = process.env.TELEGRAM_BOT_TOKEN;
+  const chat = process.env.TELEGRAM_CHAT_ID;
+  if (!bot || !chat) return;
+  const body = String(text || "").trim().slice(0, 3900);
+  if (!body) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chat,
+        text: body,
+        disable_web_page_preview: true,
+      }),
+    });
+  } catch (e) {
+    console.warn("cheap-monitor Grok Telegram", e?.message || e);
+  }
+}
+
+async function appendGrokPositionAuditRow(payload) {
+  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return;
+  try {
+    const alertsStore = getStore({
+      name: "alerts",
+      siteID: process.env.NETLIFY_SITE_ID,
+      token: process.env.NETLIFY_TOKEN,
+    });
+    const sym = String(payload.ticker || "X").replace(/[^a-z0-9_-]/gi, "").slice(0, 12) || "X";
+    const key = `alert_${Date.now()}_grok_${sym}`;
+    await alertsStore.setJSON(key, {
+      ticker: String(payload.ticker || "").toUpperCase(),
+      timestamp: Date.now(),
+      grokPositionAudit: true,
+      grokAction: payload.action,
+      grokReason: payload.reason,
+      grokTrigger: payload.trigger,
+      finalPnlPct: payload.finalPnlPct,
+      direction: payload.direction === "short" ? "put" : "call",
+      underlyingAtAlert: payload.currentPrice,
+      price: payload.currentPrice,
+      score: payload.finalPnlPct != null ? Math.round(Number(payload.finalPnlPct)) : 0,
+    });
+  } catch (e) {
+    console.warn("cheap-monitor appendGrokPositionAuditRow", e?.message || e);
+  }
+}
+
+/**
+ * After each cheap scan during RTH: evaluate open positions; call Grok only when a trigger fires.
+ * @param {any[]} cheapAlerts — same pass as scan (for live volRatio)
+ * @param {boolean} inRth
+ */
+async function runRthPositionGrokMonitor(cheapAlerts, inRth) {
+  if (!inRth) return;
+  if (!process.env.GROK_API_KEY || !process.env.TRADIER_TOKEN) return;
+  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return;
+
+  let pt;
+  let getQuote;
+  let callGrok;
+  let isPositionTerminated;
+  try {
+    pt = await import("./position-tracker.js");
+    isPositionTerminated = pt.isPositionTerminated;
+    const tradier = await import("../../src/lib/tradier.js");
+    getQuote = tradier.getQuote;
+    const grok = await import("../../src/lib/grok.js");
+    callGrok = grok.callGrok;
+  } catch (e) {
+    console.warn("cheap-monitor runRthPositionGrokMonitor import", e?.message || e);
+    return;
+  }
+
+  const map = await pt.readPositionsMap();
+  const ids = Object.keys(map);
+  if (!ids.length) return;
+
+  const cooldowns = await getPositionGrokCooldowns();
+
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    const pos = map[id];
+    if (!pos || !pos.symbol) continue;
+    if (isPositionTerminated(pos)) continue;
+
+    const direction = pos.direction === "short" ? "short" : "long";
+    const entryPrice = Number(pos.entryPrice);
+    const stopPrice = Number(pos.stopPrice);
+    const targetPrice = Number(pos.targetPrice);
+    if (!Number.isFinite(entryPrice) || entryPrice <= 0) continue;
+
+    let currentPrice = null;
+    try {
+      const q = await getQuote(pos.symbol);
+      const v = parseFloat(q?.last ?? q?.bid ?? q?.ask ?? 0);
+      if (Number.isFinite(v) && v > 0) currentPrice = v;
+    } catch (e) {
+      console.warn("cheap-monitor position quote", pos.symbol, e?.message || e);
+    }
+    if (currentPrice == null) continue;
+
+    const pnlPct =
+      direction === "short"
+        ? ((entryPrice - currentPrice) / entryPrice) * 100
+        : ((currentPrice - entryPrice) / entryPrice) * 100;
+
+    const nearStop =
+      Number.isFinite(stopPrice) &&
+      (direction === "short"
+        ? currentPrice >= stopPrice * 0.998
+        : currentPrice <= stopPrice * 1.002);
+
+    const nearTarget =
+      Number.isFinite(targetPrice) &&
+      (direction === "short"
+        ? currentPrice <= targetPrice * 1.002
+        : currentPrice >= targetPrice * 0.998);
+
+    const volRatio =
+      volRatioFromCheapAlerts(cheapAlerts, pos.symbol) ??
+      (Number(pos.volRatio) > 0 ? Number(pos.volRatio) : 0);
+
+    const reversalSignal =
+      direction === "short"
+        ? currentPrice > entryPrice && volRatio >= 1.5
+        : currentPrice < entryPrice && volRatio >= 1.5;
+
+    const bigMove = Math.abs(pnlPct) >= 1.5;
+
+    const triggers = [];
+    if (nearStop) triggers.push("near_stop");
+    if (nearTarget) triggers.push("near_target");
+    if (reversalSignal) triggers.push("reversal_signal");
+    if (bigMove) triggers.push("big_move");
+
+    if (!triggers.length) continue;
+    if (!positionGrokCooldownAllows(cooldowns, id, pnlPct)) continue;
+
+    const timeInTrade = formatTimeInTradeMs(pos.openedAt);
+    const triggerStr = triggers.join(", ");
+
+    const prompt = `You are SOHELATOR autonomous position manager. You have full authority to close, add, or hold.
+
+Position: ${pos.symbol} ${direction}
+Entry: $${entryPrice} | Stop: ${stopPrice} | Target: ${targetPrice}
+Current: $${currentPrice} | P&L: ${pnlPct.toFixed(2)}% | Time in trade: ${timeInTrade}
+Trigger: ${triggerStr}
+
+You are the decision maker. Respond with ONLY one of these three exact formats:
+
+CLOSE | {one line reason}
+ADD | {one line reason}  
+HOLD | {one line reason}`;
+
+    let raw;
+    try {
+      raw = await callGrok(GROK_POSITION_MODEL, prompt, 400);
+    } catch (e) {
+      console.warn("cheap-monitor Grok position", pos.symbol, e?.message || e);
+      continue;
+    }
+
+    await setPositionGrokCooldownRecord(id, pnlPct);
+
+    const decision = parseGrokPositionDecision(raw);
+    if (!decision) {
+      await appendGrokPositionAuditRow({
+        ticker: pos.symbol,
+        action: "PARSE_ERR",
+        reason: String(raw || "").slice(0, 200),
+        trigger: triggerStr,
+        finalPnlPct: pnlPct,
+        currentPrice,
+        direction,
+      });
+      continue;
+    }
+
+    const pnlDollar = (entryPrice * pnlPct) / 100;
+    const dirU = direction.toUpperCase();
+
+    if (decision.action === "CLOSE") {
+      const win = pnlPct >= 0;
+      map[id] = {
+        ...pos,
+        status: win ? "CLOSED ✅" : "CLOSED ❌",
+        closedAt: Date.now(),
+        closedAtIso: new Date().toISOString(),
+        finalPnlPct: pnlPct,
+        finalPnlDollar: pnlDollar,
+        closedReason: decision.reason,
+        currentPrice,
+        pnlPct,
+        pnlDollar,
+        lastUpdated: Date.now(),
+      };
+      const emoji = win ? "✅" : "❌";
+      const sign = pnlDollar >= 0 ? "+" : "";
+      await sendTelegramPlain(
+        `${emoji} POSITION CLOSED — ${pos.symbol}\n` +
+          `${dirU} · Grok decision\n` +
+          `Reason: ${decision.reason}\n` +
+          `Entry $${entryPrice.toFixed(2)} → Exit $${currentPrice.toFixed(2)}\n` +
+          `P&L: ${sign}$${Math.abs(pnlDollar).toFixed(2)} (${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%)\n` +
+          `Time in trade: ${timeInTrade}`
+      );
+      await appendGrokPositionAuditRow({
+        ticker: pos.symbol,
+        action: "CLOSE",
+        reason: decision.reason,
+        trigger: triggerStr,
+        finalPnlPct: pnlPct,
+        currentPrice,
+        direction,
+      });
+    } else if (decision.action === "ADD") {
+      map[id] = {
+        ...pos,
+        addSignal: true,
+        addPrice: currentPrice,
+        addAt: Date.now(),
+        lastGrokAddReason: decision.reason,
+        currentPrice,
+        pnlPct,
+        pnlDollar,
+        lastUpdated: Date.now(),
+      };
+      await sendTelegramPlain(
+        `⚡ ADD SIGNAL — ${pos.symbol}\n` +
+          `${dirU} · Grok says add here\n` +
+          `Reason: ${decision.reason}\n` +
+          `Current: $${currentPrice.toFixed(2)} · P&L so far: ${pnlPct.toFixed(2)}%\n` +
+          `Time in trade: ${timeInTrade}`
+      );
+      await appendGrokPositionAuditRow({
+        ticker: pos.symbol,
+        action: "ADD",
+        reason: decision.reason,
+        trigger: triggerStr,
+        finalPnlPct: pnlPct,
+        currentPrice,
+        direction,
+      });
+    } else {
+      map[id] = {
+        ...pos,
+        lastGrokHoldAt: Date.now(),
+        lastGrokHoldReason: decision.reason,
+        currentPrice,
+        pnlPct,
+        pnlDollar,
+        lastUpdated: Date.now(),
+      };
+      await appendGrokPositionAuditRow({
+        ticker: pos.symbol,
+        action: "HOLD",
+        reason: decision.reason,
+        trigger: triggerStr,
+        finalPnlPct: pnlPct,
+        currentPrice,
+        direction,
+      });
+    }
+
+  }
+
+  try {
+    await pt.writePositionsMap(map);
+  } catch (e) {
+    console.warn("cheap-monitor runRthPositionGrokMonitor write", e?.message || e);
+  }
+}
+
 const ALERT_COOLDOWNS_BLOB_KEY = "alert-cooldowns";
 const ALERT_TELEGRAM_COOLDOWN_MS = 20 * 60 * 1000;
 const ALERT_TELEGRAM_SCORE_JUMP = 5;
@@ -230,19 +604,28 @@ function buildTelegramPrompt19Message(a) {
   const entryStr = Number.isFinite(ent) ? ent.toFixed(2) : "—";
   const stopStr = Number.isFinite(st) ? st.toFixed(2) : "—";
   const tgtStr = Number.isFinite(tg) ? tg.toFixed(2) : "—";
-  let grok = String(a.aiCoPilot || a.aiVerdict || "")
+  const opt = a.suggestedOption
+    ? `Option: ${a.suggestedOption.description || JSON.stringify(a.suggestedOption)}`
+    : "";
+
+  let analysis = String(a.grokAnalysis || "").replace(/\s+/g, " ").trim();
+  let risks = String(a.grokRisks || "").replace(/\s+/g, " ").trim();
+  let plan = String(a.grokPlan || a.plan || "")
     .replace(/\s+/g, " ")
     .trim();
-  if (grok.length > 600) grok = grok.slice(0, 597) + "…";
-  const plan = String(a.plan || "").trim();
+  let verdict = String(a.aiVerdict || "").replace(/\s+/g, " ").trim();
+  if (analysis.length > 300) analysis = analysis.slice(0, 297) + "…";
+  if (risks.length > 150) risks = risks.slice(0, 147) + "…";
+  if (plan.length > 150) plan = plan.slice(0, 147) + "…";
+  if (verdict.length > 150) verdict = verdict.slice(0, 147) + "…";
+
   const histLine = historicalMatchesShortP19(a);
 
   const hi = [];
   if (score >= 90) hi.push("⚡ SCORE 90+ — TOP TIER");
   if (volRatioOfAlertP19(a) >= 3) hi.push("⚡ VOL SURGE 3×+");
   if (hasCatalystSignalP19(a)) hi.push("⚡ CATALYST / NEWS");
-  if (hasRegimeOrLevelKeywordsP19(a)) hi.push("⚡ REGIME / LEVEL / REVERSAL — READ FULL GROK");
-
+  if (hasRegimeOrLevelKeywordsP19(a)) hi.push("⚡ REGIME / LEVEL / REVERSAL");
   const banner = hi.length ? hi.join("\n") + "\n\n" : "";
 
   return (
@@ -253,8 +636,11 @@ function buildTelegramPrompt19Message(a) {
     `Price: ${priceStr}${chg}\n` +
     `Play: ENTRY @ ${entryStr}\n` +
     `Stop: ${stopStr} | Target: ${tgtStr}\n` +
-    `Grok: ${grok || "—"}\n` +
+    `${opt ? opt + "\n" : ""}` +
+    `Analysis: ${analysis || "—"}\n` +
+    `Risks: ${risks || "—"}\n` +
     `Plan: ${plan || "—"}\n` +
+    `Verdict: ${verdict || "—"}\n` +
     `Historical: ${histLine}`
   );
 }
@@ -494,8 +880,11 @@ exports.handler = async () => {
     const wild = alerts.filter(isWild);
     out.wildCount = wild.length;
 
+    let expAlerts = [];
     if (!wild.length) {
       out.status = "ok";
+      await runPositionSync(alerts, expAlerts);
+      await runRthPositionGrokMonitor(alerts, inRth);
       return { statusCode: 200, headers, body: JSON.stringify(out) };
     }
 
@@ -546,7 +935,7 @@ exports.handler = async () => {
       out.expensiveHttp = exp.status;
       const ej = await exp.json().catch(() => ({}));
       out.expensiveOk = !!(ej && ej.success);
-      const expAlerts = Array.isArray(ej.alerts) ? ej.alerts : [];
+      expAlerts = Array.isArray(ej.alerts) ? ej.alerts : [];
       await relayPrompt19Telegrams(expAlerts, telegramDedupe);
     }
 
@@ -561,6 +950,8 @@ exports.handler = async () => {
     });
     out.push = push;
     out.status = "ok";
+    await runPositionSync(alerts, expAlerts);
+    await runRthPositionGrokMonitor(alerts, inRth);
 
     return { statusCode: 200, headers, body: JSON.stringify(out) };
   } catch (e) {

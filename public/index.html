@@ -521,6 +521,12 @@
     .hud-log-badge--long { color: var(--hud-green); border-color: var(--hud-green); }
     .hud-log-badge--short { color: var(--hud-red); border-color: var(--hud-red); }
     .hud-log-badge--skip { color: var(--hud-muted); border-color: var(--hud-muted); }
+    .hud-log-row--grok { border-color: rgba(0, 229, 255, 0.22); }
+    .hud-log-badge--grok {
+      color: var(--hud-cyan);
+      border-color: var(--hud-cyan);
+      font-size: 0.48rem !important;
+    }
 
     /* Positions (tracker) */
     .hud-pos-list { display: flex; flex-direction: column; gap: 12px; }
@@ -563,6 +569,32 @@
     .hud-pos-bar--hold > i { background: var(--hud-amber); }
     .hud-pos-bar--danger > i { background: var(--hud-red); }
     .hud-pos-bar--exit > i { background: #556; }
+    .hud-pos-subh {
+      font-family: var(--hud-mono);
+      font-size: 0.52rem;
+      letter-spacing: 0.18em;
+      color: var(--hud-muted);
+      margin: 14px 0 8px;
+    }
+    .hud-pos-subh:first-child { margin-top: 0; }
+    .hud-pos-card--closed {
+      opacity: 0.72;
+      border-color: rgba(45, 104, 120, 0.35);
+    }
+    .hud-pos-ac--closed-win { background: var(--hud-green); box-shadow: 0 0 8px rgba(0, 255, 136, 0.25); }
+    .hud-pos-ac--closed-loss { background: var(--hud-red); box-shadow: 0 0 8px rgba(255, 45, 78, 0.25); }
+    .hud-pos-closed-pnl {
+      font-family: var(--hud-mono);
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      margin-top: 6px;
+      color: var(--hud-green);
+    }
+    .hud-pos-closed-pnl--neg { color: var(--hud-red) !important; }
+    .hud-pos-detail--dim { opacity: 0.85; font-size: 0.58rem !important; }
+    .hud-pos-bar--closed-win > i { background: var(--hud-green); width: 100% !important; }
+    .hud-pos-bar--closed-loss > i { background: var(--hud-red); width: 100% !important; }
 
     /* Logged trades (log-trade API) */
     .hud-subh {
