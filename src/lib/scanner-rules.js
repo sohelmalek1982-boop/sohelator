@@ -24,17 +24,17 @@ import {
 
 /** Defaults match shipped public/optimized_params.json (blueprint baseline) */
 export const BLUEPRINT_DEFAULT_PARAMS = {
-  adxThreshold: 18,
-  volIgnition: 1.75,
-  prevVolIgnition: 1.5,
+  adxThreshold: 12,
+  volIgnition: 1.5,
+  prevVolIgnition: 1.25,
   sectorRSBonus: 20,
-  minScore: 65,
-  higherTFPenaltyMax: -15,
-  evThreshold: 0.5,
+  minScore: 55,
+  higherTFPenaltyMax: -10,
+  evThreshold: 0.4,
   playTypeBonus: {
     SCALP: 0,
-    SWING: 0,
-    SCALP_SWING: 0,
+    SWING: 5,
+    SCALP_SWING: 3,
   },
   scalpHorizonBars: 6,
   swingHorizonBars: 48,

@@ -77,9 +77,13 @@
   schedule = "*/5 * * * *"
   timeout = 120
 
-# Expensive scan — 17:00 UTC ≈ 1:00 PM ET (EST); ET slot filter still in trigger-expensive.js
+[functions."position-tracker"]
+  timeout = 60
+
+# Expensive checkpoints — trigger-expensive.js only acts on exact ET slots (8:15, 9:25, 9:45, 11:00, 13:00, 14:00, 16:00).
+# Cron must run often enough to hit those minutes; every 15m UTC 12–20 weekdays (see trigger-expensive.js).
 [functions."trigger-expensive"]
-  schedule = "0 17 * * 1-5"
+  schedule = "*/15 12-20 * * 1-5"
   timeout = 120
 
 [[redirects]]
@@ -193,6 +197,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/learning-data"
+  to = "/.netlify/functions/learning-data"
+  status = 200
+
+[[redirects]]
   from = "/api/strategy-params"
   to = "/.netlify/functions/strategy-params"
   status = 200
@@ -218,6 +227,11 @@
 [[redirects]]
   from = "/api/nightly-learn"
   to = "/.netlify/functions/nightly-learn"
+  status = 200
+
+[[redirects]]
+  from = "/api/position-tracker"
+  to = "/.netlify/functions/position-tracker"
   status = 200
 
 [[redirects]]

@@ -1,7 +1,7 @@
 /**
  * SOHELATOR blueprint — scheduled expensive /api/scan (Prompt 7)
- * Schedule: netlify.toml — single daily UTC cron; must align with a slot below or handler skips.
- * Exact ET minutes (America/New_York): 8:15, 9:25, 9:45, 11:00, 13:00, 14:00, 16:00
+ * Schedule: netlify.toml — e.g. every 15m UTC; handler fires when ET time is within ±2 min of a slot.
+ * Slot centers (America/New_York): 8:15, 9:25, 9:35, 9:45, 11:00, 12:00, 13:00, 14:00, 15:00, 16:00
  */
 
 const fetch = globalThis.fetch || require("node-fetch");
@@ -41,12 +41,13 @@ function minutesEt(d) {
   return h * 60 + m;
 }
 
-/** 8:15, 9:25, 9:45, 11:00, 13:00 (1pm), 14:00, 16:00 ET — minutes since midnight */
-const EXPENSIVE_SLOTS_ET = [495, 565, 585, 660, 780, 840, 960];
+/** ET minutes since midnight (window centers); aligned with scheduled cron times */
+const EXPENSIVE_SLOTS_ET = [495, 565, 575, 585, 660, 720, 780, 840, 900, 960];
 
 function isExpensiveMinuteEt(d) {
   if (!isWeekdayEt(d)) return false;
-  return EXPENSIVE_SLOTS_ET.includes(minutesEt(d));
+  const t = minutesEt(d);
+  return EXPENSIVE_SLOTS_ET.some((slot) => Math.abs(t - slot) <= 2);
 }
 
 exports.handler = async () => {

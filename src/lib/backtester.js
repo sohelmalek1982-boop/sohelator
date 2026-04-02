@@ -269,12 +269,18 @@ function playTypeEdge(rows, pt) {
   return sub.filter((r) => r.win).length / sub.length - 0.5;
 }
 
+/** Cap on returned rows; actual count is always `results.length` (may be lower if cache is small). */
+export const SIMILAR_SETUPS_MAX_RESULTS = 15;
+
 /**
  * Compare current setup to last backtest + optional historical trades list.
  * @param {object} currentSetup { symbol, bars, meta?: object }
  * @param {number} [maxResults]
  */
-export async function findSimilarSetups(currentSetup, maxResults = 15) {
+export async function findSimilarSetups(
+  currentSetup,
+  maxResults = SIMILAR_SETUPS_MAX_RESULTS
+) {
   await applyOptimizedParams();
 
   const meta = currentSetup.meta || {};

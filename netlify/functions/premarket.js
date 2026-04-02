@@ -66,7 +66,7 @@ function isEtGrokWindow(d) {
 
 async function callGrokPremarketWithFallback(prompt, maxTok) {
   const expensiveModel =
-    process.env.GROK_MODEL_EXPENSIVE || "grok-4.20-reasoning";
+    process.env.GROK_MODEL_EXPENSIVE || "grok-4.20-0309-reasoning";
   const cheapModel =
     process.env.GROK_MODEL_CHEAP || "grok-4-1-fast-reasoning";
   let lastErr;

@@ -3,14 +3,14 @@
  *
  * Netlify environment variables (set in Site configuration → Environment variables):
  * - GROK_API_KEY — required for any Grok call
- * - GROK_MODEL_EXPENSIVE — default "grok-4.20-reasoning" (scan co-pilot, pre-market brief)
+ * - GROK_MODEL_EXPENSIVE — default "grok-4.20-0309-reasoning" (scan co-pilot, pre-market brief)
  * - GROK_MODEL_CHEAP — default "grok-4-1-fast-reasoning" (nightly summary)
  */
 
 export const GROK_BASE = "https://api.x.ai/v1";
 
 /**
- * @param {string} model e.g. "grok-4.20-reasoning" | "grok-4-1-fast-reasoning"
+ * @param {string} model e.g. "grok-4.20-0309-reasoning" | "grok-4-1-fast-reasoning"
  * @param {string} prompt
  * @param {number} [maxTokens=2000]
  * @returns {Promise<string>} Assistant message content

@@ -1,13 +1,117 @@
 /**
  * Position tracker — blob-backed (sohelator-positions), Tradier quotes, Telegram on status change.
- * GET: list positions (openedAt desc). Exported: logAlertAsPosition, updatePositions for cheap-monitor + scan.
+ * GET: list positions (openedAt desc). Exported: appendSessionLog, logAlertAsPosition, updatePositions for cheap-monitor.
  */
 
 import { getStore } from "@netlify/blobs";
 import { getQuote } from "../../src/lib/tradier.js";
 
 const BLOB_KEY = "positions";
+const SESSION_LOG_KEY = "session-log";
+/** Cap array length to keep blob size bounded */
+const SESSION_LOG_MAX = 8000;
 const DEDUP_MS = 20 * 60 * 1000;
+
+const SESSION_LOG_TYPES = new Set([
+  "ALERT_FIRED",
+  "POSITION_OPENED",
+  "GROK_DECISION",
+  "POSITION_CLOSED",
+  "ADD_SIGNAL",
+  "NEWS_FLAG",
+  "CHECKPOINT",
+]);
+
+export function formatSessionTimeInTrade(openedAtMs) {
+  const ms = Date.now() - Number(openedAtMs || 0);
+  if (!Number.isFinite(ms) || ms < 0) return "0m";
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+/**
+ * Append one row to session-log JSON array in sohelator-positions.
+ * @param {Partial<{
+ *   type: string,
+ *   symbol: string,
+ *   direction: string,
+ *   score: number | null,
+ *   entryPrice: number | null,
+ *   currentPrice: number | null,
+ *   pnlPct: number | null,
+ *   pnlDollar: number | null,
+ *   timeInTrade: string | null,
+ *   grokVerdict: string,
+ *   grokReason: string,
+ *   decision: string,
+ *   trigger: string,
+ *   closedReason: string,
+ *   outcome: string,
+ * }>} entry
+ */
+export async function appendSessionLog(entry) {
+  const type = entry?.type;
+  if (!type || !SESSION_LOG_TYPES.has(type)) {
+    console.warn("position-tracker appendSessionLog invalid type:", type);
+    return;
+  }
+  const store = positionsStore();
+  if (!store) return;
+
+  const row = {
+    ts: Date.now(),
+    tsIso: new Date().toISOString(),
+    type,
+    symbol: entry.symbol != null ? String(entry.symbol) : "",
+    direction: entry.direction != null ? String(entry.direction) : "",
+    score:
+      entry.score != null && Number.isFinite(Number(entry.score))
+        ? Number(entry.score)
+        : null,
+    entryPrice:
+      entry.entryPrice != null && Number.isFinite(Number(entry.entryPrice))
+        ? Number(entry.entryPrice)
+        : null,
+    currentPrice:
+      entry.currentPrice != null &&
+      Number.isFinite(Number(entry.currentPrice))
+        ? Number(entry.currentPrice)
+        : null,
+    pnlPct:
+      entry.pnlPct != null && Number.isFinite(Number(entry.pnlPct))
+        ? Number(entry.pnlPct)
+        : null,
+    pnlDollar:
+      entry.pnlDollar != null && Number.isFinite(Number(entry.pnlDollar))
+        ? Number(entry.pnlDollar)
+        : null,
+    timeInTrade:
+      entry.timeInTrade != null && entry.timeInTrade !== ""
+        ? String(entry.timeInTrade)
+        : null,
+    grokVerdict: entry.grokVerdict != null ? String(entry.grokVerdict) : "",
+    grokReason: entry.grokReason != null ? String(entry.grokReason) : "",
+    decision: entry.decision != null ? String(entry.decision) : "",
+    trigger: entry.trigger != null ? String(entry.trigger) : "",
+    closedReason:
+      entry.closedReason != null ? String(entry.closedReason) : "",
+    outcome: entry.outcome != null ? String(entry.outcome) : "",
+  };
+
+  try {
+    let log = await store.get(SESSION_LOG_KEY, { type: "json" });
+    if (!Array.isArray(log)) log = [];
+    log.push(row);
+    if (log.length > SESSION_LOG_MAX) log = log.slice(-SESSION_LOG_MAX);
+    await store.setJSON(SESSION_LOG_KEY, log);
+  } catch (e) {
+    console.warn("position-tracker appendSessionLog", e?.message || e);
+  }
+}
+
+/** @deprecated use appendSessionLog */
+export const appendSessionLogEntry = appendSessionLog;
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -146,16 +250,18 @@ async function sendPositionUpdateTelegram(pos, newStatus) {
 }
 
 /**
+ * Persist a new position from a scan alert. Session log rows (ALERT_FIRED / POSITION_OPENED) are appended by cheap-monitor via appendSessionLog.
  * @param {Record<string, any>} alert scan alert
+ * @returns {Promise<null | { symbol: string, direction: string, score: number, entryPrice: number, currentPrice: number, openedAt: number, grokVerdict: string }>}
  */
 export async function logAlertAsPosition(alert) {
   const symbol = String(alert?.symbol || "").trim().toUpperCase();
-  if (!symbol) return;
+  if (!symbol) return null;
 
   const store = positionsStore();
   if (!store) {
     console.warn("position-tracker logAlertAsPosition: no blob store");
-    return;
+    return null;
   }
 
   const map = await readPositionsMap();
@@ -163,11 +269,11 @@ export async function logAlertAsPosition(alert) {
 
   for (const p of Object.values(map)) {
     if (String(p.symbol || "").toUpperCase() !== symbol) continue;
-    if (now - Number(p.openedAt || 0) < DEDUP_MS) return;
+    if (now - Number(p.openedAt || 0) < DEDUP_MS) return null;
   }
 
   const entry = Number(alert.entry);
-  if (!Number.isFinite(entry) || entry <= 0) return;
+  if (!Number.isFinite(entry) || entry <= 0) return null;
 
   const openedAt = now;
   const id = `${symbol}-${openedAt}`;
@@ -207,32 +313,50 @@ export async function logAlertAsPosition(alert) {
     lastUpdated: now,
   };
 
+  const dir = map[id].direction;
+  const sc = map[id].score;
+  const curPx = map[id].currentPrice;
+  const grokVerdict = String(alert.aiVerdict || "");
+
   try {
     await writePositionsMap(map);
   } catch (e) {
     console.warn("position-tracker logAlertAsPosition write", e?.message || e);
+    return null;
   }
+
+  return {
+    symbol,
+    direction: dir,
+    score: sc,
+    entryPrice: entry,
+    currentPrice: curPx,
+    openedAt,
+    grokVerdict,
+  };
 }
 
+/** @returns {Promise<Array<{ symbol: string, direction: string, score: number | null, entryPrice: number | null, currentPrice: number, pnlPct: number, pnlDollar: number, timeInTrade: string, closedReason: string, outcome: string }>>} */
 export async function updatePositions() {
   if (!process.env.TRADIER_TOKEN) {
     console.warn("position-tracker updatePositions: TRADIER_TOKEN missing");
-    return;
+    return [];
   }
 
   const store = positionsStore();
-  if (!store) return;
+  if (!store) return [];
 
   let map;
   try {
     map = await readPositionsMap();
   } catch (e) {
     console.warn("position-tracker updatePositions read", e?.message || e);
-    return;
+    return [];
   }
 
   const ids = Object.keys(map);
   let changed = false;
+  const closedEvents = [];
 
   for (const id of ids) {
     const pos = map[id];
@@ -265,6 +389,21 @@ export async function updatePositions() {
 
     if (oldStatus !== status) {
       await sendPositionUpdateTelegram(updated, status);
+      if (isExitStatus(status) && !isExitStatus(oldStatus)) {
+        const ent = Number(pos.entryPrice);
+        closedEvents.push({
+          symbol: pos.symbol,
+          direction: pos.direction === "short" ? "short" : "long",
+          score: pos.score != null ? Number(pos.score) : null,
+          entryPrice: Number.isFinite(ent) ? ent : null,
+          currentPrice,
+          pnlPct,
+          pnlDollar,
+          timeInTrade: formatSessionTimeInTrade(pos.openedAt),
+          closedReason: status,
+          outcome: pnlPct >= 0 ? "WIN" : "LOSS",
+        });
+      }
     }
 
     map[id] = updated;
@@ -278,6 +417,8 @@ export async function updatePositions() {
       console.warn("position-tracker updatePositions write", e?.message || e);
     }
   }
+
+  return closedEvents;
 }
 
 export async function handler(event) {

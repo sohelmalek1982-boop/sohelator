@@ -1985,8 +1985,7 @@ window.calculateIgnition = calculateIgnition;
    Unified nav: LIVE (watchlist + regime strip) / HISTORY / LEARNING (3 top + 3 bottom).
    ───────────────────────────────────────────────────────────────────────────── */
 (function initSohelLearningPrompt16() {
-  var MEMORY_URL = "/api/memory-data";
-  var PATTERNS_URL = "/historical_patterns.json";
+  var LEARNING_DATA_URL = "/api/learning-data";
   var lastLearningFetch = 0;
   var STALE_MS = 90000;
 
@@ -1995,6 +1994,186 @@ window.calculateIgnition = calculateIgnition;
     var d = document.createElement("div");
     d.textContent = String(s);
     return d.innerHTML;
+  }
+
+  function gradeMegaClass(letter) {
+    var L = String(letter || "")
+      .trim()
+      .toUpperCase()
+      .charAt(0);
+    if (L === "A") return "learn-grade-mega--a";
+    if (L === "B") return "learn-grade-mega--b";
+    if (L === "C") return "learn-grade-mega--c";
+    if (L === "D" || L === "F") return "learn-grade-mega--df";
+    return "learn-grade-mega--na";
+  }
+
+  function gradeTdClass(letter) {
+    var L = String(letter || "")
+      .trim()
+      .toUpperCase()
+      .charAt(0);
+    if (L === "A") return "learn-grade-td learn-grade-td--a";
+    if (L === "B") return "learn-grade-td learn-grade-td--b";
+    if (L === "C") return "learn-grade-td learn-grade-td--c";
+    if (L === "D" || L === "F") return "learn-grade-td learn-grade-td--df";
+    return "learn-grade-td";
+  }
+
+  function paramDiffLineClass(key, from, to) {
+    var f = Number(from);
+    var t = Number(to);
+    if (!isFinite(f) || !isFinite(t)) return "learn-param-line--neutral";
+    if (t < f) return "learn-param-line--loose";
+    if (t > f) return "learn-param-line--tight";
+    return "learn-param-line--neutral";
+  }
+
+  function renderParamDiffs(mergeDiff, suggestions) {
+    if (mergeDiff && mergeDiff.length) {
+      return mergeDiff
+        .map(function (d) {
+          var cls = paramDiffLineClass(d.key, d.from, d.to);
+          return (
+            '<div class="learn-param-line ' +
+            cls +
+            '">' +
+            p16esc(d.key) +
+            ": " +
+            p16esc(String(d.from)) +
+            " → " +
+            p16esc(String(d.to)) +
+            "</div>"
+          );
+        })
+        .join("");
+    }
+    if (suggestions && typeof suggestions === "object") {
+      var keys = ["minScore", "adxThreshold", "volIgnition", "evThreshold"];
+      var parts = [];
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        if (suggestions[k] == null) continue;
+        parts.push(
+          '<div class="learn-param-line learn-param-line--neutral">' +
+            p16esc(k) +
+            " suggested: " +
+            p16esc(String(suggestions[k])) +
+            "</div>"
+        );
+      }
+      if (parts.length) return parts.join("");
+    }
+    return '<p class="hint" style="margin:0;">No parameter changes.</p>';
+  }
+
+  function renderGrokDashboard(latest) {
+    var host = document.getElementById("learning-grok-dashboard");
+    if (!host) return;
+    if (!latest) {
+      host.innerHTML =
+        '<p class="hint">No <code style="color:var(--cyan)">learning-YYYY-MM-DD</code> rows yet. After the ET session, <code style="color:var(--cyan)">scan-eod</code> writes the debrief to <code style="color:var(--cyan)">sohelator-learning</code>.</p>';
+      return;
+    }
+    var g = String(latest.sessionGrade || "?")
+      .trim()
+      .charAt(0)
+      .toUpperCase();
+    var megaCls = gradeMegaClass(g);
+    var W = latest.wins != null && isFinite(Number(latest.wins)) ? Number(latest.wins) : "—";
+    var L = latest.losses != null && isFinite(Number(latest.losses)) ? Number(latest.losses) : "—";
+    var pnl = "—";
+    if (latest.totalPnlPct != null && String(latest.totalPnlPct) !== "") {
+      var pN = Number(latest.totalPnlPct);
+      pnl = isFinite(pN) ? pN.toFixed(2) + "%" : String(latest.totalPnlPct);
+    }
+    var perf = String(latest.performanceReview || "").trim();
+    var filt = String(latest.filterAssessment || "").trim();
+    var audit = String(latest.cheapGrokAudit || "").trim();
+    var tomorrow = String(latest.tomorrowInstructions || "").trim();
+    var diffBlock = renderParamDiffs(
+      latest.parameterMergeDiff,
+      latest.parameterSuggestions
+    );
+    host.innerHTML =
+      '<div class="learn-brief-top">' +
+      '<div class="learn-grade-mega ' +
+      megaCls +
+      '" aria-label="Session grade">' +
+      p16esc(g || "—") +
+      "</div>" +
+      '<div class="learn-key-mega">' +
+      p16esc(String(latest.keyLearning || "—").trim()) +
+      "</div></div>" +
+      '<div class="learn-stats-row">' +
+      '<div class="learn-stat-cell">WINS<span class="v">' +
+      p16esc(String(W)) +
+      '</span></div><div class="learn-stat-cell">LOSSES<span class="v">' +
+      p16esc(String(L)) +
+      '</span></div><div class="learn-stat-cell">P&amp;L %<span class="v">' +
+      p16esc(String(pnl)) +
+      "</span></div></div>" +
+      (perf
+        ? '<div class="learn-block"><div class="learn-k">PERFORMANCE REVIEW</div><div class="learn-prose">' +
+          p16esc(perf) +
+          "</div></div>"
+        : "") +
+      (filt
+        ? '<div class="learn-block"><div class="learn-k">FILTER ASSESSMENT</div><div class="learn-prose">' +
+          p16esc(filt) +
+          "</div></div>"
+        : "") +
+      '<div class="learn-block"><div class="learn-k">CHEAP GROK AUDIT</div><div class="learn-audit-mono">' +
+      (audit ? p16esc(audit) : '<span class="hint">—</span>') +
+      '</div></div><div class="learn-block"><div class="learn-tomorrow-cap">CHEAP GROK BRIEFING · TOMORROW</div><div class="learn-tomorrow-box">' +
+      (tomorrow ? p16esc(tomorrow) : '<span class="hint">—</span>') +
+      '</div></div><div class="learn-block"><div class="learn-k">PARAMETER CHANGES</div>' +
+      diffBlock +
+      "</div>";
+  }
+
+  function renderGrokHistory(entries) {
+    var tb = document.getElementById("learning-progress-tbody");
+    if (!tb) return;
+    if (!entries || !entries.length) {
+      tb.innerHTML =
+        '<tr><td colspan="5" class="hint">No debrief history yet.</td></tr>';
+      return;
+    }
+    tb.innerHTML = entries
+      .map(function (row) {
+        var wN = row.wins != null && isFinite(Number(row.wins)) ? Number(row.wins) : null;
+        var lN = row.losses != null && isFinite(Number(row.losses)) ? Number(row.losses) : null;
+        var wl =
+          wN != null && lN != null ? wN + "W / " + lN + "L" : "—";
+        var pnl = "—";
+        if (row.totalPnlPct != null && String(row.totalPnlPct) !== "") {
+          var p = Number(row.totalPnlPct);
+          pnl = isFinite(p) ? p.toFixed(2) + "%" : String(row.totalPnlPct);
+        }
+        var kl = String(row.keyLearning || "—").trim();
+        if (kl.length > 140) kl = kl.slice(0, 137) + "…";
+        var d = row.date || "—";
+        var gr = String(row.sessionGrade || "—")
+          .trim()
+          .charAt(0)
+          .toUpperCase();
+        var tdGr = '<td class="' + gradeTdClass(gr) + '">' + p16esc(gr || "—") + "</td>";
+        return (
+          "<tr><td>" +
+          p16esc(d) +
+          "</td>" +
+          tdGr +
+          "<td>" +
+          p16esc(wl) +
+          "</td><td>" +
+          p16esc(pnl) +
+          "</td><td>" +
+          p16esc(kl) +
+          "</td></tr>"
+        );
+      })
+      .join("");
   }
 
   function setUnifiedPage(which) {
@@ -2023,176 +2202,30 @@ window.calculateIgnition = calculateIgnition;
     });
   }
 
-  function rowMetrics(row) {
-    var res = Array.isArray(row.results) ? row.results : [];
-    var sumEst = res.reduce(function (s, r) {
-      return s + (Number(r.estimatedOptionReturn) || 0);
-    }, 0);
-    var totalR = sumEst / 100;
-    var ev = res.length ? sumEst / res.length : null;
-    var setups =
-      row.snapshotCount != null
-        ? row.snapshotCount
-        : row.totalCalls != null
-          ? row.totalCalls
-          : res.length;
-    return { totalR: totalR, ev: ev, setups: setups };
-  }
-
-  function trendClass(curWr, olderWr) {
-    if (olderWr == null || curWr == null || !isFinite(curWr) || !isFinite(olderWr)) {
-      return { cls: "learn-trend--flat", sym: "→" };
-    }
-    if (curWr > olderWr + 0.25) return { cls: "learn-trend--up", sym: "↑" };
-    if (curWr < olderWr - 0.25) return { cls: "learn-trend--down", sym: "↓" };
-    return { cls: "learn-trend--flat", sym: "→" };
-  }
-
-  function renderLearningLatest(imp, reviews, patterns) {
-    var host = document.getElementById("learning-latest-body");
-    if (!host) return;
-    var blocks = [];
-    var latest = reviews && reviews.length ? reviews[0] : null;
-    if (latest) {
-      var aiTxt =
-        latest.claudeAnalysis ||
-        latest.eodAnalysis ||
-        latest.improvementSuggestions ||
-        "";
-      aiTxt = String(aiTxt).trim();
-      if (aiTxt.length > 1400) aiTxt = aiTxt.slice(0, 1400) + "…";
-      blocks.push(
-        '<div class="learn-block"><div class="learn-k">EOD / AI REVIEW · ' +
-          p16esc(latest.date || "—") +
-          '</div><div class="learn-ai-box">' +
-          (aiTxt ? p16esc(aiTxt) : "<span class=\"hint\">No narrative stored for this day.</span>") +
-          "</div></div>"
-      );
-    }
-    if (imp && Array.isArray(imp.suggestions) && imp.suggestions.length) {
-      blocks.push(
-        '<div class="learn-block"><div class="learn-k">PATTERN IMPROVEMENTS</div><ul class="learn-ul">' +
-          imp.suggestions
-            .slice(0, 12)
-            .map(function (x) {
-              return "<li>" + p16esc(typeof x === "string" ? x : x.message || x.text || JSON.stringify(x)) + "</li>";
-            })
-          .join("") +
-          "</ul></div>"
-      );
-    }
-    if (patterns && patterns.length) {
-      var notes = patterns
-        .slice(-6)
-        .map(function (p) {
-          return p && p.note ? p.note : null;
-        })
-        .filter(Boolean);
-      if (notes.length) {
-        blocks.push(
-          '<div class="learn-block"><div class="learn-k">NEW PATTERNS (LOCAL JSON)</div><ul class="learn-ul">' +
-            notes.map(function (n) {
-              return "<li>" + p16esc(n) + "</li>";
-            }).join("") +
-            "</ul></div>"
-        );
-      }
-    }
-    if (!blocks.length) {
-      host.innerHTML =
-        '<p class="hint">No nightly blob data yet. Run <code style="color:var(--cyan)">/api/scan-eod</code> on schedule or open this page after EOD reviews populate.</p>';
-      return;
-    }
-    host.innerHTML = blocks.join("");
-  }
-
-  function renderLearningTable(reviews) {
-    var tb = document.getElementById("learning-progress-tbody");
-    if (!tb) return;
-    if (!reviews || !reviews.length) {
-      tb.innerHTML =
-        '<tr><td colspan="6" class="hint">No historical rows — EOD reviews will appear here.</td></tr>';
-      return;
-    }
-    var sorted = reviews.slice().sort(function (a, b) {
-      var ta = Number(a.timestamp) || 0;
-      var tb_ = Number(b.timestamp) || 0;
-      if (tb_ !== ta) return tb_ - ta;
-      return String(b.date || "").localeCompare(String(a.date || ""));
-    });
-    tb.innerHTML = sorted
-      .map(function (row, i) {
-        var m = rowMetrics(row);
-        var wr = row.winRate;
-        var wrN = wr != null && isFinite(Number(wr)) ? Number(wr) : null;
-        var older = sorted[i + 1];
-        var olderWr =
-          older && older.winRate != null && isFinite(Number(older.winRate))
-            ? Number(older.winRate)
-            : null;
-        var tr = trendClass(wrN, olderWr);
-        var wrStr = wrN != null ? wrN.toFixed(1) + "%" : "—";
-        var evStr = m.ev != null && isFinite(m.ev) ? m.ev.toFixed(1) + "%" : "—";
-        return (
-          "<tr><td>" +
-          p16esc(row.date || "—") +
-          "</td><td>" +
-          p16esc(wrStr) +
-          "</td><td>" +
-          p16esc(m.totalR.toFixed(2)) +
-          "</td><td>" +
-          p16esc(evStr) +
-          "</td><td>" +
-          p16esc(String(m.setups != null ? m.setups : "—")) +
-          '</td><td><span class="learn-trend ' +
-          tr.cls +
-          '" title="vs prior row">' +
-          tr.sym +
-          "</span></td></tr>"
-        );
-      })
-      .join("");
-  }
-
   function fetchLearningIfStale(force) {
     var now = Date.now();
     if (!force && now - lastLearningFetch < STALE_MS) return;
     lastLearningFetch = now;
-    var host = document.getElementById("learning-latest-body");
-    if (host) host.innerHTML = '<p class="hint" style="padding:0;">Loading…</p>';
+    var gDash = document.getElementById("learning-grok-dashboard");
+    if (gDash) gDash.innerHTML = '<p class="hint" style="padding:0;">Loading…</p>';
 
-    Promise.all([
-      fetch(MEMORY_URL + "?type=improvements", { cache: "no-store" }).then(function (r) {
+    fetch(LEARNING_DATA_URL, { cache: "no-store" })
+      .then(function (r) {
         return r.json();
-      }),
-      fetch(MEMORY_URL + "?type=learning-log", { cache: "no-store" }).then(function (r) {
-        return r.json();
-      }),
-      fetch(PATTERNS_URL, { cache: "no-store" }).then(function (r) {
-        return r.ok ? r.json() : [];
-      }),
-    ])
-      .then(function (tuple) {
-        var imp = tuple[0];
-        var logPack = tuple[1] || {};
-        var reviews = Array.isArray(logPack.reviews) ? logPack.reviews : [];
-        var patterns = Array.isArray(tuple[2]) ? tuple[2] : [];
-        renderLearningLatest(imp, reviews, patterns);
-        renderLearningTable(reviews);
+      })
+      .then(function (ld) {
+        ld = ld || {};
+        renderGrokDashboard(ld.latest || null);
+        renderGrokHistory(
+          Array.isArray(ld.entries) ? ld.entries.slice(0, 14) : []
+        );
       })
       .catch(function () {
-        if (host)
-          host.innerHTML =
-            '<p class="hint">Could not load learning APIs (offline or CORS). Showing patterns file only…</p>';
-        fetch(PATTERNS_URL, { cache: "no-store" })
-          .then(function (r) {
-            return r.json();
-          })
-          .then(function (patterns) {
-            renderLearningLatest(null, [], Array.isArray(patterns) ? patterns : []);
-            renderLearningTable([]);
-          })
-          .catch(function () {});
+        var gHost = document.getElementById("learning-grok-dashboard");
+        if (gHost)
+          gHost.innerHTML =
+            '<p class="hint">Could not load <code style="color:var(--cyan)">/api/learning-data</code>.</p>';
+        renderGrokHistory([]);
       });
   }
 

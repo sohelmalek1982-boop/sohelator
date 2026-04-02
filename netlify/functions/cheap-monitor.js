@@ -135,7 +135,10 @@ const TELEGRAM_ALERT_MIN_SCORE = 65;
 async function runPositionSync(cheapAlerts, expAlerts) {
   try {
     const pt = await import("./position-tracker.js");
-    await pt.updatePositions();
+    const closedEvents = await pt.updatePositions();
+    for (const ev of closedEvents) {
+      await pt.appendSessionLog({ type: "POSITION_CLOSED", ...ev });
+    }
     const bySym = new Map();
     for (const a of cheapAlerts || []) {
       if (a?.symbol) {
@@ -149,11 +152,40 @@ async function runPositionSync(cheapAlerts, expAlerts) {
     }
     for (const a of bySym.values()) {
       if (Number(a.score) >= TELEGRAM_ALERT_MIN_SCORE) {
-        await pt.logAlertAsPosition(a);
+        const opened = await pt.logAlertAsPosition(a);
+        if (opened) {
+          const base = {
+            symbol: opened.symbol,
+            direction: opened.direction,
+            score: opened.score,
+            entryPrice: opened.entryPrice,
+            currentPrice: opened.currentPrice,
+            pnlPct: 0,
+            pnlDollar: 0,
+            timeInTrade: pt.formatSessionTimeInTrade(opened.openedAt),
+            grokVerdict: opened.grokVerdict,
+            outcome: "OPEN",
+          };
+          await pt.appendSessionLog({ type: "ALERT_FIRED", ...base });
+          await pt.appendSessionLog({ type: "POSITION_OPENED", ...base });
+        }
       }
     }
   } catch (e) {
     console.warn("cheap-monitor position-tracker", e?.message || e);
+  }
+}
+
+let appendSessionLogFn;
+async function appendSessionLogRow(row) {
+  try {
+    if (!appendSessionLogFn) {
+      const pt = await import("./position-tracker.js");
+      appendSessionLogFn = pt.appendSessionLog;
+    }
+    await appendSessionLogFn(row);
+  } catch (e) {
+    console.warn("cheap-monitor appendSessionLogRow", e?.message || e);
   }
 }
 
@@ -283,8 +315,9 @@ async function appendGrokPositionAuditRow(payload) {
  * After each cheap scan during RTH: evaluate open positions; call Grok only when a trigger fires.
  * @param {any[]} cheapAlerts — same pass as scan (for live volRatio)
  * @param {boolean} inRth
+ * @param {string | null} [grokDailyBrief] — EOD `tomorrowInstructions` for cheap Grok
  */
-async function runRthPositionGrokMonitor(cheapAlerts, inRth) {
+async function runRthPositionGrokMonitor(cheapAlerts, inRth, grokDailyBrief = null) {
   if (!inRth) return;
   if (!process.env.GROK_API_KEY || !process.env.TRADIER_TOKEN) return;
   if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return;
@@ -371,11 +404,32 @@ async function runRthPositionGrokMonitor(cheapAlerts, inRth) {
     if (!positionGrokCooldownAllows(cooldowns, id, pnlPct)) continue;
 
     const timeInTrade = formatTimeInTradeMs(pos.openedAt);
+    const sessionTimeInTrade = pt.formatSessionTimeInTrade(pos.openedAt);
     const triggerStr = triggers.join(", ");
 
-    const prompt = `You are SOHELATOR autonomous position manager. You have full authority to close, add, or hold.
+    const sessionRowBase = () => ({
+      symbol: pos.symbol,
+      direction,
+      score: pos.score != null ? Number(pos.score) : null,
+      entryPrice,
+      currentPrice,
+      pnlPct,
+      pnlDollar,
+      timeInTrade: sessionTimeInTrade,
+      grokVerdict: String(pos.grokVerdict || ""),
+      trigger: triggerStr,
+    });
 
-Position: ${pos.symbol} ${direction}
+    const briefText =
+      grokDailyBrief != null && String(grokDailyBrief).trim()
+        ? String(grokDailyBrief).trim().slice(0, 3500)
+        : "";
+    const briefBlock = briefText
+      ? `Yesterday's debrief instructions:\n${briefText}\n\nApply these when making your decision today.\n\n---\n\n`
+      : "";
+
+    const prompt = `You are SOHELATOR autonomous position manager. You have full authority to close, add, or hold.
+${briefBlock}Position: ${pos.symbol} ${direction}
 Entry: $${entryPrice} | Stop: ${stopPrice} | Target: ${targetPrice}
 Current: $${currentPrice} | P&L: ${pnlPct.toFixed(2)}% | Time in trade: ${timeInTrade}
 Trigger: ${triggerStr}
@@ -406,6 +460,12 @@ HOLD | {one line reason}`;
         finalPnlPct: pnlPct,
         currentPrice,
         direction,
+      });
+      await pt.appendSessionLog({
+        type: "GROK_DECISION",
+        ...sessionRowBase(),
+        grokReason: String(raw || "").slice(0, 500),
+        outcome: "OPEN",
       });
       continue;
     }
@@ -447,6 +507,19 @@ HOLD | {one line reason}`;
         currentPrice,
         direction,
       });
+      const closeRow = {
+        type: "GROK_DECISION",
+        ...sessionRowBase(),
+        grokReason: decision.reason,
+        decision: "CLOSE",
+        closedReason: decision.reason,
+        outcome: win ? "WIN" : "LOSS",
+      };
+      await pt.appendSessionLog(closeRow);
+      await pt.appendSessionLog({
+        ...closeRow,
+        type: "POSITION_CLOSED",
+      });
     } else if (decision.action === "ADD") {
       map[id] = {
         ...pos,
@@ -475,6 +548,18 @@ HOLD | {one line reason}`;
         currentPrice,
         direction,
       });
+      const addRow = {
+        type: "GROK_DECISION",
+        ...sessionRowBase(),
+        grokReason: decision.reason,
+        decision: "ADD",
+        outcome: "OPEN",
+      };
+      await pt.appendSessionLog(addRow);
+      await pt.appendSessionLog({
+        ...addRow,
+        type: "ADD_SIGNAL",
+      });
     } else {
       map[id] = {
         ...pos,
@@ -493,6 +578,13 @@ HOLD | {one line reason}`;
         finalPnlPct: pnlPct,
         currentPrice,
         direction,
+      });
+      await pt.appendSessionLog({
+        type: "GROK_DECISION",
+        ...sessionRowBase(),
+        grokReason: decision.reason,
+        decision: "HOLD",
+        outcome: "OPEN",
       });
     }
 
@@ -765,6 +857,25 @@ exports.handler = async () => {
     };
   }
 
+  let grokDailyBrief = null;
+  try {
+    if (process.env.NETLIFY_SITE_ID && process.env.NETLIFY_TOKEN) {
+      const store = getStore({
+        name: "sohelator-learning",
+        siteID: process.env.NETLIFY_SITE_ID,
+        token: process.env.NETLIFY_TOKEN,
+      });
+      const yesterday = ymdEt(new Date(Date.now() - 86400000));
+      const today = ymdEt(new Date());
+      const learned =
+        (await store.get(`learning-${today}`, { type: "json" })) ||
+        (await store.get(`learning-${yesterday}`, { type: "json" }));
+      if (learned?.tomorrowInstructions) grokDailyBrief = learned.tomorrowInstructions;
+    }
+  } catch (e) {
+    console.warn("cheap-monitor: could not load daily brief", e?.message);
+  }
+
   const now = new Date();
   const inRth = isRthEt(now);
   const inAfterHours = isAfterHoursCheapWindowEt(now);
@@ -840,6 +951,14 @@ exports.handler = async () => {
       out.newsFetch = err || "ok";
       const { syms, catalystNewsSummary } = universeSymsFromNews(items);
       out.newsUniverseHits = syms;
+      if (syms.length) {
+        await appendSessionLogRow({
+          type: "NEWS_FLAG",
+          symbol: syms.slice(0, 24).join(",").slice(0, 120),
+          trigger: (catalystNewsSummary || "").slice(0, 500),
+          outcome: "OPEN",
+        });
+      }
       scanBody = {
         mode: "cheap",
         suppressTelegram: true,
@@ -875,6 +994,18 @@ exports.handler = async () => {
     const alerts = Array.isArray(j.alerts) ? j.alerts : [];
     out.alertCount = alerts.length;
 
+    await appendSessionLogRow({
+      type: "CHECKPOINT",
+      trigger:
+        out.path === "after_hours_hourly"
+          ? `after_hours:${out.afterHoursSlot || ymdEt(now)}`
+          : inRth
+            ? "rth_cheap_scan_5m"
+            : "cheap_scan",
+      score: alerts.length,
+      outcome: "OPEN",
+    });
+
     await relayPrompt19Telegrams(alerts, telegramDedupe);
 
     const wild = alerts.filter(isWild);
@@ -884,7 +1015,7 @@ exports.handler = async () => {
     if (!wild.length) {
       out.status = "ok";
       await runPositionSync(alerts, expAlerts);
-      await runRthPositionGrokMonitor(alerts, inRth);
+      await runRthPositionGrokMonitor(alerts, inRth, grokDailyBrief);
       return { statusCode: 200, headers, body: JSON.stringify(out) };
     }
 
@@ -951,7 +1082,7 @@ exports.handler = async () => {
     out.push = push;
     out.status = "ok";
     await runPositionSync(alerts, expAlerts);
-    await runRthPositionGrokMonitor(alerts, inRth);
+    await runRthPositionGrokMonitor(alerts, inRth, grokDailyBrief);
 
     return { statusCode: 200, headers, body: JSON.stringify(out) };
   } catch (e) {

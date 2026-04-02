@@ -19,10 +19,15 @@ import {
   applyOptimizedParams,
   getOptimizedParams,
 } from "../../src/lib/scanner-rules.js";
-import { runBacktest, findSimilarSetups } from "../../src/lib/backtester.js";
+import {
+  runBacktest,
+  findSimilarSetups,
+  SIMILAR_SETUPS_MAX_RESULTS,
+} from "../../src/lib/backtester.js";
 import { formatDrivingAlert } from "../../src/lib/alert-formatter.js";
 import { num } from "../../src/lib/utils.js";
 import { callGrok } from "../../src/lib/grok.js";
+import { getStore } from "@netlify/blobs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -103,11 +108,12 @@ function levelsFromLastBar(bars5, bull, riskPct) {
 }
 
 function historicalSummary(similar) {
-  if (!similar?.length) return "Historical: no close matches in last backtest cache.";
+  const n = Array.isArray(similar) ? similar.length : 0;
+  if (!n) return "Historical: no close matches in last backtest cache.";
   const wins = similar.filter((s) => s.win).length;
-  const wr = Math.round((wins / similar.length) * 100);
+  const wr = Math.round((wins / n) * 100);
   const top = similar[0];
-  return `Historical: ${similar.length} near matches, ~${wr}% wins in sample. Closest: ${top.symbol} (${playLabelPretty(top.playType)}, sim=${top.similarity}). ${top.patternNote || ""}`;
+  return `Historical: ${n} near matches, ~${wr}% wins in sample. Closest: ${top.symbol} (${playLabelPretty(top.playType)}, sim=${top.similarity}). ${top.patternNote || ""}`;
 }
 
 /** Prompt 8 — America/New_York 8:00–16:00 weekdays for Grok / expensive alignment */
@@ -210,19 +216,28 @@ function buildTelegramPrompt19Message(a) {
   const entryStr = Number.isFinite(ent) ? ent.toFixed(2) : "—";
   const stopStr = Number.isFinite(st) ? st.toFixed(2) : "—";
   const tgtStr = Number.isFinite(tg) ? tg.toFixed(2) : "—";
-  let grok = String(a.aiCoPilot || a.aiVerdict || "")
+  const opt = a.suggestedOption
+    ? `Option: ${a.suggestedOption.description || JSON.stringify(a.suggestedOption)}`
+    : "";
+
+  let analysis = String(a.grokAnalysis || "").replace(/\s+/g, " ").trim();
+  let risks = String(a.grokRisks || "").replace(/\s+/g, " ").trim();
+  let plan = String(a.grokPlan || a.plan || "")
     .replace(/\s+/g, " ")
     .trim();
-  if (grok.length > 600) grok = grok.slice(0, 597) + "…";
-  const plan = String(a.plan || "").trim();
+  let verdict = String(a.aiVerdict || "").replace(/\s+/g, " ").trim();
+  if (analysis.length > 300) analysis = analysis.slice(0, 297) + "…";
+  if (risks.length > 150) risks = risks.slice(0, 147) + "…";
+  if (plan.length > 150) plan = plan.slice(0, 147) + "…";
+  if (verdict.length > 150) verdict = verdict.slice(0, 147) + "…";
+
   const histLine = historicalMatchesShort(a);
 
   const hi = [];
   if (score >= 90) hi.push("⚡ SCORE 90+ — TOP TIER");
   if (volRatioOfAlert(a) >= 3) hi.push("⚡ VOL SURGE 3×+");
   if (hasCatalystSignal(a)) hi.push("⚡ CATALYST / NEWS");
-  if (hasRegimeOrLevelKeywords(a)) hi.push("⚡ REGIME / LEVEL / REVERSAL — READ FULL GROK");
-
+  if (hasRegimeOrLevelKeywords(a)) hi.push("⚡ REGIME / LEVEL / REVERSAL");
   const banner = hi.length ? hi.join("\n") + "\n\n" : "";
 
   return (
@@ -233,8 +248,11 @@ function buildTelegramPrompt19Message(a) {
     `Price: ${priceStr}${chg}\n` +
     `Play: ENTRY @ ${entryStr}\n` +
     `Stop: ${stopStr} | Target: ${tgtStr}\n` +
-    `Grok: ${grok || "—"}\n` +
+    `${opt ? opt + "\n" : ""}` +
+    `Analysis: ${analysis || "—"}\n` +
+    `Risks: ${risks || "—"}\n` +
     `Plan: ${plan || "—"}\n` +
+    `Verdict: ${verdict || "—"}\n` +
     `Historical: ${histLine}`
   );
 }
@@ -298,6 +316,37 @@ async function callGrokExpensiveWithFallback(aiPrompt, maxTok) {
 }
 
 const BATCH_GROK_MAX_TOK = 2500;
+
+function ymdEtScan(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(dt);
+}
+
+/** Same `learning-YYYY-MM-DD` blob read as cheap-monitor — `tomorrowInstructions` for cheap batch Grok. */
+async function loadGrokDailyBriefForCheapScan() {
+  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return "";
+  try {
+    const store = getStore({
+      name: "sohelator-learning",
+      siteID: process.env.NETLIFY_SITE_ID,
+      token: process.env.NETLIFY_TOKEN,
+    });
+    const yesterday = ymdEtScan(new Date(Date.now() - 86400000));
+    const today = ymdEtScan(new Date());
+    const learned =
+      (await store.get(`learning-${today}`, { type: "json" })) ||
+      (await store.get(`learning-${yesterday}`, { type: "json" }));
+    return String(learned?.tomorrowInstructions || "").trim();
+  } catch (e) {
+    console.warn("scan.js loadGrokDailyBriefForCheapScan", e?.message || e);
+    return "";
+  }
+}
 
 /** Parse batched Grok reply: JSON array of { symbol, analysis, risks, plan, netVerdict }. */
 function parseBatchedGrokVerdicts(rawText) {
@@ -521,7 +570,7 @@ export const handler = async (event) => {
 
       const similar = await findSimilarSetups(
         { symbol, bars: bars5, dailyBars: daily },
-        15
+        SIMILAR_SETUPS_MAX_RESULTS
       );
 
       const bull = num(bars5[bars5.length - 1].close) >= num(bars5[bars5.length - 1].open);
@@ -560,6 +609,7 @@ export const handler = async (event) => {
             ? "Rules edge: passes EV threshold — confirm with tape / spread before size."
             : "Rules edge below EV floor — paper / skip.",
         historicalSummary: hist,
+        similarCount: similar.length,
         ev: sc.edge,
         projectedEv: backtest7?.ev ?? null,
         thetaCountdown: undefined,
@@ -569,7 +619,19 @@ export const handler = async (event) => {
 
       try {
         const sug = await suggestAtmOption(symbol, row.last, bull);
-        if (sug) setup.suggestedOption = sug;
+        if (sug) {
+          setup.suggestedOption = sug;
+          const right = sug.right === "call" ? "CALL" : "PUT";
+          const exp = sug.expiration || "—";
+          const strike = sug.strike || "—";
+          const mid = Number.isFinite(Number(sug.mid))
+            ? `$${Number(sug.mid).toFixed(2)}`
+            : "—";
+          const delta = Number.isFinite(Number(sug.delta))
+            ? Number(sug.delta).toFixed(2)
+            : "—";
+          setup.suggestedOption.description = `${strike}${right} exp ${exp} | Mid ${mid} | Δ ${delta}`;
+        }
       } catch (e) {
         console.warn("scan suggestAtmOption", symbol, e?.message || e);
       }
@@ -579,35 +641,38 @@ export const handler = async (event) => {
       alerts.push(setup);
     }
 
-    /* Expensive: one batched Grok call for all alerts (Netlify timeout — was N sequential calls). */
-    if (scanMode === "expensive" && process.env.GROK_API_KEY && alerts.length) {
-      try {
-        const setupsPayload = alerts.map((setup) => ({
-          symbol: setup.symbol,
-          score: setup.score,
-          edge: setup.edge,
-          playTypeLabel: setup.playTypeLabel,
-          direction: setup.direction,
-          entry: setup.entry,
-          stop: setup.stop,
-          target: setup.target,
-          historicalSummary: setup.historicalSummary,
-          ev: setup.ev,
-          projectedEv: setup.projectedEv,
-          rulesAiVerdict: setup.aiVerdict,
-        }));
+    const setupsPayload =
+      alerts.length > 0
+        ? alerts.map((setup) => ({
+            symbol: setup.symbol,
+            score: setup.score,
+            edge: setup.edge,
+            playTypeLabel: setup.playTypeLabel,
+            direction: setup.direction,
+            entry: setup.entry,
+            stop: setup.stop,
+            target: setup.target,
+            historicalSummary: setup.historicalSummary,
+            similarCount: Array.isArray(setup.similar)
+              ? setup.similar.length
+              : setup.similarCount ?? 0,
+            ev: setup.ev,
+            projectedEv: setup.projectedEv,
+            rulesAiVerdict: setup.aiVerdict,
+          }))
+        : [];
 
-        const priorityInBatch = [
-          ...new Set(
-            alerts
-              .filter((a) => prioritySyms.has(a.symbol))
-              .map((a) => a.symbol)
-          ),
-        ];
+    const priorityInBatch = [
+      ...new Set(
+        alerts
+          .filter((a) => prioritySyms.has(a.symbol))
+          .map((a) => a.symbol)
+      ),
+    ];
 
-        const catBlock =
-          catalystNewsSummary
-            ? `
+    const catBlock =
+      catalystNewsSummary
+        ? `
 
 Recent market headlines (catalyst context for the session):
 ${catalystNewsSummary}
@@ -616,9 +681,13 @@ Symbols in this batch that appeared in universe ∩ headline scan: ${priorityInB
 For any such symbol, if a *fresh* catalyst in the text clearly supports a tactical trade in that symbol, that symbol's netVerdict MUST begin exactly: HIGH-PROBABILITY CATALYST PLAY —
 For other symbols, if a headline clearly ties a *fresh* catalyst to that symbol, the same prefix applies.
 Otherwise use a normal conviction netVerdict (no catalyst prefix).`
-            : "";
+        : "";
 
-        const symList = alerts.map((a) => a.symbol).join(", ");
+    const symList = alerts.map((a) => a.symbol).join(", ");
+
+    /* Expensive: one batched Grok call for all alerts (Netlify timeout — was N sequential calls). */
+    if (scanMode === "expensive" && process.env.GROK_API_KEY && alerts.length) {
+      try {
         const aiPrompt = `You are SOHELATOR's aggressive trading co-pilot. Market is live. Analyze each setup below and return actionable intelligence.
 
 For each symbol provide:
@@ -670,6 +739,74 @@ Respond ONLY with a valid JSON array. One object per symbol with fields: symbol,
         }
       } catch (e) {
         console.warn("scan.js batched Grok failed:", e?.message || e);
+        grokHealthAgg = worseGrokHealth(grokHealthAgg, "error");
+        for (const setup of alerts) {
+          setup.aiCoPilot = `Grok unavailable: ${e?.message || e}`;
+        }
+        for (const a of alerts) {
+          a.drivingText = formatDrivingAlert(a);
+        }
+      }
+    }
+
+    /* Cheap: batched Grok with yesterday's expensive EOD instructions before setups JSON. */
+    if (scanMode === "cheap" && process.env.GROK_API_KEY && alerts.length) {
+      try {
+        const grokDailyBrief = await loadGrokDailyBriefForCheapScan();
+        const debriefBlock =
+          grokDailyBrief
+            ? `Yesterday's debrief instructions:\n${grokDailyBrief.slice(0, 3500)}\n\nApply these when making your decision today.\n\n---\n\n`
+            : "";
+        const cheapModel =
+          process.env.GROK_MODEL_CHEAP || "grok-4-1-fast-reasoning";
+        const aiPrompt = `You are SOHELATOR's fast intraday scan co-pilot (cheap model). Market is live. Analyze each setup below and return actionable intelligence.
+
+For each symbol provide:
+- analysis: 2-3 lines covering trend context, key level behavior, and edge RIGHT NOW
+- risks: 1 line on what invalidates this trade
+- plan: specific action — scale in, wait for pullback, full size, avoid, etc.
+- netVerdict: one conviction line starting with LONG, SHORT, WAIT, or AVOID
+
+Rules:
+- Never veto unless score < 40
+- Be specific — mention actual price levels from the data
+- If score >= 85 lead with HIGH CONVICTION
+- When debrief instructions above conflict with generic advice, follow the debrief.
+
+${debriefBlock}Setups:
+${JSON.stringify(setupsPayload)}
+${catBlock}
+
+Respond ONLY with a valid JSON array. One object per symbol with fields: symbol, analysis, risks, plan, netVerdict. Include every symbol: ${symList}.`;
+
+        const grokOut = await callGrok(cheapModel, aiPrompt, BATCH_GROK_MAX_TOK);
+        grokHealthAgg = worseGrokHealth(grokHealthAgg, "ok");
+        const verdictMap = parseBatchedGrokVerdicts(grokOut);
+        for (const setup of alerts) {
+          const sym = String(setup.symbol || "").trim().toUpperCase();
+          const row = verdictMap.get(sym);
+          if (row) {
+            if (row.analysis) setup.grokAnalysis = row.analysis;
+            if (row.risks) setup.grokRisks = row.risks;
+            setup.plan = String(row.plan || "").trim();
+            if (setup.plan) setup.grokPlan = setup.plan;
+            if (row.netVerdict) setup.aiVerdict = row.netVerdict;
+            const parts = [];
+            if (row.analysis) parts.push(`Analysis: ${row.analysis}`);
+            if (row.risks) parts.push(`Risks: ${row.risks}`);
+            if (row.plan) parts.push(`Plan: ${row.plan}`);
+            if (parts.length) setup.aiCoPilot = parts.join("\n");
+          } else if (verdictMap.size > 0) {
+            setup.aiCoPilot = `Grok batch: missing entry for ${sym}`;
+          } else {
+            setup.aiCoPilot = `Grok batch: could not parse JSON (${String(grokOut || "").length} chars)`;
+          }
+        }
+        for (const a of alerts) {
+          a.drivingText = formatDrivingAlert(a);
+        }
+      } catch (e) {
+        console.warn("scan.js cheap batched Grok failed:", e?.message || e);
         grokHealthAgg = worseGrokHealth(grokHealthAgg, "error");
         for (const setup of alerts) {
           setup.aiCoPilot = `Grok unavailable: ${e?.message || e}`;

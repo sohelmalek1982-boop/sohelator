@@ -79,6 +79,129 @@ function isSameNyDay(ts) {
   return ny === now;
 }
 
+/** YYYY-MM-DD in America/New_York (ET trading calendar). */
+function ymdEt(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(dt);
+}
+
+const POSITIONS_SESSION_LOG_KEY = "session-log";
+
+async function loadSessionLogRowsForEtYmd(ymd) {
+  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return [];
+  const posStore = getStore({
+    name: "sohelator-positions",
+    siteID: process.env.NETLIFY_SITE_ID,
+    token: process.env.NETLIFY_TOKEN,
+  });
+  try {
+    const log = await posStore.get(POSITIONS_SESSION_LOG_KEY, { type: "json" });
+    if (!Array.isArray(log)) return [];
+    return log.filter(
+      (e) =>
+        e &&
+        typeof e.ts === "number" &&
+        ymdEt(new Date(e.ts)) === ymd
+    );
+  } catch (e) {
+    console.error("scan-eod session-log", e);
+    return [];
+  }
+}
+
+/**
+ * @param {any[]} log
+ * @param {string} dateStr — ymdEt(new Date())
+ */
+function buildEodDebriefSummary(log, dateStr) {
+  const totalPnlPct = log
+    .filter((e) => e.outcome === "WIN" || e.outcome === "LOSS")
+    .reduce((sum, e) => sum + (Number(e.pnlPct) || 0), 0);
+  return {
+    date: dateStr,
+    totalAlertsFired: log.filter((e) => e.type === "ALERT_FIRED").length,
+    totalPositionsOpened: log.filter((e) => e.type === "POSITION_OPENED").length,
+    totalClosed: log.filter((e) => e.type === "POSITION_CLOSED").length,
+    wins: log.filter((e) => e.outcome === "WIN").length,
+    losses: log.filter((e) => e.outcome === "LOSS").length,
+    totalPnlPct: totalPnlPct.toFixed(2),
+    grokDecisions: log.filter((e) => e.type === "GROK_DECISION"),
+    allPositions: log.filter(
+      (e) => e.type === "POSITION_CLOSED" || e.type === "POSITION_OPENED"
+    ),
+  };
+}
+
+function parseGrokDebriefJson(text) {
+  let s = String(text || "").trim();
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) s = fence[1].trim();
+  const i = s.indexOf("{");
+  const j = s.lastIndexOf("}");
+  if (i < 0 || j <= i) return null;
+  try {
+    return JSON.parse(s.slice(i, j + 1));
+  } catch {
+    return null;
+  }
+}
+
+function tuningLearningStore() {
+  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return null;
+  return getStore({
+    name: "sohelator-learning",
+    siteID: process.env.NETLIFY_SITE_ID,
+    token: process.env.NETLIFY_TOKEN,
+  });
+}
+
+/**
+ * Merge non-null numeric fields from Grok into `optimized_params` blob.
+ * @returns {Promise<{ changed: string[], diffs: { key: string, from: unknown, to: number }[], next: Record<string, unknown> | null }>}
+ */
+async function mergeOptimizedParamsFromGrokSuggestions(suggestions) {
+  const store = tuningLearningStore();
+  if (!store || !suggestions || typeof suggestions !== "object") {
+    return { changed: [], diffs: [], next: null };
+  }
+  const keys = ["minScore", "adxThreshold", "volIgnition", "evThreshold"];
+  let cur = await store.get("optimized_params", { type: "json" });
+  if (typeof cur === "string") {
+    try {
+      cur = JSON.parse(cur);
+    } catch {
+      cur = {};
+    }
+  }
+  if (!cur || typeof cur !== "object" || Array.isArray(cur)) cur = {};
+  const next = { ...cur };
+  const changed = [];
+  const diffs = [];
+  for (const k of keys) {
+    const v = suggestions[k];
+    if (v == null) continue;
+    const n = Number(v);
+    if (!Number.isFinite(n)) continue;
+    const from = next[k];
+    if (from !== n) {
+      next[k] = n;
+      changed.push(`${k} ${from}→${n}`);
+      diffs.push({ key: k, from, to: n });
+    }
+  }
+  if (changed.length) {
+    await store.set("optimized_params", JSON.stringify(next), {
+      metadata: { contentType: "application/json" },
+    });
+  }
+  return { changed, diffs, next: changed.length ? next : null };
+}
+
 async function listAlertJsonKeys(alertStore) {
   const keys = [];
   try {
@@ -534,6 +657,59 @@ Also briefly: Was the GEX regime directionally useful? Did options-flow / sector
     eodAnalysis = data.content?.[0]?.text || data.error?.message || "";
   }
 
+  let eodDebriefSummary = null;
+  let grokDebriefRaw = "";
+  let grokDebriefParsed = null;
+  let paramTuneChanged = [];
+  let parameterMergeDiff = [];
+  try {
+    const ymdKey = ymdEt(new Date());
+    const sessionRows = await loadSessionLogRowsForEtYmd(ymdKey);
+    eodDebriefSummary = buildEodDebriefSummary(sessionRows, ymdKey);
+    if (process.env.GROK_API_KEY) {
+      const { callGrok } = await import("../../src/lib/grok.js");
+      const grokDebriefModel = "grok-4.20-0309-reasoning";
+      const summaryJson = JSON.stringify(eodDebriefSummary, null, 2);
+      const debriefPrompt = `You are SOHELATOR's head analyst. Run the end-of-day debrief and make cheap Grok smarter for tomorrow.
+
+Today's session log:
+${summaryJson}
+
+Respond ONLY with valid JSON in exactly this structure:
+{
+  "performanceReview": "3-4 sentences on what happened today",
+  "cheapGrokAudit": "review every CLOSE/ADD/HOLD decision — score right or wrong based on outcome, identify patterns",
+  "filterAssessment": "were scanner filters catching good setups or noise? be specific",
+  "tomorrowInstructions": "direct instruction set for cheap Grok to follow tomorrow — what to favor, avoid, watch for. Write as if directly addressing cheap Grok.",
+  "parameterSuggestions": { "minScore": null, "adxThreshold": null, "volIgnition": null, "evThreshold": null },
+  "sessionGrade": "A or B or C or D or F",
+  "keyLearning": "one sentence max"
+}`;
+      grokDebriefRaw = await callGrok(grokDebriefModel, debriefPrompt, 2500);
+      grokDebriefParsed = parseGrokDebriefJson(grokDebriefRaw);
+
+      const tuningStore = tuningLearningStore();
+      if (tuningStore && grokDebriefParsed && typeof grokDebriefParsed === "object") {
+        const merge = await mergeOptimizedParamsFromGrokSuggestions(
+          grokDebriefParsed.parameterSuggestions
+        );
+        paramTuneChanged = merge.changed;
+        parameterMergeDiff = merge.diffs || [];
+        const blobPayload = {
+          ...grokDebriefParsed,
+          summary: eodDebriefSummary,
+          savedAt: Date.now(),
+          savedAtIso: new Date().toISOString(),
+          paramTuneChanged,
+          parameterMergeDiff,
+        };
+        await tuningStore.setJSON(`learning-${ymdKey}`, blobPayload);
+      }
+    }
+  } catch (e) {
+    console.error("scan-eod debrief block", e);
+  }
+
   const gradeMatchEod = eodAnalysis.match(/Grade[:\s]+([A-F][+-]?)/i);
   let gradeLetter = gradeMatchEod ? gradeMatchEod[1] : null;
   if (
@@ -578,6 +754,11 @@ Also briefly: Was the GEX regime directionally useful? Did options-flow / sector
     bottomPatterns,
     improvementSuggestions,
     gradeLetter,
+    eodDebriefSummary,
+    grokDebriefRaw,
+    grokDebriefParsed,
+    paramTuneChanged,
+    parameterMergeDiff,
   };
 
   await learningStore.setJSON("eod_" + dateStr.replace(/\s/g, "_"), eodData);
@@ -610,17 +791,57 @@ Also briefly: Was the GEX regime directionally useful? Did options-flow / sector
 
   const bot = process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TELEGRAM_CHAT_ID;
-  if (bot && chat && eodAnalysis) {
-    const gradeMatch = eodAnalysis.match(/Grade[:\s]+([A-D][+-]?)/i);
-    const grade = gradeMatch ? gradeMatch[1] : "?";
-    const gradeEmoji = grade.startsWith("A")
-      ? "🏆"
-      : grade.startsWith("B")
-        ? "✅"
-        : grade.startsWith("C")
-          ? "⚠️"
-          : "❌";
-    const msg = `📊 <b>SOHELATOR EOD REVIEW — ${dateStr}</b>
+  if (bot && chat) {
+    if (grokDebriefParsed && eodDebriefSummary) {
+      const sg = eodDebriefSummary;
+      const gd = grokDebriefParsed;
+      const sessionGrade = String(gd.sessionGrade || "?").trim();
+      const keyLearning = String(gd.keyLearning || "—").trim();
+      const audit120 = String(gd.cheapGrokAudit || "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 120);
+      const tom100 = String(gd.tomorrowInstructions || "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 100);
+      const sug = gd.parameterSuggestions || {};
+      const nonNullParams = ["minScore", "adxThreshold", "volIgnition", "evThreshold"]
+        .filter((k) => sug[k] != null && sug[k] !== "")
+        .map((k) => `${k}=${sug[k]}`);
+      const paramsLine =
+        paramTuneChanged.length > 0
+          ? paramTuneChanged.join(", ")
+          : nonNullParams.length > 0
+            ? nonNullParams.join(", ")
+            : "no changes";
+      const debriefMsg = `📊 EOD DEBRIEF — ${sg.date}
+Grade: ${sessionGrade}
+${sg.wins}W · ${sg.losses}L · P&L ${sg.totalPnlPct}%
+${keyLearning}
+Cheap Grok audit: ${audit120 || "—"}
+Tomorrow: ${tom100 || "—"}
+Params updated: ${paramsLine}`;
+      await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chat,
+          text: debriefMsg.slice(0, 3900),
+        }),
+      });
+    }
+    if (eodAnalysis) {
+      const gradeMatch = eodAnalysis.match(/Grade[:\s]+([A-D][+-]?)/i);
+      const grade = gradeMatch ? gradeMatch[1] : "?";
+      const gradeEmoji = grade.startsWith("A")
+        ? "🏆"
+        : grade.startsWith("B")
+          ? "✅"
+          : grade.startsWith("C")
+            ? "⚠️"
+            : "❌";
+      const msg = `📊 <b>SOHELATOR EOD REVIEW — ${dateStr}</b>
 
 ${gradeEmoji} <b>TODAY'S GRADE: ${grade}</b>
 Win rate: ${winRate ?? "N/A"}% (${correctCalls}/${totalCalls || 0} calls)
@@ -638,15 +859,16 @@ ${results
 ${eodAnalysis.slice(0, 800)}…
 
 📈 <i>Full review in dashboard → SCAN tab</i>`;
-    await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chat,
-        text: msg,
-        parse_mode: "HTML",
-      }),
-    });
+      await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chat,
+          text: msg,
+          parse_mode: "HTML",
+        }),
+      });
+    }
   }
 
   return { statusCode: 200, body: JSON.stringify({ ok: true }) };
