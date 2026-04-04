@@ -24,79 +24,48 @@
   node_bundler = "esbuild"
 
 # All schedules in UTC. EDT = UTC-4 (Mar-Nov). EST = UTC-5 (Nov-Mar).
-# Update all schedules in November when clocks fall back.
+# Update all hour values +1 in November when clocks fall back.
+
+[functions."premarket"]
+  schedule = "30 12 * * 1-5"
+  timeout = 30
+  # 8:30 AM EDT
 
 [functions."scan-925"]
   schedule = "25 13 * * 1-5"
-  timeout = 60
+  timeout = 30
+  # 9:25 AM EDT
 
 [functions."scan-955"]
   schedule = "55 13 * * 1-5"
-  timeout = 60
+  timeout = 30
+  # 9:55 AM EDT
 
-# EOD — 4:05 PM EDT → 20:05 UTC
+[functions."brief-1pm"]
+  schedule = "0 17 * * 1-5"
+  timeout = 30
+  # 1:00 PM EDT
+
 [functions."scan-eod"]
   schedule = "5 20 * * 1-5"
   timeout = 60
+  # 4:05 PM EDT
 
-[functions."scanner-core"]
-  timeout = 60
-
-[functions."scan-weekend"]
-  timeout = 60
-
-[functions."scan-now"]
-  timeout = 60
-
-[functions."ticker-intel"]
-  timeout = 60
-
-[functions."ai"]
-  timeout = 45
-
-[functions."ai-test"]
-  timeout = 120
-
-[functions."research-brief"]
-  timeout = 60
-
-# Netlify Pro max 26s; free tier is 10s — tune SCAN_CLAUDE_*_TIMEOUT_MS if you hit limits
-[functions."scan"]
-  timeout = 26
-
-# Premarket — 8:30 AM EDT → 12:30 UTC
-[functions."premarket"]
-  schedule = "30 12 * * 1-5"
-  timeout = 90
-
-[functions."nightly-learn"]
-  schedule = "30 23 * * 1-5"
-  timeout = 120
-
-[functions."trigger"]
-  timeout = 60
-
-# Cheap monitor — every 5m during 9 AM–4 PM EDT window (UTC 13–20 weekdays); function also filters ET RTH
 [functions."cheap-monitor"]
   schedule = "*/5 13-20 * * 1-5"
-  timeout = 120
+  timeout = 26
+  # Every 5 min 9AM-4PM EDT
 
 [functions."matrix-signal"]
   timeout = 30
 
-# 1:00 PM EDT afternoon brief → 17:00 UTC
-[functions."brief-1pm"]
-  schedule = "0 17 * * 1-5"
-  timeout = 120
+[functions."scan"]
+  timeout = 26
 
-[functions."position-tracker"]
+[functions."nightly-learn"]
+  schedule = "0 2 * * 2-6"
   timeout = 60
-
-# Expensive checkpoints — trigger-expensive.js only acts on exact ET slots (8:15, 9:25, 9:45, 11:00, 13:00, 14:00, 16:00).
-# Cron must run often enough to hit those minutes; every 15m UTC 12–20 weekdays (see trigger-expensive.js).
-[functions."trigger-expensive"]
-  schedule = "*/15 12-20 * * 1-5"
-  timeout = 120
+  # 10 PM EDT Mon-Fri (2 AM UTC next day)
 
 [[redirects]]
   from = "/api/research-brief"
