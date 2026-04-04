@@ -878,6 +878,11 @@ async function runScan(event) {
   }
 }
 
+/**
+ * Netlify entry: Promise.race(runScan vs 25s) + outer try/catch so the platform
+ * returns 200 JSON on timeout/errors instead of 502 when possible. runScan also
+ * has inner try/catch. Requires Netlify Pro for [functions.scan] timeout 26s.
+ */
 export const handler = async (event) => {
   const timeoutHeaders = { ...cors, "Content-Type": "application/json" };
   try {

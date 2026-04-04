@@ -1,9 +1,9 @@
 {
-  "adxThreshold": 12,
+  "adxThreshold": 22,
   "volIgnition": 1.5,
   "prevVolIgnition": 1.25,
-  "sectorRSBonus": 20,
-  "minScore": 55,
+  "sectorRSBonus": 10,
+  "minScore": 75,
   "higherTFPenaltyMax": -10,
   "evThreshold": 0.4,
   "playTypeBonus": {

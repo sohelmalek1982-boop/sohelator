@@ -24,11 +24,11 @@ import {
 
 /** Defaults match shipped public/optimized_params.json (blueprint baseline) */
 export const BLUEPRINT_DEFAULT_PARAMS = {
-  adxThreshold: 12,
+  adxThreshold: 22,
   volIgnition: 1.5,
   prevVolIgnition: 1.25,
-  sectorRSBonus: 20,
-  minScore: 55,
+  sectorRSBonus: 10,
+  minScore: 75,
   higherTFPenaltyMax: -10,
   evThreshold: 0.4,
   playTypeBonus: {
@@ -53,6 +53,15 @@ export const BLUEPRINT_DEFAULT_PARAMS = {
     minScore: 1,
     evThreshold: 1,
   },
+};
+
+/** Written to Netlify blob when health detects runaway tuning (subset of blueprint). */
+export const SAFE_OPTIMIZED_PARAMS_BLOB = {
+  adxThreshold: 22,
+  sectorRSBonus: 10,
+  minScore: 75,
+  evThreshold: 0.4,
+  higherTFPenaltyMax: -10,
 };
 
 /** @type {typeof BLUEPRINT_DEFAULT_PARAMS | null} */

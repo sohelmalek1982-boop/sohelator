@@ -51,25 +51,35 @@ exports.handler = async (event) => {
   if (blobsConfigured) {
     try {
       const mod = await import("../../src/lib/scanner-rules.js");
+      const { getStore } = await import("@netlify/blobs");
+      const { SAFE_OPTIMIZED_PARAMS_BLOB } = mod;
       await mod.applyOptimizedParams(true);
       let params = mod.getOptimizedParams();
       const paramsNeedReset =
-        (params.sectorRSBonus || 0) > 15 ||
         (params.adxThreshold || 999) < 18 ||
-        (params.minScore || 0) < 50;
+        (params.sectorRSBonus || 0) > 12 ||
+        (params.minScore || 0) < 70;
       if (paramsNeedReset) {
         console.warn(
-          "health: optimized params out of bounds — resetting to defaults"
+          "health: optimized params out of bounds — writing safe blob defaults"
         );
-        await mod.resetOptimizedParams();
+        const store = getStore({
+          name: "sohelator-learning",
+          siteID: process.env.NETLIFY_SITE_ID,
+          token: process.env.NETLIFY_TOKEN,
+        });
+        await store.setJSON("optimized_params", SAFE_OPTIMIZED_PARAMS_BLOB);
+        await mod.applyOptimizedParams(true);
         params = mod.getOptimizedParams();
         optimizedParamsReset = true;
+        console.log("health: reset params to safe defaults", SAFE_OPTIMIZED_PARAMS_BLOB);
       }
       optimizedParams = {
         adxThreshold: params.adxThreshold,
         sectorRSBonus: params.sectorRSBonus,
         minScore: params.minScore,
         evThreshold: params.evThreshold,
+        higherTFPenaltyMax: params.higherTFPenaltyMax,
       };
     } catch (e) {
       console.warn("health optimized params", e?.message || e);

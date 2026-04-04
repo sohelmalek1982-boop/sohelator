@@ -130,13 +130,110 @@ function positionsStore() {
   });
 }
 
+const TZ_ET = "America/New_York";
+
+function weekdayShortEt(d) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: TZ_ET,
+    weekday: "short",
+  }).format(d);
+}
+
+/** 9:30 AM ET on the same calendar date as `anchor` in America/New_York (minute resolution). */
+function marketOpenUtcMsForEtCalendarDay(anchor) {
+  const fDate = new Intl.DateTimeFormat("en-US", {
+    timeZone: TZ_ET,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = fDate.formatToParts(anchor);
+  const ye = parts.find((p) => p.type === "year")?.value;
+  const mo = parts.find((p) => p.type === "month")?.value;
+  const da = parts.find((p) => p.type === "day")?.value;
+  if (!ye || !mo || !da) return null;
+  const target = `${ye}-${mo}-${da}`;
+  const t0 = anchor.getTime() - 12 * 60 * 60 * 1000;
+  const t1 = anchor.getTime() + 36 * 60 * 60 * 1000;
+  for (let t = t0; t <= t1; t += 60 * 1000) {
+    const d = new Date(t);
+    const p2 = fDate.formatToParts(d);
+    const y2 = p2.find((p) => p.type === "year")?.value;
+    const m2 = p2.find((p) => p.type === "month")?.value;
+    const d2 = p2.find((p) => p.type === "day")?.value;
+    if (`${y2}-${m2}-${d2}` !== target) continue;
+    const hp = new Intl.DateTimeFormat("en-US", {
+      timeZone: TZ_ET,
+      hour: "numeric",
+      minute: "numeric",
+      hour12: false,
+    }).formatToParts(d);
+    let h = 0;
+    let mi = 0;
+    for (const p of hp) {
+      if (p.type === "hour") h = parseInt(p.value, 10);
+      if (p.type === "minute") mi = parseInt(p.value, 10);
+    }
+    if (h === 9 && mi === 30) return t;
+  }
+  return null;
+}
+
+/** Today's session open in ET; on Sat/Sun use most recent Friday 9:30 ET. */
+function stalePruneCutoffMs(now = new Date()) {
+  const wd = weekdayShortEt(now);
+  if (wd === "Sat" || wd === "Sun") {
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(now.getTime() - i * 86400000);
+      if (weekdayShortEt(d) === "Fri") {
+        return marketOpenUtcMsForEtCalendarDay(d);
+      }
+    }
+  }
+  return marketOpenUtcMsForEtCalendarDay(now);
+}
+
+/**
+ * Close non-terminal positions opened before today's (or last Friday on weekends)
+ * 9:30 AM ET so stale P&L does not carry into the next session.
+ */
+function pruneStaleOpenPositions(map) {
+  const cutoff = stalePruneCutoffMs();
+  if (cutoff == null || !Number.isFinite(cutoff)) return { map, changed: false };
+  let changed = false;
+  const out = { ...map };
+  for (const id of Object.keys(out)) {
+    const p = out[id];
+    if (!p || isPositionTerminated(p)) continue;
+    const openedAt = Number(p.openedAt);
+    if (!Number.isFinite(openedAt) || openedAt >= cutoff) continue;
+    out[id] = {
+      ...p,
+      status: "CLOSED ❌ stale_weekend",
+      closedAt: new Date().toISOString(),
+      closeReason: "stale_weekend",
+      lastUpdated: Date.now(),
+    };
+    changed = true;
+  }
+  return { map: out, changed };
+}
+
 export async function readPositionsMap() {
   const store = positionsStore();
   if (!store) return {};
   try {
     const raw = await store.get(BLOB_KEY, { type: "json" });
-    if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw;
-    return {};
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    const { map, changed } = pruneStaleOpenPositions(raw);
+    if (changed) {
+      try {
+        await store.setJSON(BLOB_KEY, map);
+      } catch (e) {
+        console.warn("position-tracker prune stale write", e?.message || e);
+      }
+    }
+    return map;
   } catch (e) {
     console.warn("position-tracker readPositionsMap", e?.message || e);
     return {};
