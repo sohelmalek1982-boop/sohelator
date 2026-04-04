@@ -7,7 +7,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "sync-version": "node scripts/sync-version.js"
+    "sync-version": "node scripts/sync-version.js",
+    "test:claude": "node scripts/smoke-claude.mjs"
   },
   "dependencies": {
     "@netlify/functions": "^2.0.0",
