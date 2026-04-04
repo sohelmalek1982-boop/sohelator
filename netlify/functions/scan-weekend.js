@@ -161,11 +161,7 @@ Give: (1) tone for the week (2) best 3 tickers to stalk (3) what to avoid (4) ma
     model,
   };
 
-  const store = getStore({
-    name: "morning-scans",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  const store = getStore('morning-scans');
   await store.setJSON("weekend_intel_latest", intel);
   await store.setJSON("weekend_intel_" + weekOf, intel);
 
@@ -183,11 +179,7 @@ async function httpHandler(event) {
     return { statusCode: 204, headers: cors, body: "" };
   }
   if (event.httpMethod === "GET") {
-    const store = getStore({
-      name: "morning-scans",
-      siteID: process.env.NETLIFY_SITE_ID,
-      token: process.env.NETLIFY_TOKEN,
-    });
+    const store = getStore('morning-scans');
     const data = await store.get("weekend_intel_latest", { type: "json" });
     return {
       statusCode: 200,

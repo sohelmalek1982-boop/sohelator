@@ -15,16 +15,8 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "GET only" }) };
   }
 
-  const alertsStore = getStore({
-    name: "alerts",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
-  const scannerStore = getStore({
-    name: "scanner",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  const alertsStore = getStore('alerts');
+  const scannerStore = getStore('scanner');
 
   const pending = [];
   const toDelete = [];

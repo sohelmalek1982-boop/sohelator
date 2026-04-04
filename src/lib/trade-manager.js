@@ -29,11 +29,7 @@ function tradierBase() {
 }
 
 function tradeLogStore() {
-  return getStore({
-    name: STORE_NAME,
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  return getStore(STORE_NAME);
 }
 
 function normalizeLogShape(raw) {
@@ -46,7 +42,6 @@ function normalizeLogShape(raw) {
 }
 
 async function blobRead() {
-  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return null;
   try {
     const store = tradeLogStore();
     const j = await store.get(BLOB_KEY, { type: "json" });
@@ -58,9 +53,6 @@ async function blobRead() {
 }
 
 async function blobWrite(state) {
-  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) {
-    return { saved: false, note: "NETLIFY_SITE_ID / NETLIFY_TOKEN not set — open trades only in memory for this request" };
-  }
   try {
     const store = tradeLogStore();
     await store.setJSON(BLOB_KEY, state);

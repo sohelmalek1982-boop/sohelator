@@ -3,11 +3,7 @@ const { getStore } = require("@netlify/blobs");
 const DECISION_SCHEMA_VERSION = 2;
 
 function getMemoryStore() {
-  return getStore({
-    name: "trading-memory",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  return getStore('trading-memory');
 }
 
 async function listKeysWithPrefix(store, prefix) {

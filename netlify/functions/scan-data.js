@@ -57,7 +57,7 @@ function emptyScanPayload(extra = {}) {
     lastUpdated: Date.now(),
     blobsConfigured: false,
     blobsMessage:
-      "Add NETLIFY_SITE_ID (Site settings → General → Site details) and NETLIFY_TOKEN (User settings → Applications → Personal access tokens with Blobs scope) in Netlify → Site → Environment variables. Without them, scheduled scans cannot save and this feed stays empty.",
+      "This feed needs Netlify Functions runtime (blobs use built-in credentials on deploy). Local or missing NETLIFY_SITE_ID: scheduled scans may not persist and this feed can stay empty.",
     pipelineStatus: getPipelineStatus(),
     ...extra,
   };
@@ -76,9 +76,8 @@ exports.handler = async (event) => {
     };
   }
 
-  const siteID = process.env.NETLIFY_SITE_ID;
-  const token = process.env.NETLIFY_TOKEN;
-  const blobsConfigured = !!(siteID && token);
+  const blobsConfigured =
+    process.env.NETLIFY === "true" || !!process.env.NETLIFY_SITE_ID;
 
   let marketClock = null;
   try {
@@ -98,21 +97,9 @@ exports.handler = async (event) => {
   }
 
   try {
-    const store = getStore({
-      name: "morning-scans",
-      siteID,
-      token,
-    });
-    const learningStore = getStore({
-      name: "learnings",
-      siteID,
-      token,
-    });
-    const scannerStore = getStore({
-      name: "scanner",
-      siteID,
-      token,
-    });
+    const store = getStore('morning-scans');
+    const learningStore = getStore('learnings');
+    const scannerStore = getStore('scanner');
 
     const [
       scan925,

@@ -128,27 +128,8 @@ exports.handler = async (event) => {
     };
   }
 
-  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) {
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        ok: true,
-        entries: [],
-        latest: null,
-        todayEodReview: null,
-        todayEt: ymdEtNow(),
-        note: "NETLIFY_SITE_ID / NETLIFY_TOKEN not set",
-      }),
-    };
-  }
-
   try {
-    const store = getStore({
-      name: "sohelator-learning",
-      siteID: process.env.NETLIFY_SITE_ID,
-      token: process.env.NETLIFY_TOKEN,
-    });
+    const store = getStore('sohelator-learning');
     const [learningKeys, eodKeys] = await Promise.all([
       listBlobKeys(store, "learning-"),
       listBlobKeys(store, "eod-review-"),

@@ -50,11 +50,7 @@ exports.handler = async (event) => {
   const dateParam = q.date || null;
 
   const memStore = getMemoryStore();
-  const learningStore = getStore({
-    name: "learnings",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  const learningStore = getStore('learnings');
 
   try {
     if (type === "patterns") {

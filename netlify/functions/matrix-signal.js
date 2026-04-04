@@ -679,17 +679,10 @@ export const handler = async (event) => {
 
     const marketProb = calculateMarketProbability(cur, gradClass, macroRegime);
 
-    let positionStore = null;
-    if (process.env.NETLIFY_SITE_ID && process.env.NETLIFY_TOKEN) {
-      positionStore = getStore({
-        name: "sohelator-positions",
-        siteID: process.env.NETLIFY_SITE_ID,
-        token: process.env.NETLIFY_TOKEN,
-      });
-    }
-    const prevBiasData = positionStore
-      ? await positionStore.get("market-prob-last-bias", { type: "json" }).catch(() => null)
-      : null;
+    const positionStore = getStore("sohelator-positions");
+    const prevBiasData = await positionStore
+      .get("market-prob-last-bias", { type: "json" })
+      .catch(() => null);
     const prevBias = prevBiasData?.biasKey || null;
 
     await maybeSendGEXConfirmationTelegram(currentPrice, gexData, positionStore, {

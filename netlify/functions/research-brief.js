@@ -116,11 +116,7 @@ exports.handler = async (event) => {
   const model =
     process.env.ANTHROPIC_MODEL_RESEARCH || "claude-haiku-4-5-20251001";
 
-  const store = getStore({
-    name: "trading-memory",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  const store = getStore('trading-memory');
 
   const ck = cacheKey(symbol, dateStr);
   if (!refresh && apiKey) {

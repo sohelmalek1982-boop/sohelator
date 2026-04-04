@@ -46,13 +46,8 @@ const VOLUME_TELEGRAM_COOLDOWN_MS = 3 * 60 * 60 * 1000;
 
 /** Persists latest POST /api/scan JSON for HUD GET /api/scan-data (cheap-monitor updates without opening the app). */
 async function persistLastHudScan(payload) {
-  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return;
   try {
-    const scannerStore = getStore({
-      name: "scanner",
-      siteID: process.env.NETLIFY_SITE_ID,
-      token: process.env.NETLIFY_TOKEN,
-    });
+    const scannerStore = getStore('scanner');
     await scannerStore.setJSON("last_hud_scan", payload);
   } catch (e) {
     console.warn("scan.js persist last_hud_scan", e?.message || e);

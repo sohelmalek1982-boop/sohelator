@@ -1,7 +1,7 @@
 /**
  * SOHELATOR blueprint — nightly learning job: backtest → trade_log feedback → pattern discovery → persist tuned params.
  *
- * Persists to Netlify Blobs (`sohelator-learning` store) when NETLIFY_SITE_ID + NETLIFY_TOKEN are set.
+ * Persists to Netlify Blobs (`sohelator-learning` store) on Netlify (runtime blob credentials).
  * Static files under public/ are updated at deploy; runtime overrides live in the blob (merged in applyOptimizedParams).
  *
  * Schedule via Netlify cron or POST manually. Increase function timeout in netlify.toml if backtest exceeds default.
@@ -150,20 +150,11 @@ function discoverPatterns(backtestReport, tradeLog) {
 }
 
 function learningStore() {
-  return getStore({
-    name: "sohelator-learning",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  return getStore('sohelator-learning');
 }
 
 async function persistLearning(optimizedParams, patterns) {
   const out = { saved: false, blob: false };
-  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) {
-    out.note =
-      "NETLIFY_SITE_ID / NETLIFY_TOKEN not set — copy `response.persistJson` into public/ on next deploy";
-    return out;
-  }
   try {
     const store = learningStore();
     await store.set("optimized_params", JSON.stringify(optimizedParams), {

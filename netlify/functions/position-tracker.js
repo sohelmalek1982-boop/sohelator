@@ -57,7 +57,6 @@ export async function appendSessionLog(entry) {
     return;
   }
   const store = positionsStore();
-  if (!store) return;
 
   const row = {
     ts: Date.now(),
@@ -120,14 +119,7 @@ const cors = {
 };
 
 function positionsStore() {
-  const siteID = process.env.NETLIFY_SITE_ID;
-  const token = process.env.NETLIFY_TOKEN;
-  if (!siteID || !token) return null;
-  return getStore({
-    name: "sohelator-positions",
-    siteID,
-    token,
-  });
+  return getStore("sohelator-positions");
 }
 
 const TZ_ET = "America/New_York";
@@ -221,7 +213,6 @@ function pruneStaleOpenPositions(map) {
 
 export async function readPositionsMap() {
   const store = positionsStore();
-  if (!store) return {};
   try {
     const raw = await store.get(BLOB_KEY, { type: "json" });
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
@@ -242,7 +233,6 @@ export async function readPositionsMap() {
 
 export async function writePositionsMap(map) {
   const store = positionsStore();
-  if (!store) throw new Error("NETLIFY_SITE_ID / NETLIFY_TOKEN required for positions");
   await store.setJSON(BLOB_KEY, map);
 }
 
@@ -440,9 +430,6 @@ export async function updatePositions() {
     return [];
   }
 
-  const store = positionsStore();
-  if (!store) return [];
-
   let map;
   try {
     map = await readPositionsMap();
@@ -548,16 +535,6 @@ export async function handler(event) {
       body = {};
     }
     const store = positionsStore();
-    if (!store) {
-      return {
-        statusCode: 503,
-        headers,
-        body: JSON.stringify({
-          ok: false,
-          error: "NETLIFY_SITE_ID / NETLIFY_TOKEN required",
-        }),
-      };
-    }
     try {
       const cleared = [];
       if (body.clearPositions === true) {

@@ -110,12 +110,7 @@ function ymdEt(d) {
 const POSITIONS_SESSION_LOG_KEY = "session-log";
 
 async function loadSessionLogRowsForEtYmd(ymd) {
-  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return [];
-  const posStore = getStore({
-    name: "sohelator-positions",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  const posStore = getStore("sohelator-positions");
   try {
     const log = await posStore.get(POSITIONS_SESSION_LOG_KEY, { type: "json" });
     if (!Array.isArray(log)) return [];
@@ -180,12 +175,7 @@ function parseGrokDebriefJson(text) {
 }
 
 function tuningLearningStore() {
-  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return null;
-  return getStore({
-    name: "sohelator-learning",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  return getStore("sohelator-learning");
 }
 
 /**
@@ -271,21 +261,9 @@ async function runEod() {
   }
 
   const dateStr = dateStrUs();
-  const store = getStore({
-    name: "morning-scans",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
-  const alertStore = getStore({
-    name: "alerts",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
-  const learningStore = getStore({
-    name: "learnings",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  const store = getStore('morning-scans');
+  const alertStore = getStore('alerts');
+  const learningStore = getStore('learnings');
 
   try {
     const existing = await learningStore.get("eod_latest", { type: "json" });
@@ -769,17 +747,9 @@ Respond ONLY with valid JSON in exactly this structure:
   let comprehensiveEodReview = "";
   let comprehensiveEodParsed = null;
   try {
-    if (
-      process.env.ANTHROPIC_API_KEY &&
-      process.env.NETLIFY_SITE_ID &&
-      process.env.NETLIFY_TOKEN
-    ) {
+    if (process.env.ANTHROPIC_API_KEY) {
       const { callClaudeExpensive } = await import("../../src/lib/claude.js");
-      const posStore = getStore({
-        name: "sohelator-positions",
-        siteID: process.env.NETLIFY_SITE_ID,
-        token: process.env.NETLIFY_TOKEN,
-      });
+      const posStore = getStore("sohelator-positions");
       const fullLog = await loadFullSessionLogForEod(posStore);
       const ymdKey2 = ymdEt(new Date());
       const todayLog = fullLog.filter(
@@ -1118,11 +1088,7 @@ async function httpHandler(event) {
     return { statusCode: 204, headers: cors, body: "" };
   }
   if (event.httpMethod === "GET") {
-    const learningStore = getStore({
-      name: "learnings",
-      siteID: process.env.NETLIFY_SITE_ID,
-      token: process.env.NETLIFY_TOKEN,
-    });
+    const learningStore = getStore('learnings');
     const data = await learningStore.get("eod_latest", { type: "json" });
     return {
       statusCode: 200,

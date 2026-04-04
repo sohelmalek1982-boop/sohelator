@@ -43,9 +43,8 @@ exports.handler = async (event) => {
       body: JSON.stringify({ error: "GET only" }),
     };
   }
-  const blobsConfigured = !!(
-    process.env.NETLIFY_SITE_ID && process.env.NETLIFY_TOKEN
-  );
+  const blobsConfigured =
+    process.env.NETLIFY === "true" || !!process.env.NETLIFY_SITE_ID;
   let optimizedParams = null;
   let optimizedParamsReset = false;
   if (blobsConfigured) {
@@ -63,11 +62,7 @@ exports.handler = async (event) => {
         console.warn(
           "health: optimized params out of bounds — writing safe blob defaults"
         );
-        const store = getStore({
-          name: "sohelator-learning",
-          siteID: process.env.NETLIFY_SITE_ID,
-          token: process.env.NETLIFY_TOKEN,
-        });
+        const store = getStore('sohelator-learning');
         await store.setJSON("optimized_params", SAFE_OPTIMIZED_PARAMS_BLOB);
         await mod.applyOptimizedParams(true);
         params = mod.getOptimizedParams();

@@ -10,13 +10,17 @@
  *     symbols in our universe mentioned in headlines get priority; body forwards catalyst text for Grok.
  *
  * Netlify: URL / DEPLOY_PRIME_URL, TRADIER_TOKEN (news + scan), Claude via expensive /api/scan,
- * NETLIFY_SITE_ID + NETLIFY_TOKEN (debounce blob + alert-cooldowns), VAPID_* (push via lib/pushAll).
+ * On Netlify, blobs use runtime credentials (debounce + alert-cooldowns). VAPID_* (push via lib/pushAll).
  */
 
 const fetch = globalThis.fetch || require("node-fetch");
 const { getStore } = require("@netlify/blobs");
 const { sendPushToAll } = require("./lib/pushAll.js");
 const alertQuality = require("./lib/alertQuality.cjs");
+
+function netlifyBlobRuntime() {
+  return process.env.NETLIFY === "true" || !!process.env.NETLIFY_SITE_ID;
+}
 
 /** Must match DEFAULT_UNIVERSE in netlify/functions/scan.js for headline intersection. */
 const SCAN_UNIVERSE = new Set([
@@ -91,13 +95,8 @@ function ymdEt(d) {
 
 /** Symbols from today's 9:25 scan blob — merged into RTH cheap scan as priority + extra universe. */
 async function getScan925WatchlistSyms() {
-  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return [];
   try {
-    const store = getStore({
-      name: "morning-scans",
-      siteID: process.env.NETLIFY_SITE_ID,
-      token: process.env.NETLIFY_TOKEN,
-    });
+    const store = getStore('morning-scans');
     const scan925 = await store.get("scan_925_latest", { type: "json" });
     if (!scan925) return [];
     const todayLong = new Date().toLocaleDateString("en-US", {
@@ -125,13 +124,8 @@ async function getScan925WatchlistSyms() {
 
 /** After 1pm ET: Claude's revised afternoon list from brief_1pm_latest (same ET calendar day). */
 async function getBrief1pmAfternoonWatchlist() {
-  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return null;
   try {
-    const store = getStore({
-      name: "morning-scans",
-      siteID: process.env.NETLIFY_SITE_ID,
-      token: process.env.NETLIFY_TOKEN,
-    });
+    const store = getStore('morning-scans');
     const b = await store.get("brief_1pm_latest", { type: "json" });
     if (!b || !b.afternoonWatchlist) return null;
     const todayLong = new Date().toLocaleDateString("en-US", {
@@ -260,7 +254,6 @@ const CLAUDE_POSITION_MODEL =
 
 async function getPositionGrokCooldowns() {
   const store = cheapMonitorBlobStore();
-  if (!store) return {};
   try {
     const data = await store.get(POSITION_GROK_COOLDOWN_KEY, { type: "json" });
     if (data && typeof data === "object" && !Array.isArray(data)) return data;
@@ -273,7 +266,6 @@ async function getPositionGrokCooldowns() {
 
 async function setPositionGrokCooldownRecord(posId, pnlPct) {
   const store = cheapMonitorBlobStore();
-  if (!store) return;
   const id = String(posId || "");
   if (!id) return;
   try {
@@ -347,13 +339,8 @@ async function sendTelegramPlain(text) {
 }
 
 async function appendGrokPositionAuditRow(payload) {
-  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return;
   try {
-    const alertsStore = getStore({
-      name: "alerts",
-      siteID: process.env.NETLIFY_SITE_ID,
-      token: process.env.NETLIFY_TOKEN,
-    });
+    const alertsStore = getStore('alerts');
     const sym = String(payload.ticker || "X").replace(/[^a-z0-9_-]/gi, "").slice(0, 12) || "X";
     const key = `alert_${Date.now()}_grok_${sym}`;
     await alertsStore.setJSON(key, {
@@ -383,7 +370,6 @@ async function appendGrokPositionAuditRow(payload) {
 async function runRthPositionGrokMonitor(cheapAlerts, inRth, grokDailyBrief = null) {
   if (!inRth) return;
   if (!process.env.ANTHROPIC_API_KEY || !process.env.TRADIER_TOKEN) return;
-  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return;
 
   let pt;
   let getQuote;
@@ -665,18 +651,12 @@ const ALERT_TELEGRAM_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 hours
 const ALERT_TELEGRAM_SCORE_JUMP = 10; // Score must jump 10 points to override cooldown
 
 function cheapMonitorBlobStore() {
-  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return null;
-  return getStore({
-    name: "sohelator-cheap-monitor",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  return getStore("sohelator-cheap-monitor");
 }
 
 /** @returns {Promise<Record<string, { score: number, firedAt: number }>>} */
 async function getAlertCooldowns() {
   const store = cheapMonitorBlobStore();
-  if (!store) return {};
   try {
     const data = await store.get(ALERT_COOLDOWNS_BLOB_KEY, { type: "json" });
     if (data && typeof data === "object" && !Array.isArray(data)) return data;
@@ -689,7 +669,6 @@ async function getAlertCooldowns() {
 
 async function setAlertCooldown(symbol, score) {
   const store = cheapMonitorBlobStore();
-  if (!store) return;
   const sym = String(symbol || "").trim().toUpperCase();
   if (!sym) return;
   const s = Math.round(Number(score) || 0);
@@ -935,19 +914,13 @@ exports.handler = async () => {
 
   let grokDailyBrief = null;
   try {
-    if (process.env.NETLIFY_SITE_ID && process.env.NETLIFY_TOKEN) {
-      const store = getStore({
-        name: "sohelator-learning",
-        siteID: process.env.NETLIFY_SITE_ID,
-        token: process.env.NETLIFY_TOKEN,
-      });
-      const yesterday = ymdEt(new Date(Date.now() - 86400000));
-      const today = ymdEt(new Date());
-      const learned =
-        (await store.get(`learning-${today}`, { type: "json" })) ||
-        (await store.get(`learning-${yesterday}`, { type: "json" }));
-      if (learned?.tomorrowInstructions) grokDailyBrief = learned.tomorrowInstructions;
-    }
+    const store = getStore("sohelator-learning");
+    const yesterday = ymdEt(new Date(Date.now() - 86400000));
+    const today = ymdEt(new Date());
+    const learned =
+      (await store.get(`learning-${today}`, { type: "json" })) ||
+      (await store.get(`learning-${yesterday}`, { type: "json" }));
+    if (learned?.tomorrowInstructions) grokDailyBrief = learned.tomorrowInstructions;
   } catch (e) {
     console.warn("cheap-monitor: could not load daily brief", e?.message);
   }
@@ -976,50 +949,41 @@ exports.handler = async () => {
     const hourEt = Math.floor(tmin / 60);
     afterHoursSlot = `${ymdEt(now)}-${hourEt}`;
 
-    /* Without blobs, only attempt once per ET hour (first five-minute bucket 00–04). */
-    if (
-      !(process.env.NETLIFY_SITE_ID && process.env.NETLIFY_TOKEN) &&
-      tmin % 60 > 4
-    ) {
+    /* Without Netlify blob runtime, only attempt once per ET hour (first five-minute bucket 00–04). */
+    if (!netlifyBlobRuntime() && tmin % 60 > 4) {
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
           ...out,
           status: "ok",
-          skipped: "after_hours_set_NETLIFY_SITE_ID_TOKEN_for_hourly_dedupe",
+          skipped: "after_hours_no_blob_runtime_for_hourly_dedupe",
           afterHoursSlot,
         }),
       };
     }
 
-    if (process.env.NETLIFY_SITE_ID && process.env.NETLIFY_TOKEN) {
-      try {
-        const store = getStore({
-          name: "sohelator-cheap-monitor",
-          siteID: process.env.NETLIFY_SITE_ID,
-          token: process.env.NETLIFY_TOKEN,
-        });
-        const prevAh = await store.get("afterhours_last_slot", { type: "json" });
-        if (prevAh && String(prevAh.slotKey) === afterHoursSlot) {
-          return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({
-              ...out,
-              status: "ok",
-              skipped: "after_hours_hour_already_scanned",
-              afterHoursSlot,
-            }),
-          };
-        }
-        await store.setJSON("afterhours_last_slot", {
-          slotKey: afterHoursSlot,
-          at: Date.now(),
-        });
-      } catch (e) {
-        console.warn("cheap-monitor afterhours dedupe", e?.message || e);
+    try {
+      const store = getStore("sohelator-cheap-monitor");
+      const prevAh = await store.get("afterhours_last_slot", { type: "json" });
+      if (prevAh && String(prevAh.slotKey) === afterHoursSlot) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            ...out,
+            status: "ok",
+            skipped: "after_hours_hour_already_scanned",
+            afterHoursSlot,
+          }),
+        };
       }
+      await store.setJSON("afterhours_last_slot", {
+        slotKey: afterHoursSlot,
+        at: Date.now(),
+      });
+    } catch (e) {
+      console.warn("cheap-monitor afterhours dedupe", e?.message || e);
     }
 
     try {
@@ -1144,31 +1108,29 @@ exports.handler = async () => {
     try {
       const bias = alertQuality.inferBiasFromAlerts(alerts);
       const st = cheapMonitorBlobStore();
-      if (st) {
-        const ymd = ymdEt(now);
-        const prev = await st.get("market_bias_last", { type: "json" });
-        if (
-          prev &&
-          prev.ymd === ymd &&
-          prev.bias &&
-          prev.bias !== "mixed" &&
-          bias !== "mixed" &&
-          prev.bias !== bias
-        ) {
-          regimeFlipActive = true;
-          await appendSessionLogRow({
-            type: "REGIME_BIAS_FLIP",
-            trigger: `${prev.bias}->${bias}`,
-            score: alerts.length,
-            outcome: "OPEN",
-          });
-        }
-        await st.setJSON("market_bias_last", {
-          ymd,
-          bias,
-          at: Date.now(),
+      const ymd = ymdEt(now);
+      const prev = await st.get("market_bias_last", { type: "json" });
+      if (
+        prev &&
+        prev.ymd === ymd &&
+        prev.bias &&
+        prev.bias !== "mixed" &&
+        bias !== "mixed" &&
+        prev.bias !== bias
+      ) {
+        regimeFlipActive = true;
+        await appendSessionLogRow({
+          type: "REGIME_BIAS_FLIP",
+          trigger: `${prev.bias}->${bias}`,
+          score: alerts.length,
+          outcome: "OPEN",
         });
       }
+      await st.setJSON("market_bias_last", {
+        ymd,
+        bias,
+        at: Date.now(),
+      });
     } catch (e) {
       console.warn("cheap-monitor market_bias_last", e?.message || e);
     }
@@ -1192,32 +1154,26 @@ exports.handler = async () => {
     }
 
     let doExpensive = true;
-    if (process.env.NETLIFY_SITE_ID && process.env.NETLIFY_TOKEN) {
-      try {
-        const store = getStore({
-          name: "sohelator-cheap-monitor",
-          siteID: process.env.NETLIFY_SITE_ID,
-          token: process.env.NETLIFY_TOKEN,
-        });
-        const fp = wild
-          .map((a) => `${a.symbol}:${a.score}:${volRatioOf(a)}`)
-          .sort()
-          .join("|");
-        const prev = await store.get("exp_debounce", { type: "json" });
-        const t = Date.now();
-        if (
-          prev &&
-          prev.fp === fp &&
-          t - Number(prev.at || 0) < 10 * 60 * 1000
-        ) {
-          doExpensive = false;
-          out.expensiveSkipped = "debounced_10m";
-        } else {
-          await store.setJSON("exp_debounce", { fp, at: t });
-        }
-      } catch (e) {
-        console.warn("cheap-monitor debounce", e?.message || e);
+    try {
+      const store = getStore("sohelator-cheap-monitor");
+      const fp = wild
+        .map((a) => `${a.symbol}:${a.score}:${volRatioOf(a)}`)
+        .sort()
+        .join("|");
+      const prev = await store.get("exp_debounce", { type: "json" });
+      const t = Date.now();
+      if (
+        prev &&
+        prev.fp === fp &&
+        t - Number(prev.at || 0) < 10 * 60 * 1000
+      ) {
+        doExpensive = false;
+        out.expensiveSkipped = "debounced_10m";
+      } else {
+        await store.setJSON("exp_debounce", { fp, at: t });
       }
+    } catch (e) {
+      console.warn("cheap-monitor debounce", e?.message || e);
     }
 
     if (doExpensive) {

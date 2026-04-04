@@ -107,15 +107,8 @@ function optimizedParamsUrl() {
 
 async function tryLoadBlobParams() {
   try {
-    const siteID = typeof process !== "undefined" && process.env.NETLIFY_SITE_ID;
-    const token = typeof process !== "undefined" && process.env.NETLIFY_TOKEN;
-    if (!siteID || !token) return null;
     const { getStore } = await import("@netlify/blobs");
-    const store = getStore({
-      name: "sohelator-learning",
-      siteID,
-      token,
-    });
+    const store = getStore("sohelator-learning");
     const raw = await store.get("optimized_params", { type: "json" });
     return raw && typeof raw === "object" ? raw : null;
   } catch {
@@ -163,26 +156,15 @@ export async function applyOptimizedParams(force = false) {
  */
 export async function resetOptimizedParams() {
   _runtimeMergedParams = null;
-  const siteID = typeof process !== "undefined" && process.env.NETLIFY_SITE_ID;
-  const token = typeof process !== "undefined" && process.env.NETLIFY_TOKEN;
-  if (!siteID || !token) return false;
   try {
     const { getStore } = await import("@netlify/blobs");
-    const store = getStore({
-      name: "sohelator-learning",
-      siteID,
-      token,
-    });
+    const store = getStore("sohelator-learning");
     await store.delete("optimized_params");
   } catch (e) {
     console.warn("resetOptimizedParams delete blob:", e?.message || e);
     try {
       const { getStore } = await import("@netlify/blobs");
-      const store = getStore({
-        name: "sohelator-learning",
-        siteID: process.env.NETLIFY_SITE_ID,
-        token: process.env.NETLIFY_TOKEN,
-      });
+      const store = getStore("sohelator-learning");
       await store.setJSON("optimized_params", {});
     } catch (e2) {
       console.warn("resetOptimizedParams setJSON:", e2?.message || e2);

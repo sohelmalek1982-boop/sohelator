@@ -475,11 +475,7 @@ ${allHeadlines.slice(0, 8).join("\n")}`;
       "No analysis.";
   }
 
-  const store = getStore({
-    name: "morning-scans",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  const store = getStore('morning-scans');
 
   const watchlistBull = bullCandidates.slice(0, 5).map((c) => ({
     symbol: c.ticker,
@@ -573,11 +569,7 @@ async function httpHandler(event) {
     return { statusCode: 204, headers: cors, body: "" };
   }
   if (event.httpMethod === "GET") {
-    const store = getStore({
-      name: "morning-scans",
-      siteID: process.env.NETLIFY_SITE_ID,
-      token: process.env.NETLIFY_TOKEN,
-    });
+    const store = getStore('morning-scans');
     const data = await store.get("scan_925_latest", { type: "json" });
     return {
       statusCode: 200,

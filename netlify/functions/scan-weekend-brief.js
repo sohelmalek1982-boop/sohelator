@@ -25,11 +25,7 @@ function esc(s) {
 }
 
 async function runSundayBrief() {
-  const store = getStore({
-    name: "morning-scans",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  const store = getStore('morning-scans');
   const intel = await store.get("weekend_intel_latest", { type: "json" });
   if (!intel?.claudeAnalysis) {
     return {

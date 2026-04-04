@@ -782,16 +782,8 @@ async function fetchOptionLeg(sym, underlying, setupType, price) {
 }
 
 async function runScan() {
-  const scannerStore = getStore({
-    name: "scanner",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
-  const alertsStore = getStore({
-    name: "alerts",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  const scannerStore = getStore('scanner');
+  const alertsStore = getStore('alerts');
   if (!isEquitySessionDay(new Date())) {
     await scannerStore.setJSON("last_scan", {
       timestamp: Date.now(),

@@ -156,11 +156,7 @@ exports.handler = async (event) => {
     };
   }
 
-  const alertsStore = getStore({
-    name: "alerts",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  const alertsStore = getStore('alerts');
 
   const keys = [];
   try {

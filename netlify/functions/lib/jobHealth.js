@@ -3,11 +3,7 @@ const { getStore } = require("@netlify/blobs");
 const KEY = "system_job_health";
 
 function learningStore() {
-  return getStore({
-    name: "learnings",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  return getStore('learnings');
 }
 
 async function recordJobOk(jobId, meta = {}) {

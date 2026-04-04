@@ -15,11 +15,7 @@ function configureVapid() {
 
 async function sendPushToAll({ title, body, data = {} }) {
   if (!configureVapid()) return { skipped: true, reason: "VAPID keys not set" };
-  const store = getStore({
-    name: "subscriptions",
-    siteID: process.env.NETLIFY_SITE_ID,
-    token: process.env.NETLIFY_TOKEN,
-  });
+  const store = getStore('subscriptions');
   let sent = 0;
   let failed = 0;
   try {
