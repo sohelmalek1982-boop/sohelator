@@ -5,7 +5,6 @@ const { withSohelContext, buildTradingContext } = require("./lib/sohelContext");
 const { getMemoryContext } = require("./lib/memory.cjs");
 const { getMasterAnalysis } = require("./lib/masterAnalysis");
 const { recordJobOk, recordJobError } = require("./lib/jobHealth");
-const { isScanForceRequested } = require("./lib/scanForce");
 
 function tradierBase() {
   return (process.env.TRADIER_ENV || "production").toLowerCase() === "sandbox"
@@ -264,20 +263,16 @@ function detect955Stage(ctx) {
 }
 
 async function run955(event) {
-  const forced = isScanForceRequested(event);
-  if (!forced) {
-    const { h, m } = nyHM();
-    if (h !== 9 || m < 50 || m > 59) {
-      return {
-        statusCode: 200,
-        headers: { ...cors, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          skipped: true,
-          reason:
-            "Outside 9:50–9:59 AM ET. Set SCAN_FORCE_SECRET and POST ?force=<secret> to test.",
-        }),
-      };
-    }
+  const { h, m } = nyHM();
+  if (h !== 9 || m < 50 || m > 59) {
+    return {
+      statusCode: 200,
+      headers: { ...cors, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        skipped: true,
+        reason: "Outside the scheduled 9:50–9:59 AM ET window.",
+      }),
+    };
   }
 
   const store = getStore({
@@ -665,7 +660,7 @@ ${claudeOverall.slice(0, 500)}…
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type, X-Scan-Force",
+  "Access-Control-Allow-Headers": "Content-Type",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 

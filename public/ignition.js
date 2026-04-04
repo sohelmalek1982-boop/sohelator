@@ -204,10 +204,8 @@ window.calculateIgnition = calculateIgnition;
  * #hud-logged-trades, #hud-alert-log, #health-banner
  */
 (function initSohelatorVerbatimNeon() {
-  var SCAN_URL = "/api/scan";
   var LOG_URL = "/api/log-trade";
-  var SCAN_HOOK = "/api/scan";
-  /** Poll saved scan from server (cheap-monitor writes last_hud_scan); avoids manual SCAN. */
+  /** Poll saved scan from server (cheap-monitor writes last_hud_scan). */
   var POLL_SCAN_MS = 45000;
   var POLL_OPEN_MS = 30000;
   var SPY_LEVELS_SYM = "SPY";
@@ -218,7 +216,7 @@ window.calculateIgnition = calculateIgnition;
   var spyLevelsTimer = null;
   var hudClockTimer = null;
   var positionTtiTimer = null;
-  /** Dedupes pullScanData vs manual POST when savedAt matches. */
+  /** Dedupes pullScanData when savedAt matches. */
   var lastAppliedHudSavedAt = 0;
 
   function timeInTrade(openedAt) {
@@ -1501,6 +1499,15 @@ window.calculateIgnition = calculateIgnition;
         typeof j.savedAt === "number" ? j.savedAt : Date.now();
       if (typeof j.savedAt === "number") lastAppliedHudSavedAt = j.savedAt;
     }
+    if (j && j.meta) {
+      window.__sohelLastScanStatus = j.status;
+      var mh =
+        j.meta.claudeHealth != null ? j.meta.claudeHealth : j.meta.grokHealth;
+      if (mh != null) {
+        window.__sohelLastGrokHealth = mh;
+      }
+      updateHealthBanner();
+    }
     updateRiskPillFromScan(j);
     renderHudStats(j);
     updateRegimeBadgeFromScan(j);
@@ -1550,54 +1557,9 @@ window.calculateIgnition = calculateIgnition;
       .catch(function () {});
   }
 
-  /** First paint: use recent blob if scheduled scan already ran; else POST once. */
+  /** First paint: latest scan from blob only (scheduled cheap-monitor / cron). */
   function fetchOrSeedHudScan() {
-    fetch("/api/scan-data", { cache: "no-store" })
-      .then(function (r) {
-        return r.json();
-      })
-      .then(function (data) {
-        var j = data && data.lastScan;
-        var ageMs = j && j.savedAt ? Date.now() - j.savedAt : Infinity;
-        if (isHudScanShape(j) && ageMs < 15 * 60 * 1000) {
-          lastAppliedHudSavedAt = typeof j.savedAt === "number" ? j.savedAt : 0;
-          applyScanPayload(j, { ok: true });
-          try {
-            onScanNotifyAndRefreshOpen(j);
-            onNeonScan(j);
-          } catch (e1) {}
-          return;
-        }
-        pullScan();
-      })
-      .catch(function () {
-        pullScan();
-      });
-  }
-
-  function pullScan() {
-    setPanelStatus("SCAN …", true);
-    fetch(SCAN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "cheap" }),
-      cache: "no-store",
-    })
-      .then(function (r) {
-        return r.json().then(function (j) {
-          return { r: r, j: j };
-        });
-      })
-      .then(function (o) {
-        applyScanPayload(o.j, o.r);
-      })
-      .catch(function (e) {
-        setPanelStatus("SCAN ERR", false);
-        var host = document.getElementById("hud-alert-log");
-        if (host)
-          host.innerHTML =
-            '<p class="hint">' + esc(e.message || String(e)) + "</p>";
-      });
+    pullScanData();
   }
 
   function minutesEt(d) {
@@ -1745,23 +1707,6 @@ window.calculateIgnition = calculateIgnition;
     hb.style.color = bad ? (errGrok ? "#f87171" : "#fbbf24") : "#bef264";
   }
 
-  function onHealthScan(res, j) {
-    if (res.ok && j && j.success !== false) {
-      window.__sohelLastScanOkAt = Date.now();
-    }
-    window.__sohelLastScanStatus = j && j.status;
-    var mh =
-      j && j.meta
-        ? j.meta.claudeHealth != null
-          ? j.meta.claudeHealth
-          : j.meta.grokHealth
-        : null;
-    if (mh != null) {
-      window.__sohelLastGrokHealth = mh;
-    }
-    updateHealthBanner();
-  }
-
   var prevAlertSig = null;
   var prevRegSig = null;
   var prevMaxScore = null;
@@ -1884,17 +1829,6 @@ window.calculateIgnition = calculateIgnition;
             : input && input.url
               ? input.url
               : "";
-        if (u.indexOf(SCAN_HOOK) !== -1 && res && res.clone) {
-          res
-            .clone()
-            .json()
-            .then(function (j) {
-              onHealthScan(res, j);
-              onScanNotifyAndRefreshOpen(j);
-              onNeonScan(j);
-            })
-            .catch(function () {});
-        }
         if (u.indexOf(LOG_URL) !== -1 && res.ok && res.clone) {
           res
             .clone()
@@ -2126,9 +2060,6 @@ window.calculateIgnition = calculateIgnition;
         }
       });
     }
-
-    var refBtn = document.getElementById("btn-align-refresh");
-    if (refBtn) refBtn.addEventListener("click", pullScan);
 
     fetchOrSeedHudScan();
     if (pollScanTimer) clearInterval(pollScanTimer);
@@ -2484,13 +2415,6 @@ window.calculateIgnition = calculateIgnition;
       else if (k === "learning") setUnifiedPage("brief");
       else setUnifiedPage("home");
     };
-
-    var refL = document.getElementById("btn-learning-refresh");
-    if (refL)
-      refL.addEventListener("click", function () {
-        lastLearningFetch = 0;
-        fetchLearningIfStale(true);
-      });
 
     setInterval(function () {
       fetchLearningIfStale(false);
