@@ -45,6 +45,7 @@ function getETHour() {
   return h * 60 + m;
 }
 
+/** Monday–Friday ET. Used to suppress Telegram when the HUD polls this function on weekends. */
 function isWeekday() {
   const d = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
@@ -768,8 +769,8 @@ export const handler = async (event) => {
           : `Building: ${gradClass} ${tier} tier`,
     };
 
-    // Send GEX alerts — each one independently
-    if (gexContext?.alerts?.length && positionStore) {
+    // Send GEX alerts — each one independently (weekdays ET only; HUD polls on weekends)
+    if (gexContext?.alerts?.length && positionStore && isWeekday()) {
       const bot = process.env.TELEGRAM_BOT_TOKEN;
       const chat = process.env.TELEGRAM_CHAT_ID;
       if (bot && chat) {
@@ -822,7 +823,7 @@ export const handler = async (event) => {
       prevBiasData.biasKey !== nar.biasKey ||
       Math.abs((prevBiasData.bullPct || 0) - marketProb.bullPct) >= 15;
 
-    if (nar.sendAlert && narrativeBiasChanged) {
+    if (nar.sendAlert && narrativeBiasChanged && isWeekday()) {
       const bot = process.env.TELEGRAM_BOT_TOKEN;
       const chat = process.env.TELEGRAM_CHAT_ID;
       if (bot && chat) {
@@ -858,7 +859,7 @@ export const handler = async (event) => {
       }
     }
 
-    if (primarySignal) {
+    if (primarySignal && isWeekday()) {
       const bot = process.env.TELEGRAM_BOT_TOKEN;
       const chat = process.env.TELEGRAM_CHAT_ID;
       if (bot && chat) {
