@@ -23,6 +23,9 @@
 [functions]
   node_bundler = "esbuild"
 
+# All schedules in UTC. EDT = UTC-4 (Mar-Nov). EST = UTC-5 (Nov-Mar).
+# Update all schedules in November when clocks fall back.
+
 [functions."scan-925"]
   schedule = "25 13 * * 1-5"
   timeout = 60
@@ -31,9 +34,9 @@
   schedule = "55 13 * * 1-5"
   timeout = 60
 
-# EOD scan — 20:00 UTC ≈ 4pm ET (EST); adjust if you need 3pm ET in EDT
+# EOD — 4:05 PM EDT → 20:05 UTC
 [functions."scan-eod"]
-  schedule = "0 20 * * 1-5"
+  schedule = "5 20 * * 1-5"
   timeout = 60
 
 [functions."scanner-core"]
@@ -61,6 +64,7 @@
 [functions."scan"]
   timeout = 26
 
+# Premarket — 8:30 AM EDT → 12:30 UTC
 [functions."premarket"]
   schedule = "30 12 * * 1-5"
   timeout = 90
@@ -72,7 +76,7 @@
 [functions."trigger"]
   timeout = 60
 
-# Cheap monitor — every 5m UTC 13–20 (weekdays); function also filters ET RTH
+# Cheap monitor — every 5m during 9 AM–4 PM EDT window (UTC 13–20 weekdays); function also filters ET RTH
 [functions."cheap-monitor"]
   schedule = "*/5 13-20 * * 1-5"
   timeout = 120
@@ -80,7 +84,7 @@
 [functions."matrix-signal"]
   timeout = 30
 
-# 1:00 PM ET afternoon brief (compare vs 9:25); cron UTC — see brief-1pm.js header
+# 1:00 PM EDT afternoon brief → 17:00 UTC
 [functions."brief-1pm"]
   schedule = "0 17 * * 1-5"
   timeout = 120
