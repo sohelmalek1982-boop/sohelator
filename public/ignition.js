@@ -2381,6 +2381,15 @@ window.calculateIgnition = calculateIgnition;
         }
       }
     }
+
+    var gexSection = document.getElementById("gex-levels-section");
+    if (gexSection) {
+      if (noGexOrPrice) {
+        gexSection.classList.add("gex-levels--hidden");
+      } else {
+        gexSection.classList.remove("gex-levels--hidden");
+      }
+    }
   }
 
   function matrixSignalClosedFallback() {

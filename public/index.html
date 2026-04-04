@@ -45,7 +45,7 @@
       color: var(--hud-text);
       font-family: var(--hud-sans);
       padding-top: calc(10px + var(--safe-t));
-      padding-bottom: calc(var(--nav-h) + var(--health-h) + 80px + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(var(--nav-h) + var(--health-h) + env(safe-area-inset-bottom, 0px));
       -webkit-font-smoothing: antialiased;
     }
 
@@ -139,7 +139,8 @@
     .hud-main {
       max-width: 560px;
       margin: 0 auto;
-      padding: 14px 14px 80px;
+      padding: 14px 14px 70px;
+      min-height: 0;
     }
     .hud-page { display: none; }
     .hud-page.active { display: block; }
@@ -208,8 +209,20 @@
       color: var(--hud-cyan);
     }
 
+    #matrix-section {
+      min-height: 0;
+      margin-bottom: 12px;
+    }
+    #gex-levels-section:empty {
+      display: none;
+    }
+    #gex-levels-section.gex-levels--hidden {
+      display: none;
+    }
+
     /* Checkpoint strip */
     .hud-cp-wrap {
+      margin-top: 0;
       margin-bottom: 18px;
     }
     .hud-cp-lab {
@@ -697,6 +710,7 @@
     .sr-ladder-hints .sr-hint-r { text-align: right; }
     .sr-ladder-track-wrap {
       position: relative;
+      min-height: 0;
       height: 26px;
       margin-top: 8px;
     }
@@ -1171,7 +1185,7 @@
       </div>
     </section>
 
-    <div class="sec" id="matrix-section" style="margin-bottom:12px">
+    <div class="sec" id="matrix-section">
       <div id="market-status-big" style="
         font-size:52px;
         font-weight:700;
@@ -1197,33 +1211,35 @@
           <div id="signal-bar" style="height:100%;border-radius:4px;width:0%;transition:width 0.8s,background 0.5s"></div>
         </div>
       </div>
-      <div class="sr-ladder">
-        <div class="sr-ladder-caps">
-          <div class="sr-ladder-cap sr-ladder-cap--sup">
-            <span class="sr-cap-lab">SUPPORT</span>
-            <span id="level-support" class="sr-cap-prc">—</span>
+      <div id="gex-levels-section" class="gex-levels-section gex-levels--hidden">
+        <div class="sr-ladder">
+          <div class="sr-ladder-caps">
+            <div class="sr-ladder-cap sr-ladder-cap--sup">
+              <span class="sr-cap-lab">SUPPORT</span>
+              <span id="level-support" class="sr-cap-prc">—</span>
+            </div>
+            <div class="sr-ladder-cap sr-ladder-cap--spy">
+              <span class="sr-cap-lab">SPY</span>
+              <span id="sr-spy-range" class="sr-cap-prc sr-cap-prc--spy">—</span>
+            </div>
+            <div class="sr-ladder-cap sr-ladder-cap--res">
+              <span class="sr-cap-lab">RESISTANCE</span>
+              <span id="level-resistance" class="sr-cap-prc">—</span>
+            </div>
           </div>
-          <div class="sr-ladder-cap sr-ladder-cap--spy">
-            <span class="sr-cap-lab">SPY</span>
-            <span id="sr-spy-range" class="sr-cap-prc sr-cap-prc--spy">—</span>
+          <div class="sr-ladder-hints">
+            <span id="level-support-dist" class="sr-hint-l">—</span>
+            <span id="level-resistance-dist" class="sr-hint-r">—</span>
           </div>
-          <div class="sr-ladder-cap sr-ladder-cap--res">
-            <span class="sr-cap-lab">RESISTANCE</span>
-            <span id="level-resistance" class="sr-cap-prc">—</span>
+          <div
+            id="sr-ladder-track"
+            class="sr-ladder-track-wrap sr-ladder--dim"
+            role="img"
+            aria-label="Support and resistance range. SPY position pending data."
+          >
+            <div class="sr-ladder-rail" aria-hidden="true"></div>
+            <div id="sr-ladder-marker" class="sr-ladder-marker" style="left:50%"></div>
           </div>
-        </div>
-        <div class="sr-ladder-hints">
-          <span id="level-support-dist" class="sr-hint-l">—</span>
-          <span id="level-resistance-dist" class="sr-hint-r">—</span>
-        </div>
-        <div
-          id="sr-ladder-track"
-          class="sr-ladder-track-wrap sr-ladder--dim"
-          role="img"
-          aria-label="Support and resistance range. SPY position pending data."
-        >
-          <div class="sr-ladder-rail" aria-hidden="true"></div>
-          <div id="sr-ladder-marker" class="sr-ladder-marker" style="left:50%"></div>
         </div>
       </div>
       <div id="watch-message" style="
@@ -1354,6 +1370,6 @@
 
   <div id="health-banner" class="sohel-health"></div>
 
-  <script src="/ignition.js?v=1.2.0"></script>
+  <script src="/ignition.js?v=1.2.1"></script>
 </body>
 </html>
