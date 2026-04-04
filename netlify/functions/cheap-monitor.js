@@ -89,6 +89,40 @@ function ymdEt(d) {
   }).format(d);
 }
 
+/** Symbols from today's 9:25 scan blob — merged into RTH cheap scan as priority + extra universe. */
+async function getScan925WatchlistSyms() {
+  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return [];
+  try {
+    const store = getStore({
+      name: "morning-scans",
+      siteID: process.env.NETLIFY_SITE_ID,
+      token: process.env.NETLIFY_TOKEN,
+    });
+    const scan925 = await store.get("scan_925_latest", { type: "json" });
+    if (!scan925) return [];
+    const todayLong = new Date().toLocaleDateString("en-US", {
+      timeZone: "America/New_York",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+    if (String(scan925.date || "").trim() !== String(todayLong).trim()) {
+      return [];
+    }
+    const syms = [];
+    for (const w of scan925.watchlistBull || []) {
+      if (w && w.symbol) syms.push(String(w.symbol).trim().toUpperCase());
+    }
+    for (const w of scan925.watchlistBear || []) {
+      if (w && w.symbol) syms.push(String(w.symbol).trim().toUpperCase());
+    }
+    return [...new Set(syms)];
+  } catch (e) {
+    console.warn("getScan925WatchlistSyms", e?.message || e);
+    return [];
+  }
+}
+
 /** 8:00am–4:00pm ET weekdays (Prompt 8 RTH window) */
 function isRthEt(d) {
   if (!isWeekdayEt(d)) return false;
@@ -986,6 +1020,33 @@ exports.handler = async () => {
     out.afterHoursSlot = afterHoursSlot;
   } else {
     out.path = "rth_5min";
+  }
+
+  if (inRth) {
+    try {
+      const wl925 = await getScan925WatchlistSyms();
+      if (wl925.length) {
+        const ex = Array.isArray(scanBody.extraSymbols) ? scanBody.extraSymbols : [];
+        const pr = Array.isArray(scanBody.prioritySymbols)
+          ? scanBody.prioritySymbols
+          : [];
+        scanBody = {
+          ...scanBody,
+          extraSymbols: [...new Set([...ex, ...wl925])],
+          prioritySymbols: [...new Set([...pr, ...wl925])],
+          catalystNewsSummary:
+            (typeof scanBody.catalystNewsSummary === "string"
+              ? scanBody.catalystNewsSummary
+              : "") +
+            (wl925.length
+              ? "\n9:25 watchlist (scanner priority): " + wl925.join(", ")
+              : ""),
+        };
+        out.scan925Watchlist = wl925;
+      }
+    } catch (e) {
+      console.warn("cheap-monitor scan925 wl merge", e?.message || e);
+    }
   }
 
   const telegramDedupe = new Set();

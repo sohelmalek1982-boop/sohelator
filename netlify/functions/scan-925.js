@@ -319,6 +319,14 @@ async function run925(event) {
           ? "ELEVATED FEAR — be selective"
           : "NEUTRAL — wait for direction at open";
 
+  let marketTape = null;
+  try {
+    const mod = await import("../../src/lib/marketTape.js");
+    marketTape = await mod.getMarketTapeSnapshot();
+  } catch (e) {
+    console.error("scan-925 marketTape", e);
+  }
+
   let gexSpy = null;
   try {
     if (spyLast > 0) gexSpy = await calculateGEX("SPY", spyLast);
@@ -373,12 +381,27 @@ async function run925(event) {
 
   if (key) {
     const system = withSohelContext(
-      `It's 9:25am. Market opens in 5 minutes.
-Give Sohel his morning brief.
-Format: MARKET / #1 PLAY / #2 WATCH /
-AVOID / RISK / GAME PLAN.
-Maximum 150 words. He reads this on 
-his phone before the bell.`,
+      `It's 9:25am ET. The cash open is in 5 minutes.
+
+You scan the full pre-market picture in the user message (tape, sector ETFs, movers, GEX, headlines, memory context).
+
+Your job is threefold — in plain language:
+(1) What's going on in the market right now.
+(2) The best ways to pursue edge today (styles, setups, names to lean on — not guarantees).
+(3) What to be careful about (risks, earnings, traps, fades).
+
+Use ONLY facts from the user block + sound judgment. Do not invent prices or news.
+
+Use these section headings in order (Markdown ##):
+
+## WHAT'S GOING ON
+## BEST WAYS TO MAKE $ TODAY
+## BE CAREFUL
+## WATCHLIST & FIRST HOUR
+
+In "BEST WAYS TO MAKE $ TODAY" tie ideas to bull/bear candidates and the tape. In "BE CAREFUL" cover avoid list, earnings week names, and GEX/vol risks.
+
+Max ~650 words. No JSON in the prose. Decisive, trader-to-trader tone.`,
       morningContext
     );
 
@@ -389,6 +412,9 @@ VIX: ${vixLevel} | SPY: ${spyPreMktPct.toFixed(2)}% | QQQ: ${qqqPreMktPct.toFixe
 Sentiment: ${sentiment}
 Today's themes: ${todayThemes.join(", ")}
 Regime: ${regime.primary || "n/a"}
+
+FULL MARKET TAPE (indices, all sector ETFs sorted, macro — use for rotation):
+${marketTape ? JSON.stringify(marketTape) : "N/A (Tradier tape unavailable)"}
 
 MARKET GEX (SPY proxy):
 ${gexSpy ? `${gexSpy.gexRegime} — ${gexSpy.interpretation}` : "N/A"}
@@ -437,7 +463,7 @@ ${allHeadlines.slice(0, 8).join("\n")}`;
       },
       body: JSON.stringify({
         model,
-        max_tokens: 1000,
+        max_tokens: 2200,
         system,
         messages: [{ role: "user", content: user }],
       }),
@@ -480,6 +506,7 @@ ${allHeadlines.slice(0, 8).join("\n")}`;
     type: "premarket_925",
     date: dateStr,
     timestamp: Date.now(),
+    marketTape,
     marketContext: {
       vix: vixLevel,
       spyPct: spyPreMktPct,
@@ -511,7 +538,7 @@ ${allHeadlines.slice(0, 8).join("\n")}`;
         .join(", ") || "—";
     const _brief =
       String(result?.aiBrief || result?.grokBrief || result?.claudeAnalysis || "")
-        .slice(0, 600) || "Scan complete";
+        .slice(0, 3900) || "Scan complete";
     fetch(`https://api.telegram.org/bot${_b}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

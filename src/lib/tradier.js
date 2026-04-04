@@ -56,6 +56,35 @@ export async function getQuote(symbol) {
 }
 
 /**
+ * Batch quotes (max 80 symbols per Tradier request).
+ * @param {string[]} symbols
+ * @returns {Promise<Record<string, Record<string, unknown>>>}
+ */
+export async function getQuotesBatch(symbols) {
+  const uniq = [
+    ...new Set(
+      (symbols || [])
+        .map((s) => String(s || "").trim().toUpperCase())
+        .filter(Boolean)
+    ),
+  ];
+  const out = /** @type {Record<string, Record<string, unknown>>} */ ({});
+  const chunkSize = 80;
+  for (let i = 0; i < uniq.length; i += chunkSize) {
+    const chunk = uniq.slice(i, i + chunkSize).join(",");
+    if (!chunk.trim()) continue;
+    const j = await tradierGet("/v1/markets/quotes", {
+      symbols: chunk,
+      greeks: "false",
+    });
+    for (const q of normList(j.quotes?.quote)) {
+      if (q.symbol) out[String(q.symbol).toUpperCase()] = q;
+    }
+  }
+  return out;
+}
+
+/**
  * Intraday OHLCV bars (session_filter=open matches existing SOHELATOR scanners).
  * @param {string} symbol
  * @param {string} [interval]

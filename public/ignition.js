@@ -303,6 +303,7 @@ window.calculateIgnition = calculateIgnition;
     { key: "scan-925", t: "09:25", lab: "OPEN", slotMin: 9 * 60 + 25 },
     { key: "scan-955", t: "09:55", lab: "MID-AM", slotMin: 9 * 60 + 55 },
     { key: "cheap-monitor", t: "11:00", lab: "MID", slotMin: 11 * 60 },
+    { key: "brief-1pm", t: "13:00", lab: "1PM", slotMin: 13 * 60 },
     { key: "scanner", t: "13:00", lab: "PM", slotMin: 13 * 60 },
     { key: "cheap-monitor2", t: "15:00", lab: "LATE", slotMin: 15 * 60 },
     { key: "scan-eod", t: "16:05", lab: "EOD", slotMin: 16 * 60 + 5 },
@@ -422,6 +423,30 @@ window.calculateIgnition = calculateIgnition;
         if (tm && snap && snap.asOf) {
           tm.textContent = formatAlertTime(snap.asOf);
         }
+        fetch("/api/brief-1pm", { cache: "no-store" })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (pm) {
+            var bodyPm = document.getElementById("hud-intel-body-pm");
+            var tmPm = document.getElementById("hud-intel-time-pm");
+            var txt =
+              pm && pm.claudeAnalysis ? String(pm.claudeAnalysis) : "";
+            if (bodyPm) {
+              bodyPm.textContent =
+                txt || "(No 1 PM brief yet — runs ~1:00 PM ET on weekdays.)";
+              bodyPm.style.whiteSpace = "pre-wrap";
+            }
+            if (tmPm && pm && pm.timestamp) {
+              tmPm.textContent = formatAlertTime(
+                new Date(pm.timestamp).toISOString()
+              );
+            }
+          })
+          .catch(function () {
+            var bodyPm = document.getElementById("hud-intel-body-pm");
+            if (bodyPm) bodyPm.textContent = "(1 PM brief unavailable.)";
+          });
         fetch("/api/health", { cache: "no-store" })
           .then(function (r) {
             return r.json();
@@ -628,6 +653,17 @@ window.calculateIgnition = calculateIgnition;
       var opened = p.openedAtIso || p.openedAt;
       var tti = timeInTrade(opened);
       var prog = Math.min(100, Math.max(4, 50 + (Number(p.pnlPct) || 0) * 2));
+      var stN =
+        p.stopPrice != null && isFinite(Number(p.stopPrice)) ? Number(p.stopPrice) : NaN;
+      var tgN =
+        p.targetPrice != null && isFinite(Number(p.targetPrice))
+          ? Number(p.targetPrice)
+          : NaN;
+      var spotN =
+        p.currentPrice != null && isFinite(Number(p.currentPrice))
+          ? Number(p.currentPrice)
+          : NaN;
+      var posRangeHtml = hudTradeRangeHtml(stN, tgN, spotN, "pos");
       return (
         '<div class="hud-pos-card" data-pos-id="' +
         esc(p.id) +
@@ -652,7 +688,9 @@ window.calculateIgnition = calculateIgnition;
         esc(String(opened || "")) +
         '">IN TRADE · ' +
         esc(tti) +
-        '</span></div><div class="hud-pos-bar ' +
+        '</span></div>' +
+        posRangeHtml +
+        '<div class="hud-pos-bar ' +
         barCls +
         '"><i style="width:' +
         prog +
@@ -869,6 +907,108 @@ window.calculateIgnition = calculateIgnition;
     var d = document.createElement("div");
     d.textContent = String(s);
     return d.innerHTML;
+  }
+
+  /**
+   * Compact STOP–SPOT–TARGET rail (same visual language as matrix S/R ladder).
+   * @param {number} stopN
+   * @param {number} targetN
+   * @param {number} spotN  underlying / last
+   * @param {"tcard"|"pos"} variant
+   * @returns {string} HTML or "" if no band
+   */
+  function hudTradeRangeHtml(stopN, targetN, spotN, variant) {
+    var v = variant === "pos" ? "pos" : "tcard";
+    var wrapCls = v === "pos" ? "hud-pos-range" : "hud-tcard-range";
+    var lStop = v === "pos" ? "hud-pos-range-l--stop" : "hud-tcard-range-l--stop";
+    var lTgt = v === "pos" ? "hud-pos-range-l--tgt" : "hud-tcard-range-l--tgt";
+    if (!isFinite(stopN) || !isFinite(targetN) || Math.abs(stopN - targetN) < 1e-9) {
+      return "";
+    }
+    var lo = Math.min(stopN, targetN);
+    var hi = Math.max(stopN, targetN);
+    var leftLab = stopN <= targetN ? "STOP" : "TARGET";
+    var rightLab = stopN <= targetN ? "TARGET" : "STOP";
+    var leftIsStop = Math.abs(lo - stopN) < 1e-9;
+    var leftCapCls =
+      "sr-ladder-cap sr-ladder-cap--sup " +
+      (leftIsStop ? lStop : lTgt);
+    var rightCapCls =
+      "sr-ladder-cap sr-ladder-cap--res " +
+      (!leftIsStop ? lStop : lTgt);
+    var loFmt = "$" + lo.toFixed(2);
+    var hiFmt = "$" + hi.toFixed(2);
+    var spotTxt = isFinite(spotN) && spotN > 0 ? "$" + spotN.toFixed(2) : "—";
+    var leftPct = 50;
+    var dimTrack = " sr-ladder--dim";
+    var aria = "Stop and target range. Spot position pending.";
+    if (isFinite(spotN) && spotN > 0) {
+      var t = (spotN - lo) / (hi - lo);
+      t = Math.max(0, Math.min(1, t));
+      leftPct = t * 100;
+      dimTrack = "";
+      aria =
+        "Spot about " +
+        Math.round(leftPct) +
+        "% from " +
+        leftLab +
+        " toward " +
+        rightLab +
+        ".";
+    }
+    var hintL = "—";
+    var hintR = "—";
+    if (isFinite(spotN) && spotN > 0) {
+      if (spotN < lo) {
+        hintL = ((lo - spotN) / lo * 100).toFixed(1) + "% below band";
+        hintR = "—";
+      } else if (spotN > hi) {
+        hintL = "—";
+        hintR = ((spotN - hi) / hi * 100).toFixed(1) + "% above band";
+      } else {
+        hintL = ((spotN - lo) / lo * 100).toFixed(1) + "% from low";
+        hintR = ((hi - spotN) / spotN * 100).toFixed(1) + "% to high";
+      }
+    }
+    return (
+      '<div class="' +
+      esc(wrapCls) +
+      '"><div class="sr-ladder-caps">' +
+      '<div class="' +
+      esc(leftCapCls) +
+      '"><span class="sr-cap-lab">' +
+      esc(leftLab) +
+      '</span><span class="sr-cap-prc">' +
+      esc(loFmt) +
+      '</span></div>' +
+      '<div class="sr-ladder-cap sr-ladder-cap--spy">' +
+      '<span class="sr-cap-lab">SPOT</span>' +
+      '<span class="sr-cap-prc sr-cap-prc--spy">' +
+      esc(spotTxt) +
+      '</span></div>' +
+      '<div class="' +
+      esc(rightCapCls) +
+      '"><span class="sr-cap-lab">' +
+      esc(rightLab) +
+      '</span><span class="sr-cap-prc">' +
+      esc(hiFmt) +
+      '</span></div></div>' +
+      '<div class="sr-ladder-hints">' +
+      '<span class="sr-hint-l">' +
+      esc(hintL) +
+      '</span><span class="sr-hint-r">' +
+      esc(hintR) +
+      '</span></div>' +
+      '<div class="sr-ladder-track-wrap' +
+      dimTrack +
+      '" role="img" aria-label="' +
+      esc(aria) +
+      '">' +
+      '<div class="sr-ladder-rail" aria-hidden="true"></div>' +
+      '<div class="sr-ladder-marker" style="left:' +
+      leftPct +
+      '%"></div></div></div>'
+    );
   }
 
   function normList(x) {
@@ -1123,6 +1263,10 @@ window.calculateIgnition = calculateIgnition;
       var ent = a.entry != null && isFinite(Number(a.entry)) ? "$" + Number(a.entry).toFixed(2) : "—";
       var stp = a.stop != null && isFinite(Number(a.stop)) ? "$" + Number(a.stop).toFixed(2) : "—";
       var tg = a.target != null && isFinite(Number(a.target)) ? "$" + Number(a.target).toFixed(2) : "—";
+      var stopN = a.stop != null && isFinite(Number(a.stop)) ? Number(a.stop) : NaN;
+      var targetN = a.target != null && isFinite(Number(a.target)) ? Number(a.target) : NaN;
+      var lastN = a.last != null && isFinite(Number(a.last)) ? Number(a.last) : NaN;
+      var tradeRangeHtml = hudTradeRangeHtml(stopN, targetN, lastN, "tcard");
       var o = a.suggestedOption;
       var optLine;
       if (o && o.strike != null && o.expiration) {
@@ -1162,6 +1306,7 @@ window.calculateIgnition = calculateIgnition;
         '</div></div><div class="hud-est hud-est--tgt"><span class="k">TARGET</span><div class="v">' +
         esc(tg) +
         "</div></div></div>" +
+        tradeRangeHtml +
         optLine +
         '<div class="hud-tcard-actions"><button type="button" class="hud-btn-enter" data-sohel-enter="tactical:' +
         idx +
@@ -1534,6 +1679,57 @@ window.calculateIgnition = calculateIgnition;
     return j && typeof j === "object" && Array.isArray(j.alerts);
   }
 
+  function renderWatchlist925(s925) {
+    var body = document.getElementById("hud-wl925-body");
+    var tm = document.getElementById("hud-wl925-time");
+    if (!body) return;
+    if (!s925 || (!s925.watchlistBull && !s925.watchlistBear)) {
+      body.textContent =
+        "(No 9:25 watchlist yet — saved after the morning OPEN checkpoint.)";
+      if (tm) tm.textContent = "—";
+      return;
+    }
+    if (tm && s925.timestamp) {
+      tm.textContent = formatAlertTime(new Date(s925.timestamp).toISOString());
+    }
+    var bulls = Array.isArray(s925.watchlistBull) ? s925.watchlistBull : [];
+    var bears = Array.isArray(s925.watchlistBear) ? s925.watchlistBear : [];
+    var lines = [];
+    lines.push(
+      "BULL / HEAT (" +
+        bulls.length +
+        ") — names get scanner priority in RTH (every 5m)"
+    );
+    bulls.forEach(function (w) {
+      var ch =
+        w.preMktChange != null ? Number(w.preMktChange).toFixed(2) : "—";
+      lines.push(
+        "  • " +
+          String(w.symbol || "—").toUpperCase() +
+          "  +" +
+          ch +
+          "%  score " +
+          (w.score != null ? w.score : "—")
+      );
+    });
+    lines.push("");
+    lines.push("BEAR / WEAK (" + bears.length + ")");
+    bears.forEach(function (w) {
+      var ch =
+        w.preMktChange != null ? Number(w.preMktChange).toFixed(2) : "—";
+      lines.push(
+        "  • " +
+          String(w.symbol || "—").toUpperCase() +
+          "  " +
+          ch +
+          "%  score " +
+          (w.score != null ? w.score : "—")
+      );
+    });
+    body.textContent = lines.join("\n");
+    body.style.whiteSpace = "pre-wrap";
+  }
+
   /** Sync HUD from GET /api/scan-data (POST /api/scan results saved by scheduled cheap-monitor). */
   function pullScanData() {
     fetch("/api/scan-data", { cache: "no-store" })
@@ -1541,6 +1737,8 @@ window.calculateIgnition = calculateIgnition;
         return r.json();
       })
       .then(function (data) {
+        var s = data && data.scan925;
+        renderWatchlist925(s || null);
         var j = data && data.lastScan;
         if (!isHudScanShape(j)) return;
         if (j.savedAt && Date.now() - j.savedAt > 72 * 3600000) return;

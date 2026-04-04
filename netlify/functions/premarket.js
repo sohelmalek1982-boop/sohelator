@@ -13,6 +13,7 @@ import {
   getTimesales,
   getDailyHistory,
 } from "../../src/lib/tradier.js";
+import { getMarketTapeSnapshot } from "../../src/lib/marketTape.js";
 import { callClaudeWithFallback } from "../../src/lib/claude.js";
 
 const cors = {
@@ -168,6 +169,13 @@ export const handler = async (event) => {
       });
     }
 
+    try {
+      snapshot.marketTape = await getMarketTapeSnapshot();
+    } catch (e) {
+      console.warn("premarket marketTape:", e?.message || e);
+      snapshot.marketTape = null;
+    }
+
     /* Prompt 8 — Claude 8am–4pm ET; expensive + cheap fallback */
     if (process.env.ANTHROPIC_API_KEY) {
       if (!isEtGrokWindow(new Date())) {
@@ -176,8 +184,29 @@ export const handler = async (event) => {
           "Claude brief skipped — outside SOHELATOR window (8:00am–4:00pm ET, weekdays).";
       } else {
         try {
-          const briefPrompt = `Write a short pre-market brief (4–7 lines) for a driver: lead with edge vs risk, watchlist focus, no JSON. Snapshot:\n${JSON.stringify(snapshot)}`;
-          const text = await callClaudeWithFallback(briefPrompt, 900);
+          const briefPrompt = `You are Sohel's pre-market scanner: read the tape, then tell him how to make money today and what to watch out for.
+
+Use the JSON snapshot below plus general market knowledge. Do NOT invent prices or events not supported by the data. This is idea generation, not personalized investment advice.
+
+Write a decisive briefing with EXACTLY these Markdown sections (headings as shown):
+
+## WHAT'S GOING ON
+Scan the market: indices (SPY/QQQ/IWM/DIA), VIX, macro (GLD/TLT/HYG) from marketTape when present, sector heat (marketTape.sectorsHot vs sectorsCold), and backtest edge summary. One clear picture of the morning.
+
+## BEST WAYS TO MAKE $ TODAY
+Practical edge: where leadership, rotation, and the watchlistTop5 names suggest the best risk/reward *styles* for today (e.g. follow strength in X, avoid catching knives in Y). Tie each watchlist symbol to why it could work and what would confirm it. No guarantees — be specific.
+
+## BE CAREFUL
+What can hurt you today: crowded trades, macro/VIX landmines, low edge, things that look good but aren't. What to skip or size down.
+
+## WATCH / FIRST HOUR
+Short bullets: what to monitor right after the open (indices, VIX, key sectors, top names).
+
+Rules: No JSON in the answer. No filler. Max ~900 words. Plain text + Markdown headings only.
+
+SNAPSHOT JSON:
+${JSON.stringify(snapshot)}`;
+          const text = await callClaudeWithFallback(briefPrompt, 2800);
           snapshot.aiBrief = text;
           snapshot.grokBriefStatus = "ok";
           const _bot = process.env.TELEGRAM_BOT_TOKEN;

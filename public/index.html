@@ -319,6 +319,11 @@
       white-space: pre-wrap;
       word-break: break-word;
     }
+    .hud-intel-body--mono {
+      font-family: var(--hud-mono);
+      font-size: 0.76rem;
+      line-height: 1.45;
+    }
 
     /* Tactical cards */
     .hud-sec-title {
@@ -734,6 +739,63 @@
     .sr-ladder-track-wrap.sr-ladder--dim .sr-ladder-marker {
       opacity: 0.45;
       box-shadow: none;
+    }
+
+    /* Tactical / position cards: same rail, tighter */
+    .hud-tcard-range,
+    .hud-pos-range {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(0, 229, 255, 0.06);
+    }
+    .hud-tcard-range .sr-ladder-caps,
+    .hud-pos-range .sr-ladder-caps {
+      margin-bottom: 6px;
+      gap: 4px;
+    }
+    .hud-tcard-range .sr-cap-lab,
+    .hud-pos-range .sr-cap-lab {
+      font-size: 7px;
+      margin-bottom: 1px;
+    }
+    .hud-tcard-range .sr-cap-prc,
+    .hud-pos-range .sr-cap-prc {
+      font-size: 13px;
+    }
+    .hud-tcard-range .sr-cap-prc--spy,
+    .hud-pos-range .sr-cap-prc--spy {
+      font-size: 14px;
+    }
+    .hud-tcard-range .sr-ladder-hints,
+    .hud-pos-range .sr-ladder-hints {
+      font-size: 9px;
+      margin-top: 2px;
+    }
+    .hud-tcard-range .sr-ladder-track-wrap,
+    .hud-pos-range .sr-ladder-track-wrap {
+      height: 22px;
+      margin-top: 6px;
+    }
+    .hud-tcard-range .sr-ladder-rail,
+    .hud-pos-range .sr-ladder-rail {
+      height: 10px;
+      margin-top: -5px;
+      border-radius: 5px;
+    }
+    .hud-tcard-range .sr-ladder-marker,
+    .hud-pos-range .sr-ladder-marker {
+      width: 12px;
+      height: 12px;
+      margin-left: -6px;
+      margin-top: -6px;
+    }
+    .hud-tcard-range-l--stop .sr-cap-prc,
+    .hud-pos-range-l--stop .sr-cap-prc {
+      color: var(--hud-red);
+    }
+    .hud-tcard-range-l--tgt .sr-cap-prc,
+    .hud-pos-range-l--tgt .sr-cap-prc {
+      color: var(--hud-green);
     }
 
     /* Learning / BRIEF */
@@ -1185,6 +1247,18 @@
     <section class="hud-intel" aria-label="Market brief">
       <span class="hud-intel-cap">MARKET BRIEF · <span id="hud-intel-time">—</span></span>
       <div class="hud-intel-body" id="hud-intel-body">Loading pre-market brief…</div>
+    </section>
+
+    <section class="hud-intel" aria-label="Afternoon brief">
+      <span class="hud-intel-cap">1 PM BRIEF · <span id="hud-intel-time-pm">—</span></span>
+      <div class="hud-intel-body" id="hud-intel-body-pm">—</div>
+    </section>
+
+    <section class="hud-intel" aria-label="9:25 watchlist">
+      <span class="hud-intel-cap">9:25 WATCHLIST · <span id="hud-wl925-time">—</span></span>
+      <div class="hud-intel-body hud-intel-body--mono" id="hud-wl925-body">
+        Loading watchlist…
+      </div>
     </section>
 
     <p class="hud-sec-title">TACTICAL ALERTS</p>
