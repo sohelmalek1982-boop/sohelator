@@ -56,8 +56,9 @@
 [functions."research-brief"]
   timeout = 60
 
+# Netlify Pro max 26s; free tier is 10s — tune SCAN_CLAUDE_*_TIMEOUT_MS if you hit limits
 [functions."scan"]
-  timeout = 120
+  timeout = 26
 
 [functions."premarket"]
   schedule = "30 12 * * 1-5"

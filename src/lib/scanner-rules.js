@@ -149,6 +149,42 @@ export async function applyOptimizedParams(force = false) {
 }
 
 /**
+ * Clear blob overrides so the next `applyOptimizedParams` uses shipped JSON + defaults only.
+ * Used when health detects runaway tuned params.
+ */
+export async function resetOptimizedParams() {
+  _runtimeMergedParams = null;
+  const siteID = typeof process !== "undefined" && process.env.NETLIFY_SITE_ID;
+  const token = typeof process !== "undefined" && process.env.NETLIFY_TOKEN;
+  if (!siteID || !token) return false;
+  try {
+    const { getStore } = await import("@netlify/blobs");
+    const store = getStore({
+      name: "sohelator-learning",
+      siteID,
+      token,
+    });
+    await store.delete("optimized_params");
+  } catch (e) {
+    console.warn("resetOptimizedParams delete blob:", e?.message || e);
+    try {
+      const { getStore } = await import("@netlify/blobs");
+      const store = getStore({
+        name: "sohelator-learning",
+        siteID: process.env.NETLIFY_SITE_ID,
+        token: process.env.NETLIFY_TOKEN,
+      });
+      await store.setJSON("optimized_params", {});
+    } catch (e2) {
+      console.warn("resetOptimizedParams setJSON:", e2?.message || e2);
+      return false;
+    }
+  }
+  await applyOptimizedParams(true);
+  return true;
+}
+
+/**
  * Sync read of last merged params (defaults until applyOptimizedParams runs).
  * @returns {typeof BLUEPRINT_DEFAULT_PARAMS}
  */
@@ -204,32 +240,67 @@ function computeSetupScoreCore(bars, symbol, dailyBars, params = {}) {
   }));
 
   const adx = calcADX(adxCandles, 14);
+
+  /** Hard gate — not trending enough to score (independent of P.adxThreshold tuning). */
+  const ADX_MIN_ALERT = 20;
+  if (adx < ADX_MIN_ALERT) {
+    return {
+      score: 0,
+      edge: 0,
+      details: { symbol, reason: "adx_too_low", adx },
+    };
+  }
+
   const rsi = calcRSI(closes, 14);
 
   const macdH = calcMACDHist(closes);
 
   const cur = b.length - 1;
   const prev = b.length - 2;
+  const cur_close = b[cur].close;
 
-  const recentVols = b.slice(-21, -1).map((x) => x.volume);
+  // Volume calculation — use longer baseline and require sustained surge
+  const volBars = b.slice(-51, -1); // 50 bars = ~4 hours of history
+  const volBaseline =
+    volBars.length >= 10
+      ? volBars.slice(0, -5).map((x) => x.volume) // exclude last 5 bars from baseline
+      : volBars.map((x) => x.volume);
+
   const volAvg =
-    recentVols.length > 0
-      ? recentVols.reduce((a, v) => a + v, 0) / recentVols.length
+    volBaseline.length > 0
+      ? volBaseline.reduce((a, v) => a + v, 0) / volBaseline.length
       : 1;
-  const volFloor = 50000;
-  const effectiveAvg = Math.max(volAvg, volFloor);
+
+  // Dynamic floor based on price — higher priced stocks trade more volume
+  const priceBasedFloor =
+    cur_close > 200 ? 200000 : cur_close > 50 ? 100000 : 50000;
+  const effectiveAvg = Math.max(volAvg, priceBasedFloor);
+
   const curVol = b[cur].volume || 0;
   const prevVol = b[prev].volume || 0;
-  const prevAvg =
-    b.length >= 22
-      ? b.slice(-22, -2).reduce((a, x) => a + x.volume, 0) / 20
-      : effectiveAvg;
-  const effectivePrevAvg = Math.max(prevAvg, volFloor);
+  const prevPrevVol = b.length >= 3 ? b[b.length - 3].volume || 0 : prevVol;
 
+  // Current ratio (last bar vs baseline)
   const volRatio = effectiveAvg > 0 ? curVol / effectiveAvg : 1;
-  const prevVolRatio = effectivePrevAvg > 0 ? prevVol / effectivePrevAvg : 1;
 
-  let score = 50;
+  // Sustained surge — average of last 3 bars vs baseline
+  const recentAvgVol = (curVol + prevVol + prevPrevVol) / 3;
+  const sustainedVolRatio =
+    effectiveAvg > 0 ? recentAvgVol / effectiveAvg : 1;
+
+  // Price-volume confirmation — volume only counts if price moved with it
+  const priceChange = b[cur].close - b[prev].close;
+  const priceMoving = Math.abs(priceChange) > b[cur].close * 0.001; // 0.1% move minimum
+  const volumeConfirmed = sustainedVolRatio >= 2.0 && priceMoving;
+  const volumeSurge3x = sustainedVolRatio >= 3.0 && priceMoving;
+
+  // Volume score contribution — ONLY when price is also moving (max 8 pts total)
+  const volScore = volumeConfirmed ? (volumeSurge3x ? 8 : 5) : 0;
+
+  /** Prior-bar ratio vs same baseline (for legacy / HUD) */
+  const prevVolRatio = effectiveAvg > 0 ? prevVol / effectiveAvg : 1;
+
+  let score = 40;
 
   // ADX trend gate (blueprint: adxThreshold)
   if (adx >= P.adxThreshold) score += 15;
@@ -244,35 +315,34 @@ function computeSetupScoreCore(bars, symbol, dailyBars, params = {}) {
   if ((macdH > 0 && bull) || (macdH < 0 && !bull)) score += 8;
   else score -= 5;
 
-  // Volume ignition (blueprint: volIgnition, prevVolIgnition)
-  if (volRatio >= P.volIgnition) score += 18;
-  else if (volRatio >= 1.35) score += 10;
-  else if (volRatio < 0.85) score -= 8;
-
-  if (prevVolRatio >= P.prevVolIgnition) score += 8;
+  // Volume: confirmer only (max 8 pts); never the main driver vs price action
+  score += volScore;
 
   // Sector RS bonus: without sector index feed, use daily trend vs intraday bias as proxy
+  const MAX_SECTOR_BONUS = 10;
   let sectorBonus = 0;
   const dCloses = (dailyBars || []).map((x) => num(x.close));
   const dTrend = dailyTrend(dCloses);
-  if (dTrend === "up" && bull) sectorBonus = P.sectorRSBonus;
-  if (dTrend === "down" && !bull) sectorBonus = P.sectorRSBonus;
+  if (dTrend === "up" && bull)
+    sectorBonus = Math.min(P.sectorRSBonus, MAX_SECTOR_BONUS);
+  if (dTrend === "down" && !bull)
+    sectorBonus = Math.min(P.sectorRSBonus, MAX_SECTOR_BONUS);
   score += sectorBonus;
 
-  // Higher timeframe penalty (blueprint: higherTFPenaltyMax)
+  // Higher timeframe penalty (blueprint: higherTFPenaltyMax), capped at -10
+  const MAX_HTF_PENALTY = -10;
   let tfPenalty = 0;
-  if (dTrend === "down" && bull) tfPenalty = P.higherTFPenaltyMax;
-  else if (dTrend === "up" && !bull) tfPenalty = P.higherTFPenaltyMax * 0.85;
+  if (dTrend === "down" && bull)
+    tfPenalty = Math.max(P.higherTFPenaltyMax, MAX_HTF_PENALTY);
+  else if (dTrend === "up" && !bull)
+    tfPenalty = Math.max(P.higherTFPenaltyMax * 0.85, MAX_HTF_PENALTY);
   score += tfPenalty;
 
   score = clamp(score, 0, 100);
 
-  // Edge + EV (0–1): map composite edge to [0,1] and compare to evThreshold
-  const edgeRaw = clamp(
-    (score / 100) - 0.5 + (volRatio - 1) * 0.05,
-    -1,
-    1
-  );
+  // Edge + EV (0–1): price-action dominated; cap volume influence on edge
+  const volEdgeBump = clamp((Math.min(sustainedVolRatio, 2.5) - 1) * 0.02, 0, 0.03);
+  const edgeRaw = clamp((score / 100) - 0.5 + volEdgeBump, -1, 1);
   const ev01 = (edgeRaw + 1) / 2;
 
   return {
@@ -284,7 +354,12 @@ function computeSetupScoreCore(bars, symbol, dailyBars, params = {}) {
       rsi,
       macdHist: macdH,
       volRatio,
+      sustainedVolRatio,
       prevVolRatio,
+      priceMoving,
+      volumeConfirmed,
+      volumeSurge3x,
+      volScore,
       dailyTrend: dTrend,
       tfPenalty,
       sectorBonus,

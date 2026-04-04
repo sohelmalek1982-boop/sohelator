@@ -42,6 +42,11 @@ const cors = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+/** In-process dedupe for Telegram sends (serverless instance lifetime). */
+const SESSION_DEDUPE = new Map();
+const SYMBOL_TELEGRAM_COOLDOWN_MS = 2 * 60 * 60 * 1000;
+const VOLUME_TELEGRAM_COOLDOWN_MS = 3 * 60 * 60 * 1000;
+
 /** Persists latest POST /api/scan JSON for HUD GET /api/scan-data (cheap-monitor updates without opening the app). */
 async function persistLastHudScan(payload) {
   if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return;
@@ -213,6 +218,11 @@ function volRatioOfAlert(a) {
   return Number(a?.details?.volRatio ?? a?.volRatio ?? 0);
 }
 
+function sustainedVolRatioOfAlert(a) {
+  const s = Number(a?.details?.sustainedVolRatio);
+  return Number.isFinite(s) ? s : volRatioOfAlert(a);
+}
+
 function hasCatalystSignal(a) {
   const s = JSON.stringify(a || {}).toUpperCase();
   return /CATALYST|EARNINGS|FDA|NEWS|\bGAP\b|UPGRADE|DOWNGRADE|BREAKING|MERGER|GUIDANCE|HIGH-PROBABILITY CATALYST/i.test(
@@ -284,8 +294,12 @@ function buildTelegramPrompt19Message(a) {
   const histLine = historicalMatchesShort(a);
 
   const hi = [];
+  const svr = sustainedVolRatioOfAlert(a);
+  const pm = a?.details?.priceMoving === true;
   if (score >= 90) hi.push("⚡ SCORE 90+ — TOP TIER");
-  if (volRatioOfAlert(a) >= 3) hi.push("⚡ VOL SURGE 3×+");
+  if (Number.isFinite(svr) && svr >= 2.5 && pm) {
+    hi.push("⚡ VOL SURGE " + svr.toFixed(1) + "x");
+  }
   if (hasCatalystSignal(a)) hi.push("⚡ CATALYST / NEWS");
   if (hasRegimeOrLevelKeywords(a)) hi.push("⚡ REGIME / LEVEL / REVERSAL");
   const banner = hi.length ? hi.join("\n") + "\n\n" : "";
@@ -340,226 +354,65 @@ function worseGrokHealth(a, b) {
   return (GROK_HEALTH_RANK[b] || 0) > (GROK_HEALTH_RANK[a] || 0) ? b : a;
 }
 
-/** Claude expensive with fallback to cheap (replaces Grok two-attempt flow). */
-async function callClaudeExpensiveWithFallback(aiPrompt, maxTok) {
-  try {
-    const text = await callClaudeWithFallback(aiPrompt, maxTok);
-    return { text, health: "ok" };
-  } catch (e) {
-    console.warn("scan.js Claude fallback failed:", e?.message || e);
-    return { text: "", health: "error" };
-  }
+const PHASE1_MS = 8000;
+const FUNCTION_TIMEOUT_MS = 25000;
+const CLAUDE_PER_TICKER_MS = 15000;
+/** Rules-only phase: minimum score to include in alerts (Claude sees top 3 of these). */
+const RULES_SCORE_MIN = 80;
+
+/**
+ * Race Claude call against wall clock — avoids Netlify 502 when API hangs.
+ * @param {() => Promise<string>} fn
+ * @param {number} timeoutMs
+ */
+async function callClaudeWithTimeout(fn, timeoutMs) {
+  return Promise.race([
+    fn(),
+    new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`Claude timeout after ${timeoutMs}ms`)),
+        timeoutMs
+      )
+    ),
+  ]);
 }
 
-const BATCH_GROK_MAX_TOK = 2500;
-
-function ymdEtScan(d) {
-  const dt = d instanceof Date ? d : new Date(d);
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(dt);
-}
-
-/** Same `learning-YYYY-MM-DD` blob read as cheap-monitor — `tomorrowInstructions` for cheap batch Grok. */
-async function loadGrokDailyBriefForCheapScan() {
-  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return "";
-  try {
-    const store = getStore({
-      name: "sohelator-learning",
-      siteID: process.env.NETLIFY_SITE_ID,
-      token: process.env.NETLIFY_TOKEN,
-    });
-    const yesterday = ymdEtScan(new Date(Date.now() - 86400000));
-    const today = ymdEtScan(new Date());
-    const learned =
-      (await store.get(`learning-${today}`, { type: "json" })) ||
-      (await store.get(`learning-${yesterday}`, { type: "json" }));
-    return String(learned?.tomorrowInstructions || "").trim();
-  } catch (e) {
-    console.warn("scan.js loadGrokDailyBriefForCheapScan", e?.message || e);
-    return "";
-  }
-}
-
-/** Parse batched Grok reply: JSON array of { symbol, analysis, risks, plan, netVerdict }. */
-function parseBatchedGrokVerdicts(rawText) {
-  const out = new Map();
-  if (!rawText || typeof rawText !== "string") return out;
-  let s = rawText.trim();
-  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence) s = fence[1].trim();
-
-  const fillFromArray = (arr) => {
-    if (!Array.isArray(arr)) return;
-    for (const row of arr) {
-      const sym = String(row?.symbol || "").trim().toUpperCase();
-      if (!sym) continue;
-      const analysisRaw = String(row.analysis ?? "").trim();
-      const coPilotFallback = String(
-        row.coPilot ?? row.co_pilot ?? row.notes ?? ""
-      ).trim();
-      out.set(sym, {
-        analysis: analysisRaw || coPilotFallback,
-        risks: String(row.risks ?? "").trim(),
-        plan: String(row.plan ?? "").trim(),
-        netVerdict: String(
-          row.netVerdict ?? row.NET_VERDICT ?? row.net_verdict ?? ""
-        ).trim(),
-      });
-    }
+/** Parse per-ticker Claude reply with ANALYSIS:/RISKS:/PLAN:/VERDICT: labels. */
+function parseSectionedClaude(text) {
+  const s = String(text || "");
+  const grab = (name) => {
+    const re = new RegExp(
+      `(?:^|\\n)\\s*${name}\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*(?:ANALYSIS|RISKS|PLAN|VERDICT)\\s*:|$)`,
+      "i"
+    );
+    const m = s.match(re);
+    return m ? m[1].trim().replace(/\s+/g, " ") : "";
   };
-
-  try {
-    fillFromArray(JSON.parse(s));
-    if (out.size) return out;
-  } catch {
-    /* bracket slice */
-  }
-  const i = s.indexOf("[");
-  const j = s.lastIndexOf("]");
-  if (i >= 0 && j > i) {
-    try {
-      fillFromArray(JSON.parse(s.slice(i, j + 1)));
-    } catch {
-      /* ignore */
-    }
-  }
-  return out;
+  return {
+    analysis: grab("ANALYSIS"),
+    risks: grab("RISKS"),
+    plan: grab("PLAN"),
+    verdict: grab("VERDICT"),
+  };
 }
 
-export const handler = async (event) => {
-  const headers = { ...cors, "Content-Type": "application/json" };
-
-  if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers, body: "" };
-  }
-
-  if (event.httpMethod !== "POST") {
-    return {
-      statusCode: 405,
-      headers,
-      body: JSON.stringify({ success: false, error: "POST only" }),
-    };
-  }
-
-  if (!process.env.TRADIER_TOKEN) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        success: false,
-        error: "TRADIER_TOKEN not configured",
-      }),
-    };
-  }
-
-  let body = {};
+/**
+ * Phase 1 — rules only (Tradier + scoring + levels + options). No Claude.
+ * Wrapped by caller with an 8s wall clock; on internal error returns empty alerts.
+ */
+async function runPhase1RulesScan({ scanMode, mergedUniverse, prioritySyms }) {
   try {
-    body = JSON.parse(event.body || "{}");
-  } catch {
-    body = {};
-  }
-
-  let mode = "cheap";
-  if (body.mode === "expensive" || body.mode === "cheap") {
-    mode = body.mode;
-  }
-
-  const requestedMode = mode;
-  let scanMode = mode;
-  let scanStatus = "ok";
-  const nowEt = new Date();
-  const optionsRth = isUsEquityOptionsRthEt(nowEt);
-  const forceAlertsAfterHours = body.forceAlertsAfterHours === true;
-  const allowCatalystGrokOutsideWindow =
-    body.allowCatalystGrokOutsideWindow === true;
-  if (
-    requestedMode === "expensive" &&
-    !isEtGrokWindow(nowEt) &&
-    !allowCatalystGrokOutsideWindow
-  ) {
-    scanMode = "cheap";
-    scanStatus = "outside_window";
-  }
-
-  try {
-    await applyOptimizedParams(true);
-
-    const P0 = getOptimizedParams();
-    if (!optionsRth && !forceAlertsAfterHours) {
-      const afterHoursPayload = {
-        success: true,
-        savedAt: Date.now(),
-        status: "after_hours",
-        mode: scanMode,
-        requestedMode: requestedMode !== scanMode ? requestedMode : undefined,
-        meta: {
-          minScore: P0.minScore,
-          evThreshold: P0.evThreshold,
-          grokHealth: "skipped",
-          universeSymbols: [
-            ...new Set([
-              ...DEFAULT_UNIVERSE,
-              ...(Array.isArray(body.extraSymbols)
-                ? body.extraSymbols
-                    .map((s) => String(s || "").trim().toUpperCase())
-                    .filter(Boolean)
-                : []),
-            ]),
-          ].slice(0, 48),
-          priorityFromNews: Array.isArray(body.prioritySymbols)
-            ? body.prioritySymbols
-                .map((s) => String(s || "").trim().toUpperCase())
-                .filter(Boolean)
-            : [],
-          backtest7d: null,
-          optionsSession: "after_hours",
-          optionsSessionNote:
-            "Equity options session is 9:30–16:00 ET Mon–Fri — alerts paused.",
-        },
-        alerts: [],
-      };
-      await persistLastHudScan(afterHoursPayload);
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify(afterHoursPayload),
-      };
-    }
-
-    /** Warm similarity index for findSimilarSetups (7d fast pass). */
     let backtest7 = null;
     try {
-      backtest7 = await runBacktest(7);
-    } catch (e) {
-      console.warn("scan.js runBacktest(7) optional:", e?.message || e);
+      backtest7 = await Promise.race([
+        runBacktest(7),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("backtest_timeout")), 2500)
+        ),
+      ]);
+    } catch {
+      backtest7 = null;
     }
-
-    const extraSyms = Array.isArray(body.extraSymbols)
-      ? body.extraSymbols
-          .map((s) => String(s || "").trim().toUpperCase())
-          .filter(Boolean)
-      : [];
-    const mergedUniverse = [
-      ...new Set([...DEFAULT_UNIVERSE, ...extraSyms]),
-    ];
-    const prioritySyms = new Set(
-      Array.isArray(body.prioritySymbols)
-        ? body.prioritySymbols
-            .map((s) => String(s || "").trim().toUpperCase())
-            .filter(Boolean)
-        : []
-    );
-    const catalystNewsSummary =
-      typeof body.catalystNewsSummary === "string"
-        ? body.catalystNewsSummary.slice(0, 1500)
-        : "";
-
-    /* Prompt 19 — cheap-monitor relays Telegram so cron + UI paths stay consistent without double-send from scan */
-    const suppressTelegram = body.suppressTelegram === true;
 
     const liquid = await getLiquidOptionsWatchlist(mergedUniverse);
     const withQuotes = await Promise.all(
@@ -580,18 +433,17 @@ export const handler = async (event) => {
     const take =
       scanMode === "expensive"
         ? sortedFiltered.slice(0, 4)
-        : sortedFiltered.slice(0, 10);
+        : sortedFiltered.slice(0, 5);
 
     const P = getOptimizedParams();
     const scalpH = Math.max(3, Math.round(num(P.scalpHorizonBars, 6)));
-    const swingH = Math.max(scalpH + 1, Math.round(num(P.swingHorizonBars, 48)));
+    const swingH = Math.max(
+      scalpH + 1,
+      Math.round(num(P.swingHorizonBars, 48))
+    );
     const riskPct = num(P.riskPctPerR, 0.25);
 
     const alerts = [];
-    let grokHealthAgg =
-      requestedMode === "expensive" && scanStatus === "outside_window"
-        ? "outside_window"
-        : "skipped";
 
     for (const row of take) {
       const symbol = row.symbol;
@@ -604,15 +456,16 @@ export const handler = async (event) => {
       if (!bars5.length || bars5.length < 10) continue;
 
       const sc = await calculateSetupScore(bars5, symbol, daily);
-      const minScore = num(P.minScore, 65);
-      if (sc.score < minScore) continue;
+      if (sc.score < RULES_SCORE_MIN) continue;
 
       const similar = await findSimilarSetups(
         { symbol, bars: bars5, dailyBars: daily },
         SIMILAR_SETUPS_MAX_RESULTS
       );
 
-      const bull = num(bars5[bars5.length - 1].close) >= num(bars5[bars5.length - 1].open);
+      const bull =
+        num(bars5[bars5.length - 1].close) >=
+        num(bars5[bars5.length - 1].open);
       const playRaw = livePlayTypeFromBars(bars5, scalpH, swingH, riskPct);
       const playTypeLabel = playLabelPretty(playRaw);
       const lv = levelsFromLastBar(bars5, bull, riskPct);
@@ -678,182 +531,239 @@ export const handler = async (event) => {
       }
 
       setup.drivingText = formatDrivingAlert(setup);
-
       alerts.push(setup);
     }
 
-    const setupsPayload =
-      alerts.length > 0
-        ? alerts.map((setup) => ({
-            symbol: setup.symbol,
-            score: setup.score,
-            edge: setup.edge,
-            playTypeLabel: setup.playTypeLabel,
-            direction: setup.direction,
-            entry: setup.entry,
-            stop: setup.stop,
-            target: setup.target,
-            historicalSummary: setup.historicalSummary,
-            similarCount: Array.isArray(setup.similar)
-              ? setup.similar.length
-              : setup.similarCount ?? 0,
-            ev: setup.ev,
-            projectedEv: setup.projectedEv,
-            rulesAiVerdict: setup.aiVerdict,
-          }))
-        : [];
+    alerts.sort((a, b) => (b.score || 0) - (a.score || 0));
+    return { alerts, backtest7, P };
+  } catch (e) {
+    console.error("scan.js runPhase1RulesScan:", e?.message || e);
+    return { alerts: [], backtest7: null, P: getOptimizedParams() };
+  }
+}
 
-    const priorityInBatch = [
-      ...new Set(
-        alerts
-          .filter((a) => prioritySyms.has(a.symbol))
-          .map((a) => a.symbol)
-      ),
+/** Phase 2 — Claude enrichment for a single setup (15s cap). */
+async function enrichTopTickerWithClaude(setup, scanMode) {
+  if (!process.env.ANTHROPIC_API_KEY) return;
+  const ticker = String(setup.symbol || "").toUpperCase();
+  const score = Number(setup.score) || 0;
+  const direction = String(setup.direction || "");
+  const entry = Number(setup.entry);
+  const stop = Number(setup.stop);
+  const target = Number(setup.target);
+  const priceChangePct =
+    setup.barChgPct != null && Number.isFinite(Number(setup.barChgPct))
+      ? Number(setup.barChgPct).toFixed(2)
+      : "—";
+  const volumeRatio = num(setup.details?.volRatio, 1).toFixed(2);
+  const rsi = num(setup.details?.rsi, NaN);
+  const emaDistPct = Number.isFinite(rsi)
+    ? (((rsi - 50) / 50) * 100).toFixed(1)
+    : "—";
+
+  const claudePrompt = `You are a trading analyst. Analyze this setup in 3 short sections.
+
+Ticker: ${ticker}
+Score: ${score}
+Direction: ${direction}
+Entry: ${entry} | Stop: ${stop} | Target: ${target}
+Price change: ${priceChangePct}%
+Volume: ${volumeRatio}x average
+EMA distance: ${emaDistPct}%
+
+Write exactly:
+ANALYSIS: (2 sentences max — why this setup is valid right now)
+RISKS: (1 sentence — biggest risk)
+PLAN: (1 sentence — exact execution)
+VERDICT: (BUY/SELL/SKIP with one word reason)`;
+
+  try {
+    const text = await callClaudeWithTimeout(
+      () =>
+        scanMode === "expensive"
+          ? callClaudeWithFallback(claudePrompt, 700)
+          : callClaudeCheap(claudePrompt, 700),
+      CLAUDE_PER_TICKER_MS
+    );
+    const parsed = parseSectionedClaude(text);
+    if (parsed.analysis) setup.grokAnalysis = parsed.analysis;
+    if (parsed.risks) setup.grokRisks = parsed.risks;
+    if (parsed.plan) {
+      setup.grokPlan = parsed.plan;
+      setup.plan = parsed.plan;
+    }
+    if (parsed.verdict) setup.aiVerdict = parsed.verdict;
+    const parts = [];
+    if (parsed.analysis) parts.push(`Analysis: ${parsed.analysis}`);
+    if (parsed.risks) parts.push(`Risks: ${parsed.risks}`);
+    if (parsed.plan) parts.push(`Plan: ${parsed.plan}`);
+    if (parts.length) setup.aiCoPilot = parts.join("\n");
+  } catch (e) {
+    console.warn("scan.js Claude ticker", ticker, e?.message || e);
+    setup.grokAnalysis = "Analysis pending";
+  }
+  setup.drivingText = formatDrivingAlert(setup);
+}
+
+async function runScan(event) {
+  const headers = { ...cors, "Content-Type": "application/json" };
+
+  try {
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 204, headers, body: "" };
+  }
+
+  if (event.httpMethod !== "POST") {
+    return {
+      statusCode: 405,
+      headers,
+      body: JSON.stringify({ success: false, error: "POST only" }),
+    };
+  }
+
+  if (!process.env.TRADIER_TOKEN) {
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({
+        success: false,
+        error: "TRADIER_TOKEN not configured",
+      }),
+    };
+  }
+
+  let body = {};
+  try {
+    body = JSON.parse(event.body || "{}");
+  } catch {
+    body = {};
+  }
+
+  let mode = "cheap";
+  if (body.mode === "expensive" || body.mode === "cheap") {
+    mode = body.mode;
+  }
+
+  const requestedMode = mode;
+  let scanMode = mode;
+  let scanStatus = "ok";
+  const nowEt = new Date();
+  const optionsRth = isUsEquityOptionsRthEt(nowEt);
+  const forceAlertsAfterHours = body.forceAlertsAfterHours === true;
+  const allowCatalystGrokOutsideWindow =
+    body.allowCatalystGrokOutsideWindow === true;
+  if (
+    requestedMode === "expensive" &&
+    !isEtGrokWindow(nowEt) &&
+    !allowCatalystGrokOutsideWindow
+  ) {
+    scanMode = "cheap";
+    scanStatus = "outside_window";
+  }
+
+  try {
+    await applyOptimizedParams(true);
+
+    const P0 = getOptimizedParams();
+    console.log(
+      `scan: ADX threshold = ${P0.adxThreshold}, sectorRSBonus = ${P0.sectorRSBonus}`
+    );
+    if (!optionsRth && !forceAlertsAfterHours) {
+      const afterHoursPayload = {
+        success: true,
+        savedAt: Date.now(),
+        status: "after_hours",
+        mode: scanMode,
+        requestedMode: requestedMode !== scanMode ? requestedMode : undefined,
+        meta: {
+          minScore: P0.minScore,
+          evThreshold: P0.evThreshold,
+          grokHealth: "skipped",
+          universeSymbols: [
+            ...new Set([
+              ...DEFAULT_UNIVERSE,
+              ...(Array.isArray(body.extraSymbols)
+                ? body.extraSymbols
+                    .map((s) => String(s || "").trim().toUpperCase())
+                    .filter(Boolean)
+                : []),
+            ]),
+          ].slice(0, 48),
+          priorityFromNews: Array.isArray(body.prioritySymbols)
+            ? body.prioritySymbols
+                .map((s) => String(s || "").trim().toUpperCase())
+                .filter(Boolean)
+            : [],
+          backtest7d: null,
+          optionsSession: "after_hours",
+          optionsSessionNote:
+            "Equity options session is 9:30–16:00 ET Mon–Fri — alerts paused.",
+        },
+        alerts: [],
+      };
+      await persistLastHudScan(afterHoursPayload);
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify(afterHoursPayload),
+      };
+    }
+
+    const extraSyms = Array.isArray(body.extraSymbols)
+      ? body.extraSymbols
+          .map((s) => String(s || "").trim().toUpperCase())
+          .filter(Boolean)
+      : [];
+    const mergedUniverse = [
+      ...new Set([...DEFAULT_UNIVERSE, ...extraSyms]),
     ];
+    const prioritySyms = new Set(
+      Array.isArray(body.prioritySymbols)
+        ? body.prioritySymbols
+            .map((s) => String(s || "").trim().toUpperCase())
+            .filter(Boolean)
+        : []
+    );
+    /* Prompt 19 — cheap-monitor relays Telegram so cron + UI paths stay consistent without double-send from scan */
+    const suppressTelegram = body.suppressTelegram === true;
 
-    const catBlock =
-      catalystNewsSummary
-        ? `
+    /** Phase 1 — rules scan (Tradier + rules engine), hard 8s wall clock. */
+    let phase1 = { alerts: [], backtest7: null, P: getOptimizedParams() };
+    try {
+      phase1 = await Promise.race([
+        runPhase1RulesScan({ scanMode, mergedUniverse, prioritySyms }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("phase1_timeout")), PHASE1_MS)
+        ),
+      ]);
+    } catch (e) {
+      console.error("scan phase1:", e?.message || e);
+    }
 
-Recent market headlines (catalyst context for the session):
-${catalystNewsSummary}
+    const alerts = phase1.alerts || [];
+    const backtest7 = phase1.backtest7;
+    const P = phase1.P || getOptimizedParams();
 
-Symbols in this batch that appeared in universe ∩ headline scan: ${priorityInBatch.length ? priorityInBatch.join(", ") : "(none)"}.
-For any such symbol, if a *fresh* catalyst in the text clearly supports a tactical trade in that symbol, that symbol's netVerdict MUST begin exactly: HIGH-PROBABILITY CATALYST PLAY —
-For other symbols, if a headline clearly ties a *fresh* catalyst to that symbol, the same prefix applies.
-Otherwise use a normal conviction netVerdict (no catalyst prefix).`
-        : "";
+    let grokHealthAgg =
+      requestedMode === "expensive" && scanStatus === "outside_window"
+        ? "outside_window"
+        : "skipped";
 
-    const symList = alerts.map((a) => a.symbol).join(", ");
-
-    /* Expensive: one batched Grok call for all alerts (Netlify timeout — was N sequential calls). */
-    if (scanMode === "expensive" && process.env.ANTHROPIC_API_KEY && alerts.length) {
-      try {
-        const aiPrompt = `You are SOHELATOR's aggressive trading co-pilot. Market is live. Analyze each setup below and return actionable intelligence.
-
-For each symbol provide:
-- analysis: 2-3 lines covering trend context, key level behavior, and why this setup has edge RIGHT NOW
-- risks: 1 line on what invalidates this trade
-- plan: specific action — scale in, wait for pullback, full size, avoid, etc.
-- netVerdict: one conviction line starting with LONG, SHORT, WAIT, or AVOID
-
-Rules:
-- Never veto unless score < 40
-- Be specific, not generic — mention actual price levels from the data
-- If direction is short and daily trend is down, that is confluence — say so
-- If score >= 90 lead with HIGH CONVICTION
-
-Setups:
-${JSON.stringify(setupsPayload)}
-${catBlock}
-
-Respond ONLY with a valid JSON array. One object per symbol with fields: symbol, analysis, risks, plan, netVerdict. Include every symbol: ${symList}.`;
-
-        const { text: grokOut, health: gh } = await callClaudeExpensiveWithFallback(
-          aiPrompt,
-          BATCH_GROK_MAX_TOK
+    /** Phase 2 — Claude enrichment for top 3 by score only (parallel, 15s each). */
+    if (process.env.ANTHROPIC_API_KEY && alerts.length) {
+      const top3 = [...alerts]
+        .sort((a, b) => (b.score || 0) - (a.score || 0))
+        .slice(0, 3);
+      if (top3.length) {
+        grokHealthAgg = worseGrokHealth(grokHealthAgg, "ok");
+        await Promise.all(
+          top3.map((s) => enrichTopTickerWithClaude(s, scanMode))
         );
-        grokHealthAgg = worseGrokHealth(grokHealthAgg, gh);
-        const verdictMap = parseBatchedGrokVerdicts(grokOut);
-        for (const setup of alerts) {
-          const sym = String(setup.symbol || "").trim().toUpperCase();
-          const row = verdictMap.get(sym);
-          if (row) {
-            if (row.analysis) setup.grokAnalysis = row.analysis;
-            if (row.risks) setup.grokRisks = row.risks;
-            setup.plan = String(row.plan || "").trim();
-            if (setup.plan) setup.grokPlan = setup.plan;
-            if (row.netVerdict) setup.aiVerdict = row.netVerdict;
-            const parts = [];
-            if (row.analysis) parts.push(`Analysis: ${row.analysis}`);
-            if (row.risks) parts.push(`Risks: ${row.risks}`);
-            if (row.plan) parts.push(`Plan: ${row.plan}`);
-            if (parts.length) setup.aiCoPilot = parts.join("\n");
-          } else if (verdictMap.size > 0) {
-            setup.aiCoPilot = `AI batch: missing entry for ${sym}`;
-          } else {
-            setup.aiCoPilot = `AI batch: could not parse JSON (${String(grokOut || "").length} chars)`;
-          }
-        }
-        for (const a of alerts) {
-          a.drivingText = formatDrivingAlert(a);
-        }
-      } catch (e) {
-        console.warn("scan.js batched Claude failed:", e?.message || e);
-        grokHealthAgg = worseGrokHealth(grokHealthAgg, "error");
-        for (const setup of alerts) {
-          setup.aiCoPilot = `Claude unavailable: ${e?.message || e}`;
-        }
-        for (const a of alerts) {
-          a.drivingText = formatDrivingAlert(a);
-        }
       }
     }
 
-    /* Cheap: batched Grok with yesterday's expensive EOD instructions before setups JSON. */
-    if (scanMode === "cheap" && process.env.ANTHROPIC_API_KEY && alerts.length) {
-      try {
-        const grokDailyBrief = await loadGrokDailyBriefForCheapScan();
-        const debriefBlock =
-          grokDailyBrief
-            ? `Yesterday's debrief instructions:\n${grokDailyBrief.slice(0, 3500)}\n\nApply these when making your decision today.\n\n---\n\n`
-            : "";
-        const aiPrompt = `You are SOHELATOR's fast intraday scan co-pilot (cheap model). Market is live. Analyze each setup below and return actionable intelligence.
-
-For each symbol provide:
-- analysis: 2-3 lines covering trend context, key level behavior, and edge RIGHT NOW
-- risks: 1 line on what invalidates this trade
-- plan: specific action — scale in, wait for pullback, full size, avoid, etc.
-- netVerdict: one conviction line starting with LONG, SHORT, WAIT, or AVOID
-
-Rules:
-- Never veto unless score < 40
-- Be specific — mention actual price levels from the data
-- If score >= 85 lead with HIGH CONVICTION
-- When debrief instructions above conflict with generic advice, follow the debrief.
-
-${debriefBlock}Setups:
-${JSON.stringify(setupsPayload)}
-${catBlock}
-
-Respond ONLY with a valid JSON array. One object per symbol with fields: symbol, analysis, risks, plan, netVerdict. Include every symbol: ${symList}.`;
-
-        const grokOut = await callClaudeCheap(aiPrompt, BATCH_GROK_MAX_TOK);
-        grokHealthAgg = worseGrokHealth(grokHealthAgg, "ok");
-        const verdictMap = parseBatchedGrokVerdicts(grokOut);
-        for (const setup of alerts) {
-          const sym = String(setup.symbol || "").trim().toUpperCase();
-          const row = verdictMap.get(sym);
-          if (row) {
-            if (row.analysis) setup.grokAnalysis = row.analysis;
-            if (row.risks) setup.grokRisks = row.risks;
-            setup.plan = String(row.plan || "").trim();
-            if (setup.plan) setup.grokPlan = setup.plan;
-            if (row.netVerdict) setup.aiVerdict = row.netVerdict;
-            const parts = [];
-            if (row.analysis) parts.push(`Analysis: ${row.analysis}`);
-            if (row.risks) parts.push(`Risks: ${row.risks}`);
-            if (row.plan) parts.push(`Plan: ${row.plan}`);
-            if (parts.length) setup.aiCoPilot = parts.join("\n");
-          } else if (verdictMap.size > 0) {
-            setup.aiCoPilot = `AI batch: missing entry for ${sym}`;
-          } else {
-            setup.aiCoPilot = `AI batch: could not parse JSON (${String(grokOut || "").length} chars)`;
-          }
-        }
-        for (const a of alerts) {
-          a.drivingText = formatDrivingAlert(a);
-        }
-      } catch (e) {
-        console.warn("scan.js cheap batched Claude failed:", e?.message || e);
-        grokHealthAgg = worseGrokHealth(grokHealthAgg, "error");
-        for (const setup of alerts) {
-          setup.aiCoPilot = `Claude unavailable: ${e?.message || e}`;
-        }
-        for (const a of alerts) {
-          a.drivingText = formatDrivingAlert(a);
-        }
-      }
+    for (const a of alerts) {
+      a.drivingText = formatDrivingAlert(a);
     }
 
     /* SOHELATOR blueprint — quality-filtered Telegram (Claude + edge / vol / catalyst) (Prompt 19) */
@@ -865,7 +775,41 @@ Respond ONLY with a valid JSON array. One object per symbol with fields: symbol,
     ) {
       const toSend = alertQuality.prepareAlertsForRelay(alerts, new Date(), {});
       for (const a of toSend) {
+        const sym = String(a.symbol || "").toUpperCase();
+        const sc = Math.round(Number(a.score) || 0);
+
+        const symKey = `sym-${sym}-${Math.floor(sc / 5) * 5}`;
+        const lastSymAlert = SESSION_DEDUPE.get(symKey);
+        if (
+          lastSymAlert &&
+          Date.now() - lastSymAlert < SYMBOL_TELEGRAM_COOLDOWN_MS
+        ) {
+          console.log(
+            `scan: skipping ${sym} — in cooldown (last sent ${Math.round((Date.now() - lastSymAlert) / 60000)}m ago)`
+          );
+          continue;
+        }
+
+        const sustainedVolRatio = sustainedVolRatioOfAlert(a);
+        const isVolumeAlert =
+          Number.isFinite(sustainedVolRatio) &&
+          sustainedVolRatio >= 2.0 &&
+          sc < 90 &&
+          !hasCatalystSignal(a);
+        if (isVolumeAlert) {
+          const volKey = `vol-${sym}-${Math.floor(sustainedVolRatio)}x`;
+          const lastVolAlert = SESSION_DEDUPE.get(volKey);
+          if (
+            lastVolAlert &&
+            Date.now() - lastVolAlert < VOLUME_TELEGRAM_COOLDOWN_MS
+          ) {
+            continue;
+          }
+          SESSION_DEDUPE.set(volKey, Date.now());
+        }
+
         await sendTelegramScanAlert(buildTelegramPrompt19Message(a));
+        SESSION_DEDUPE.set(symKey, Date.now());
       }
     }
 
@@ -900,11 +844,65 @@ Respond ONLY with a valid JSON array. One object per symbol with fields: symbol,
       body: JSON.stringify(scanPayload),
     };
   } catch (e) {
-    console.error("scan.js", e);
+    console.error("scan.js inner:", e);
     return {
-      statusCode: 500,
+      statusCode: 200,
       headers,
-      body: JSON.stringify({ success: false, error: String(e?.message || e) }),
+      body: JSON.stringify({
+        success: false,
+        ok: false,
+        error: String(e?.message || e),
+        message: String(e?.message || e),
+        alerts: [],
+        watchlist: [],
+      }),
+    };
+  }
+  } catch (topLevelError) {
+    console.error(
+      "scan.js top-level crash:",
+      topLevelError?.message || topLevelError
+    );
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        success: false,
+        ok: false,
+        error: "scan_crash",
+        message: String(topLevelError?.message || topLevelError),
+        alerts: [],
+        watchlist: [],
+      }),
+    };
+  }
+}
+
+export const handler = async (event) => {
+  const timeoutHeaders = { ...cors, "Content-Type": "application/json" };
+  try {
+    return await Promise.race([
+      runScan(event),
+      new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Function timeout")),
+          FUNCTION_TIMEOUT_MS
+        )
+      ),
+    ]);
+  } catch (e) {
+    console.error("scan.js handler error:", e?.message);
+    return {
+      statusCode: 200,
+      headers: timeoutHeaders,
+      body: JSON.stringify({
+        ok: false,
+        success: false,
+        error: e?.message,
+        alerts: [],
+        watchlist: [],
+        phase: "timeout",
+      }),
     };
   }
 };

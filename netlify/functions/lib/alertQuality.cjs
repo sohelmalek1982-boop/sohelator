@@ -47,6 +47,8 @@ function isOpeningBurstWindowEt(d) {
 }
 
 function volRatioOf(a) {
+  const s = Number(a?.details?.sustainedVolRatio);
+  if (Number.isFinite(s) && s > 0) return s;
   return Number(a?.details?.volRatio ?? a?.volRatio ?? 0);
 }
 
@@ -57,14 +59,19 @@ function hasCatalystSignal(a) {
   );
 }
 
-/** Not “sub par”: score 88+ passes; below that need EV / vol / catalyst (opening 85–87). */
+/** Must have score, Claude analysis, and levels — volume alone never qualifies. */
 function hasTradeableQuality(a) {
   const sc = Number(a.score) || 0;
-  if (sc >= 88) return true;
-  if (a.details && a.details.passesEv === true) return true;
-  if (volRatioOf(a) >= 2.3) return true;
-  if (hasCatalystSignal(a)) return true;
-  return false;
+  const hasHighScore = sc >= 85;
+  const hasClaudeAnalysis = isGrokConsultedAlert(a);
+  const hasValidLevels =
+    a.entry &&
+    a.stop &&
+    a.target &&
+    Number(a.entry) > 0 &&
+    Number(a.stop) > 0 &&
+    Number(a.target) > 0;
+  return hasHighScore && hasClaudeAnalysis && hasValidLevels;
 }
 
 function passesTelegramExtras(a) {
@@ -129,11 +136,7 @@ function prepareAlertsForRelay(alerts, now, options) {
   const minScore = minScoreForTelegram(d, opts);
   let list = (alerts || []).filter((a) => {
     const sc = Number(a.score) || 0;
-    return (
-      sc >= minScore &&
-      isGrokConsultedAlert(a) &&
-      hasTradeableQuality(a)
-    );
+    return sc >= minScore && hasTradeableQuality(a);
   });
   list.sort((a, b) => Number(b.score) - Number(a.score));
   if (isOpeningBurstWindowEt(d) && !opts.skipOpeningTopN) {

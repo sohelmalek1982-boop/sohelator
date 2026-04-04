@@ -46,6 +46,35 @@ exports.handler = async (event) => {
   const blobsConfigured = !!(
     process.env.NETLIFY_SITE_ID && process.env.NETLIFY_TOKEN
   );
+  let optimizedParams = null;
+  let optimizedParamsReset = false;
+  if (blobsConfigured) {
+    try {
+      const mod = await import("../../src/lib/scanner-rules.js");
+      await mod.applyOptimizedParams(true);
+      let params = mod.getOptimizedParams();
+      const paramsNeedReset =
+        (params.sectorRSBonus || 0) > 15 ||
+        (params.adxThreshold || 999) < 18 ||
+        (params.minScore || 0) < 50;
+      if (paramsNeedReset) {
+        console.warn(
+          "health: optimized params out of bounds — resetting to defaults"
+        );
+        await mod.resetOptimizedParams();
+        params = mod.getOptimizedParams();
+        optimizedParamsReset = true;
+      }
+      optimizedParams = {
+        adxThreshold: params.adxThreshold,
+        sectorRSBonus: params.sectorRSBonus,
+        minScore: params.minScore,
+        evThreshold: params.evThreshold,
+      };
+    } catch (e) {
+      console.warn("health optimized params", e?.message || e);
+    }
+  }
   const [jobHealth, clock] = await Promise.all([
     getJobHealth(),
     tradierClock(),
@@ -68,6 +97,8 @@ exports.handler = async (event) => {
       pipelineStatus,
       jobHealth,
       marketClock: clock,
+      optimizedParams,
+      optimizedParamsReset,
       at: Date.now(),
     }),
   };

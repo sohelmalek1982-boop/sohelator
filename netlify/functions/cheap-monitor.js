@@ -710,6 +710,11 @@ function volRatioOfAlertP19(a) {
   return Number(a?.details?.volRatio ?? a?.volRatio ?? 0);
 }
 
+function sustainedVolRatioOfAlertP19(a) {
+  const s = Number(a?.details?.sustainedVolRatio);
+  return Number.isFinite(s) ? s : volRatioOfAlertP19(a);
+}
+
 function hasCatalystSignalP19(a) {
   const s = JSON.stringify(a || {}).toUpperCase();
   return /CATALYST|EARNINGS|FDA|NEWS|\bGAP\b|UPGRADE|DOWNGRADE|BREAKING|MERGER|GUIDANCE|HIGH-PROBABILITY CATALYST/i.test(
@@ -777,8 +782,12 @@ function buildTelegramPrompt19Message(a) {
   const histLine = historicalMatchesShortP19(a);
 
   const hi = [];
+  const svr = sustainedVolRatioOfAlertP19(a);
+  const pm = a?.details?.priceMoving === true;
   if (score >= 90) hi.push("⚡ SCORE 90+ — TOP TIER");
-  if (volRatioOfAlertP19(a) >= 3) hi.push("⚡ VOL SURGE 3×+");
+  if (Number.isFinite(svr) && svr >= 2.5 && pm) {
+    hi.push("⚡ VOL SURGE " + svr.toFixed(1) + "x");
+  }
   if (hasCatalystSignalP19(a)) hi.push("⚡ CATALYST / NEWS");
   if (hasRegimeOrLevelKeywordsP19(a)) hi.push("⚡ REGIME / LEVEL / REVERSAL");
   const banner = hi.length ? hi.join("\n") + "\n\n" : "";
