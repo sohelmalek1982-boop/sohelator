@@ -221,92 +221,57 @@
       display: none;
     }
 
-    /* Checkpoint strip */
-    .hud-cp-wrap {
-      margin-top: 0;
-      margin-bottom: 12px;
-    }
-    .hud-cp-lab {
-      font-family: var(--hud-mono);
-      font-size: 0.5rem;
-      letter-spacing: 0.16em;
-      color: var(--hud-muted);
-      margin-bottom: 6px;
-    }
-    .checkpoint-timeline-wrap {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      padding-bottom: 8px;
-      margin: 0 -2px;
-    }
-    .hud-cp-strip {
+    /* Compact checkpoint dot strip */
+    .cp-strip {
       display: flex;
       align-items: center;
-      gap: 0;
-      min-width: min-content;
-      padding: 0 8px 0 0;
+      gap: 8px;
+      padding: 8px 16px;
+      margin: 0 0 8px 0;
     }
-    .hud-cp-node {
-      flex: 1 1 auto;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-width: 42px;
-      max-width: 64px;
-    }
-    .hud-cp-line {
-      flex: 0 0 16px;
-      height: 2px;
-      background: rgba(45, 104, 120, 0.5);
-      margin-top: 15px;
-    }
-    .hud-cp-node:first-child .hud-cp-line { display: none; }
-    .hud-cp-pip {
-      width: 14px;
-      height: 14px;
-      border: 2px solid #334d55;
-      background: var(--hud-s0);
-      transform: rotate(45deg);
-      position: relative;
-    }
-    .hud-cp-node--done .hud-cp-pip {
-      border-color: var(--hud-cyan);
-      box-shadow: 0 0 10px rgba(0, 229, 255, 0.25);
-    }
-    .hud-cp-node--done .hud-cp-pip::after {
-      content: "✓";
-      position: absolute;
-      transform: rotate(-45deg) translate(-50%, -50%);
-      left: 50%;
-      top: 50%;
-      font-size: 9px;
-      color: var(--hud-cyan);
-      font-weight: 700;
-    }
-    .hud-cp-node--next .hud-cp-pip {
-      border-color: var(--hud-amber);
-      animation: hud-cp-pulse 1.4s ease-in-out infinite;
-    }
-    @keyframes hud-cp-pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(255, 170, 0, 0.35); }
-      50% { box-shadow: 0 0 12px 2px rgba(255, 170, 0, 0.25); }
-    }
-    .hud-cp-time {
+    .cp-strip-label {
       font-family: var(--hud-mono);
       font-size: 8px;
-      color: var(--hud-muted);
-      margin-top: 6px;
+      letter-spacing: 0.1em;
+      color: var(--hud-t3);
+      white-space: nowrap;
     }
-    .hud-cp-node--next .hud-cp-time { color: var(--hud-amber); }
-    .hud-cp-label {
+    .cp-strip-dots {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+      min-width: 0;
+    }
+    .cp-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--hud-t3);
+      opacity: 0.3;
+      flex-shrink: 0;
+    }
+    .cp-dot.done {
+      background: var(--hud-cyan);
+      opacity: 1;
+    }
+    .cp-dot.next {
+      background: var(--hud-amber);
+      opacity: 1;
+      box-shadow: 0 0 4px var(--hud-amber);
+    }
+    .cp-dot-line {
+      height: 1px;
+      flex: 1;
+      min-width: 2px;
+      background: var(--hud-b1);
+    }
+    .cp-strip-next {
       font-family: var(--hud-mono);
-      font-size: 0.48rem;
+      font-size: 9px;
+      color: var(--hud-amber);
       letter-spacing: 0.06em;
-      color: var(--hud-muted);
-      margin-top: 2px;
-      text-align: center;
-      max-width: 64px;
-      line-height: 1.2;
+      white-space: nowrap;
     }
 
     /* Claude / AI intel */
@@ -1262,11 +1227,10 @@
       ">Market closed — analysis resumes Monday at 8:30 AM ET</div>
     </div>
 
-    <div class="hud-cp-wrap">
-      <div class="hud-cp-lab">CLAUDE CHECKPOINT TIMELINE (ET)</div>
-      <div class="checkpoint-timeline-wrap">
-        <div class="hud-cp-strip" id="hud-checkpoint-strip" aria-label="Checkpoints"></div>
-      </div>
+    <div class="cp-strip" id="cp-strip" aria-label="Checkpoints">
+      <div class="cp-strip-label">CHECKPOINTS</div>
+      <div class="cp-strip-dots" id="cp-dots"></div>
+      <div class="cp-strip-next" id="cp-next-label">Next: —</div>
     </div>
 
     <p class="hud-sec-title">TACTICAL ALERTS</p>

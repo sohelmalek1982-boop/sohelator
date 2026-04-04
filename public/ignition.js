@@ -217,6 +217,7 @@ window.calculateIgnition = calculateIgnition;
   var spyLevelsTimer = null;
   var hudClockTimer = null;
   var positionTtiTimer = null;
+  var cpStripTimer = null;
   /** Dedupes pullScanData when savedAt matches. */
   var lastAppliedHudSavedAt = 0;
 
@@ -299,109 +300,71 @@ window.calculateIgnition = calculateIgnition;
     span.textContent = t + " ET";
   }
 
-  var CHECKPOINTS = [
-    { key: "premarket", t: "08:30", lab: "PRE", slotMin: 8 * 60 + 30 },
-    { key: "scan-925", t: "09:25", lab: "OPEN", slotMin: 9 * 60 + 25 },
-    { key: "scan-955", t: "09:55", lab: "MID-AM", slotMin: 9 * 60 + 55 },
-    { key: "cheap-monitor", t: "11:00", lab: "MID", slotMin: 11 * 60 },
-    { key: "brief-1pm", t: "13:00", lab: "1PM", slotMin: 13 * 60 },
-    { key: "scanner", t: "13:00", lab: "PM", slotMin: 13 * 60 },
-    { key: "cheap-monitor2", t: "15:00", lab: "LATE", slotMin: 15 * 60 },
-    { key: "scan-eod", t: "16:05", lab: "EOD", slotMin: 16 * 60 + 5 },
+  /** ET slot minutes for compact checkpoint strip (single-line dots). */
+  var CP_STRIP_SLOTS = [
+    { label: "PRE", time: "08:30", slotMin: 8 * 60 + 30 },
+    { label: "OPEN", time: "09:25", slotMin: 9 * 60 + 25 },
+    { label: "MID-AM", time: "09:55", slotMin: 9 * 60 + 55 },
+    { label: "MID", time: "11:00", slotMin: 11 * 60 },
+    { label: "1PM", time: "13:00", slotMin: 13 * 60 },
+    { label: "PM", time: "15:00", slotMin: 15 * 60 },
+    { label: "EOD", time: "16:05", slotMin: 16 * 60 + 5 },
   ];
 
-  function ymdEt(ms) {
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/New_York",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date(ms));
-  }
-
-  function renderCheckpointStrip(jobHealth, premarketAsOfMs, lastScanMs) {
-    var host = document.getElementById("hud-checkpoint-strip");
-    if (!host) return;
-    var now = Date.now();
-    var todayYmd = ymdEt(now);
-    function lastOkMs(key) {
-      if (key === "premarket" && premarketAsOfMs) {
-        return ymdEt(premarketAsOfMs) === todayYmd ? premarketAsOfMs : 0;
-      }
-      if (key === "cheap-monitor2") {
-        var j = jobHealth && jobHealth["cheap-monitor"];
-        return j && j.lastOk && ymdEt(j.lastOk) === todayYmd && minutesEt(new Date(j.lastOk)) >= 14 * 60 + 30
-          ? j.lastOk
-          : 0;
-      }
-      if (key === "cheap-monitor") {
-        var j2 = jobHealth && jobHealth["cheap-monitor"];
-        if (!j2 || !j2.lastOk || ymdEt(j2.lastOk) !== todayYmd) return 0;
-        var m = minutesEt(new Date(j2.lastOk));
-        if (m >= 10 * 60 + 30 && m < 14 * 60 + 30) return j2.lastOk;
-        return 0;
-      }
-      var row = jobHealth && jobHealth[key];
-      return row && row.lastOk && ymdEt(row.lastOk) === todayYmd ? row.lastOk : 0;
-    }
-    function minutesEt(d) {
-      var parts = new Intl.DateTimeFormat("en-US", {
-        timeZone: "America/New_York",
-        hour: "numeric",
-        minute: "numeric",
-        hour12: false,
-      }).formatToParts(d);
-      var h = 0;
-      var m = 0;
-      for (var i = 0; i < parts.length; i++) {
-        if (parts[i].type === "hour") h = parseInt(parts[i].value, 10);
-        if (parts[i].type === "minute") m = parseInt(parts[i].value, 10);
-      }
-      return h * 60 + m;
-    }
+  function renderCpStrip() {
+    var dotsEl = document.getElementById("cp-dots");
+    var nextEl = document.getElementById("cp-next-label");
+    if (!dotsEl) return;
     var nowMin = minutesEt(new Date());
-    var done = CHECKPOINTS.map(function (c) {
-      var ok = 0;
-      if (c.key === "scanner" && lastScanMs && ymdEt(lastScanMs) === todayYmd) {
-        var sm = minutesEt(new Date(lastScanMs));
-        if (sm >= 12 * 60 + 15 && sm <= 14 * 60 + 45) ok = lastScanMs;
-      }
-      if (!ok) ok = lastOkMs(c.key);
-      return { slotMin: c.slotMin, ok: ok, lab: c.lab, t: c.t };
+    var states = CP_STRIP_SLOTS.map(function (cp) {
+      return {
+        label: cp.label,
+        time: cp.time,
+        slotMin: cp.slotMin,
+        done: nowMin >= cp.slotMin,
+      };
     });
     var nextIdx = -1;
     var i;
-    for (i = 0; i < done.length; i++) {
-      if (!done[i].ok && nowMin >= done[i].slotMin - 5) {
+    for (i = 0; i < states.length; i++) {
+      if (!states[i].done) {
         nextIdx = i;
         break;
       }
     }
-    if (nextIdx < 0) {
-      for (i = 0; i < done.length; i++) {
-        if (!done[i].ok) {
-          nextIdx = i;
-          break;
-        }
-      }
-    }
     var html = "";
-    for (var n = 0; n < CHECKPOINTS.length; n++) {
-      var c = CHECKPOINTS[n];
-      if (n > 0) html += '<div class="hud-cp-line"></div>';
-      var cls = "hud-cp-node";
-      if (done[n].ok) cls += " hud-cp-node--done";
-      else if (n === nextIdx) cls += " hud-cp-node--next";
+    for (var n = 0; n < states.length; n++) {
+      var st = states[n];
+      var cls = "cp-dot";
+      if (st.done) cls += " done";
+      else if (n === nextIdx) cls += " next";
       html +=
         '<div class="' +
         cls +
-        '"><div class="hud-cp-pip"></div><div class="hud-cp-time">' +
-        esc(c.t) +
-        '</div><div class="hud-cp-label">' +
-        esc(c.lab) +
-        "</div></div>";
+        '" title="' +
+        esc(st.label + " " + st.time) +
+        '"></div>';
+      if (n < states.length - 1) {
+        html += '<div class="cp-dot-line"></div>';
+      }
     }
-    host.innerHTML = html;
+    dotsEl.innerHTML = html;
+    if (nextEl) {
+      var next = null;
+      for (var j = 0; j < states.length; j++) {
+        if (!states[j].done) {
+          next = states[j];
+          break;
+        }
+      }
+      if (next) {
+        nextEl.textContent = "Next: " + next.time + " " + next.label;
+        nextEl.style.color = "var(--hud-amber)";
+      } else {
+        nextEl.textContent = "All done today";
+        nextEl.style.color = "var(--hud-green)";
+      }
+    }
   }
 
   function applyBrief1pmPayload(pm) {
@@ -505,17 +468,13 @@ window.calculateIgnition = calculateIgnition;
           })
           .then(function (h) {
             var jh = (h && h.jobHealth) || {};
-            renderCheckpointStrip(
-              jh,
-              window.__sohelPremarketAsOf,
-              window.__sohelLastScanOkAt
-            );
+            renderCpStrip();
             window.__sohelLastHealthJson = h;
             updateHealthBanner();
             mergeScanTimeFromHealth(h);
           })
           .catch(function () {
-            renderCheckpointStrip({}, window.__sohelPremarketAsOf, window.__sohelLastScanOkAt);
+            renderCpStrip();
           });
       })
       .catch(function () {
@@ -524,7 +483,7 @@ window.calculateIgnition = calculateIgnition;
           body.textContent = "Brief runs at 8:30 AM ET on market days";
           body.style.whiteSpace = "pre-wrap";
         }
-        renderCheckpointStrip({}, 0, window.__sohelLastScanOkAt);
+        renderCpStrip();
       });
   }
 
@@ -537,11 +496,7 @@ window.calculateIgnition = calculateIgnition;
       .then(function (h) {
         if (pre) pre.textContent = JSON.stringify(h, null, 2);
         window.__sohelLastHealthJson = h;
-        renderCheckpointStrip(
-          (h && h.jobHealth) || {},
-          window.__sohelPremarketAsOf,
-          window.__sohelLastScanOkAt
-        );
+        renderCpStrip();
         updateHealthBanner();
         mergeScanTimeFromHealth(h);
       })
@@ -1796,11 +1751,7 @@ window.calculateIgnition = calculateIgnition;
       })
       .then(function (h) {
         window.__sohelLastHealthJson = h;
-        renderCheckpointStrip(
-          (h && h.jobHealth) || {},
-          window.__sohelPremarketAsOf,
-          window.__sohelLastScanOkAt
-        );
+        renderCpStrip();
         mergeScanTimeFromHealth(h);
       })
       .catch(function () {});
@@ -2534,6 +2485,9 @@ window.calculateIgnition = calculateIgnition;
     fetchHudAuxiliary();
     fetchMatrixSignal();
     setInterval(fetchMatrixSignal, 15 * 60 * 1000);
+    if (cpStripTimer) clearInterval(cpStripTimer);
+    cpStripTimer = setInterval(renderCpStrip, 60000);
+    renderCpStrip();
     window.__sohelPositionTrackerList = [];
     var posElBoot = document.getElementById("hud-stat-positions");
     if (posElBoot) posElBoot.textContent = "0";
