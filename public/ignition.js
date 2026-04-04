@@ -1851,6 +1851,9 @@ window.calculateIgnition = calculateIgnition;
     var resistEl = document.getElementById("level-resistance");
     var supportDist = document.getElementById("level-support-dist");
     var resistDist = document.getElementById("level-resistance-dist");
+    var srSpyRangeEl = document.getElementById("sr-spy-range");
+    var srMarkerEl = document.getElementById("sr-ladder-marker");
+    var srTrackEl = document.getElementById("sr-ladder-track");
     var mktStat = document.getElementById("hud-stat-market");
 
     if (!statusEl) return;
@@ -1937,27 +1940,76 @@ window.calculateIgnition = calculateIgnition;
       return l.side === "resistance";
     });
     var price = parseFloat(signal.currentPrice || signal.spyPrice || 0);
+    var supN = support != null ? parseFloat(support.price) : NaN;
+    var resN = resistance != null ? parseFloat(resistance.price) : NaN;
+    var hasBand =
+      Number.isFinite(supN) &&
+      Number.isFinite(resN) &&
+      Number.isFinite(price) &&
+      price > 0 &&
+      resN > supN;
 
-    if (support && supportEl) {
-      supportEl.textContent = "$" + support.price;
+    if (srSpyRangeEl) {
+      srSpyRangeEl.textContent =
+        Number.isFinite(price) && price > 0 ? "$" + price.toFixed(2) : "—";
+    }
+
+    if (support && supportEl && Number.isFinite(supN)) {
+      supportEl.textContent = "$" + supN;
       if (supportDist && Number.isFinite(price) && price > 0) {
-        var ds = Math.abs(((price - support.price) / support.price) * 100).toFixed(1);
-        supportDist.textContent = ds + "% away";
+        var pctS = Math.abs(((price - supN) / supN) * 100).toFixed(1);
+        if (price < supN) {
+          supportDist.textContent = pctS + "% below band";
+        } else {
+          supportDist.textContent = pctS + "% above support";
+        }
       }
     } else if (supportEl) {
       supportEl.textContent = "—";
       if (supportDist) supportDist.textContent = "—";
     }
 
-    if (resistance && resistEl) {
-      resistEl.textContent = "$" + resistance.price;
+    if (resistance && resistEl && Number.isFinite(resN)) {
+      resistEl.textContent = "$" + resN;
       if (resistDist && Number.isFinite(price) && price > 0) {
-        var dr = Math.abs(((resistance.price - price) / price) * 100).toFixed(1);
-        resistDist.textContent = dr + "% away";
+        var pctR = Math.abs(((resN - price) / price) * 100).toFixed(1);
+        if (price > resN) {
+          resistDist.textContent = pctR + "% above band";
+        } else {
+          resistDist.textContent = pctR + "% below resistance";
+        }
       }
     } else if (resistEl) {
       resistEl.textContent = "—";
       if (resistDist) resistDist.textContent = "—";
+    }
+
+    if (srMarkerEl && srTrackEl) {
+      if (hasBand) {
+        srTrackEl.classList.remove("sr-ladder--dim");
+        var t = (price - supN) / (resN - supN);
+        t = Math.max(0, Math.min(1, t));
+        var leftPct = t * 100;
+        srMarkerEl.style.left = leftPct + "%";
+        var bandPct = (t * 100).toFixed(0);
+        srTrackEl.setAttribute(
+          "aria-label",
+          "SPY is about " +
+            bandPct +
+            " percent of the way from support (" +
+            supN.toFixed(2) +
+            ") toward resistance (" +
+            resN.toFixed(2) +
+            ")."
+        );
+      } else {
+        srTrackEl.classList.add("sr-ladder--dim");
+        srMarkerEl.style.left = "50%";
+        srTrackEl.setAttribute(
+          "aria-label",
+          "Support and resistance range unavailable. Need valid support below resistance and a live SPY price."
+        );
+      }
     }
 
     if (watchEl) {
