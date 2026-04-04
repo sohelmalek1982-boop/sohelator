@@ -1,15 +1,16 @@
 "use strict";
 
 /**
- * Shared rules: Telegram / push only for Grok-enriched, high-signal setups.
+ * Shared rules: Telegram / push only for AI co-pilot–enriched (Claude), high-signal setups.
  * Opening burst (9:30–9:45 ET): at most 2 names after sort (no global daily cap).
  */
 
 const OPEN_START_MIN = 9 * 60 + 30;
 const OPEN_BURST_END_MIN = 9 * 60 + 45;
 
-const GROK_BAD =
-  /Grok batch: missing|could not parse|Grok unavailable|Grok batch:|Rules edge\b/i;
+/** Reject placeholder / error text from scan `grokAnalysis` (legacy field name). */
+const AI_ANALYSIS_BAD =
+  /Grok batch:|AI batch:|could not parse|unavailable|Claude unavailable|Rules edge\b/i;
 
 function weekdayShortEt(d) {
   return new Intl.DateTimeFormat("en-US", {
@@ -82,7 +83,7 @@ function isGrokConsultedAlert(a) {
   if (!a || typeof a !== "object") return false;
   const analysis = String(a.grokAnalysis || "").trim();
   if (analysis.length < 90) return false;
-  if (GROK_BAD.test(analysis)) return false;
+  if (AI_ANALYSIS_BAD.test(analysis)) return false;
   const risks = String(a.grokRisks || "").trim();
   const plan = String(a.grokPlan || a.plan || "").trim();
   if (risks.length < 25 || plan.length < 25) return false;

@@ -778,16 +778,16 @@ window.calculateIgnition = calculateIgnition;
               : "—";
           var rs = esc(String(a.grokReason || "").slice(0, 140));
           return (
-            '<div class="hud-log-row hud-log-row--grok" data-alert-log="1"><span class="hud-log-ts">' +
+            '<div class="hud-log-row hud-log-row--claude" data-alert-log="1"><span class="hud-log-ts">' +
             esc(ts) +
             '</span><span class="hud-log-sym">' +
             sym +
-            '</span><span class="hud-log-meta">GROK ' +
+            '</span><span class="hud-log-meta">CLAUDE ' +
             act +
             " · " +
             esc(fp) +
             (rs ? " · " + rs : "") +
-            '</span><span class="hud-log-badge hud-log-badge--grok">' +
+            '</span><span class="hud-log-badge hud-log-badge--claude">' +
             esc(act) +
             "</span></div>"
           );
@@ -1045,7 +1045,7 @@ window.calculateIgnition = calculateIgnition;
     pill.style.borderColor = scanStatusOk ? "rgba(0,255,136,0.5)" : "rgba(255,170,0,0.6)";
   }
 
-  /** Short market-state copy only — full Grok / scanner dump removed from LIVE (watchlist) tab */
+  /** Short market-state copy only — full Claude / scanner dump removed from LIVE (watchlist) tab */
   function regimeBriefHtml(j) {
     if (!j || j.success === false) {
       return (
@@ -1067,8 +1067,8 @@ window.calculateIgnition = calculateIgnition;
     } else {
       s1 =
         j.mode === "expensive"
-          ? "Session live — full scan with Grok on this pass when configured."
-          : "Session live — cheap scan; Grok summaries appear on expensive-window passes.";
+          ? "Session live — full scan with Claude on this pass when configured."
+          : "Session live — cheap scan; Claude summaries appear on expensive-window passes.";
     }
     if (s1.length > 220) s1 = s1.slice(0, 217) + "…";
     var n = Array.isArray(j.alerts) ? j.alerts.length : 0;
@@ -1504,7 +1504,7 @@ window.calculateIgnition = calculateIgnition;
       var mh =
         j.meta.claudeHealth != null ? j.meta.claudeHealth : j.meta.grokHealth;
       if (mh != null) {
-        window.__sohelLastGrokHealth = mh;
+        window.__sohelLastClaudeHealth = mh;
       }
       updateHealthBanner();
     }
@@ -1661,14 +1661,14 @@ window.calculateIgnition = calculateIgnition;
 
   window.__sohelPageLoadAt = Date.now();
   window.__sohelLastScanOkAt = null;
-  window.__sohelLastGrokHealth = "skipped";
+  window.__sohelLastClaudeHealth = "skipped";
 
   function nextMonitorMinutes() {
     var mod = Math.floor(Date.now() / 60000) % 5;
     return mod === 0 ? 5 : 5 - mod;
   }
 
-  function grokLabel(h) {
+  function claudeHealthLabel(h) {
     if (h === "ok") return "OK";
     if (h === "fallback_cheap") return "OK (fallback)";
     if (h === "error") return "ERROR";
@@ -1686,12 +1686,12 @@ window.calculateIgnition = calculateIgnition;
         ? now - window.__sohelPageLoadAt > 600000
         : now - okAt > 600000;
     hb.classList.toggle("sohel-health--stale", stale);
-    var grok = grokLabel(window.__sohelLastGrokHealth);
+    var ch = claudeHealthLabel(window.__sohelLastClaudeHealth);
     var parts = [];
     parts.push(scanStatusLabel);
     parts.push(openStatusLabel);
     parts.push("Poll ~" + nextMonitorMinutes() + "m");
-    parts.push("Claude " + grok);
+    parts.push("Claude " + ch);
     if (window.__sohelLastScanStatus === "outside_window") {
       parts.push("cheap outside 8–4 ET");
     }
@@ -1702,9 +1702,9 @@ window.calculateIgnition = calculateIgnition;
     parts.push("Self-tuned nightly");
     if (stale) parts.push("Scanner idle 10+ min");
     hb.textContent = parts.join(" · ");
-    var errGrok = grok === "ERROR";
-    var bad = errGrok || !scanStatusOk || !openStatusOk;
-    hb.style.color = bad ? (errGrok ? "#f87171" : "#fbbf24") : "#bef264";
+    var errCh = ch === "ERROR";
+    var bad = errCh || !scanStatusOk || !openStatusOk;
+    hb.style.color = bad ? (errCh ? "#f87171" : "#fbbf24") : "#bef264";
   }
 
   var prevAlertSig = null;
@@ -2240,12 +2240,17 @@ window.calculateIgnition = calculateIgnition;
     return '<p class="hint" style="margin:0;">No parameter changes.</p>';
   }
 
-  function renderGrokDashboard(latest) {
-    var host = document.getElementById("learning-grok-dashboard");
+  function renderGrokDashboard(latest, todayEod) {
+    var host = document.getElementById("learning-claude-dashboard");
     if (!host) return;
-    if (!latest) {
+    var eodTop = renderEodTodayBlock(todayEod);
+    if (!latest && !todayEod) {
       host.innerHTML =
-        '<p class="hint">No <code style="color:var(--cyan)">learning-YYYY-MM-DD</code> rows yet. After the ET session, <code style="color:var(--cyan)">scan-eod</code> writes the debrief to <code style="color:var(--cyan)">sohelator-learning</code>.</p>';
+        '<p class="hint">No <code style="color:var(--cyan)">learning-YYYY-MM-DD</code> or <code style="color:var(--cyan)">eod-review-YYYY-MM-DD</code> yet. After the ET session, <code style="color:var(--cyan)">scan-eod</code> writes the debrief to <code style="color:var(--cyan)">sohelator-learning</code>.</p>';
+      return;
+    }
+    if (!latest) {
+      host.innerHTML = eodTop;
       return;
     }
     var g = String(latest.sessionGrade || "?")
@@ -2297,7 +2302,7 @@ window.calculateIgnition = calculateIgnition;
           p16esc(filt) +
           "</div></div>"
         : "") +
-      '<div class="learn-block"><div class="learn-k">CHEAP SCAN AUDIT</div><div class="learn-audit-mono">' +
+      '<div class="learn-block"><div class="learn-k">CLAUDE SCAN AUDIT</div><div class="learn-audit-mono">' +
       (audit ? p16esc(audit) : '<span class="hint">—</span>') +
       '</div></div><div class="learn-block"><div class="learn-tomorrow-cap">OVERNIGHT BRIEFING · TOMORROW</div><div class="learn-tomorrow-box">' +
       (tomorrow ? p16esc(tomorrow) : '<span class="hint">—</span>') +
@@ -2380,7 +2385,7 @@ window.calculateIgnition = calculateIgnition;
     var now = Date.now();
     if (!force && now - lastLearningFetch < STALE_MS) return;
     lastLearningFetch = now;
-    var gDash = document.getElementById("learning-grok-dashboard");
+    var gDash = document.getElementById("learning-claude-dashboard");
     if (gDash) gDash.innerHTML = '<p class="hint" style="padding:0;">Loading…</p>';
 
     fetch(LEARNING_DATA_URL, { cache: "no-store" })
@@ -2395,7 +2400,7 @@ window.calculateIgnition = calculateIgnition;
         );
       })
       .catch(function () {
-        var gHost = document.getElementById("learning-grok-dashboard");
+        var gHost = document.getElementById("learning-claude-dashboard");
         if (gHost)
           gHost.innerHTML =
             '<p class="hint">Could not load <code style="color:var(--cyan)">/api/learning-data</code>.</p>';

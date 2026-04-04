@@ -2,14 +2,14 @@
  * SOHELATOR blueprint — cheap 5-min monitor + wake-up (Prompt 7)
  * SOHELATOR blueprint — remove NVDA hardcoding + after-hours hourly scans + news/catalyst detection (Prompt 12)
  * SOHELATOR blueprint — ALL alerts to Telegram (user wants to review everything) (Prompt 19):
- *   POST /api/scan with suppressTelegram:true; relays quality-filtered alerts (Grok + lib/alertQuality.cjs) via Telegram.
+ *   POST /api/scan with suppressTelegram:true; relays quality-filtered alerts (Claude + lib/alertQuality.cjs) via Telegram.
  *
  * Schedule: netlify.toml — cron every five minutes — this function gates:
  *   • Weekday RTH 8:00–16:00 ET: every run → cheap scan + wild wakeup (score ≥72, vol ≥2.5×, text catalyst)
  *   • Weekday after-hours 16:01–20:00 ET: at most once per ET clock hour → cheap scan with Tradier news,
  *     symbols in our universe mentioned in headlines get priority; body forwards catalyst text for Grok.
  *
- * Netlify: URL / DEPLOY_PRIME_URL, TRADIER_TOKEN (news + scan), GROK via expensive /api/scan,
+ * Netlify: URL / DEPLOY_PRIME_URL, TRADIER_TOKEN (news + scan), Claude via expensive /api/scan,
  * NETLIFY_SITE_ID + NETLIFY_TOKEN (debounce blob + alert-cooldowns), VAPID_* (push via lib/pushAll).
  */
 

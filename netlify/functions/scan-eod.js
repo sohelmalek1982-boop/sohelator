@@ -734,7 +734,7 @@ ${summaryJson}
 Respond ONLY with valid JSON in exactly this structure:
 {
   "performanceReview": "3-4 sentences on what happened today",
-  "cheapGrokAudit": "review every CLOSE/ADD/HOLD decision — score right or wrong based on outcome, identify patterns",
+  "cheapGrokAudit": "review every CLOSE/ADD/HOLD decision (Claude position manager) — score right or wrong based on outcome, identify patterns",
   "filterAssessment": "were scanner filters catching good setups or noise? be specific",
   "tomorrowInstructions": "direct instruction set for the AI co-pilot to follow tomorrow — what to favor, avoid, watch for.",
   "parameterSuggestions": { "minScore": null, "adxThreshold": null, "volIgnition": null, "evThreshold": null, "alertCooldownHours": null, "gexThresholdPct": null },
@@ -1038,7 +1038,7 @@ End your response with exactly this JSON block (no markdown fences):
 Grade: ${sessionGrade}
 ${sg.wins}W · ${sg.losses}L · P&L ${sg.totalPnlPct}%
 ${keyLearning}
-Cheap Grok audit: ${audit120 || "—"}
+Claude scan audit: ${audit120 || "—"}
 Tomorrow: ${tom100 || "—"}
 Params updated: ${paramsLine}`;
       fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {

@@ -289,7 +289,7 @@
       line-height: 1.2;
     }
 
-    /* Grok intel */
+    /* Claude / AI intel */
     .hud-intel {
       position: relative;
       margin-bottom: 18px;
@@ -530,8 +530,8 @@
     .hud-log-badge--long { color: var(--hud-green); border-color: var(--hud-green); }
     .hud-log-badge--short { color: var(--hud-red); border-color: var(--hud-red); }
     .hud-log-badge--skip { color: var(--hud-muted); border-color: var(--hud-muted); }
-    .hud-log-row--grok { border-color: rgba(0, 229, 255, 0.22); }
-    .hud-log-badge--grok {
+    .hud-log-row--claude { border-color: rgba(0, 229, 255, 0.22); }
+    .hud-log-badge--claude {
       color: var(--hud-cyan);
       border-color: var(--hud-cyan);
       font-size: 0.48rem !important;
@@ -699,7 +699,7 @@
     .learn-trend--up { color: var(--hud-green); }
     .learn-trend--down { color: var(--hud-red); }
     .learn-trend--flat { color: var(--hud-amber); }
-    .learn-grok-hero {
+    .learn-claude-hero {
       display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px 24px;
       margin-bottom: 16px; padding: 12px 0; border-bottom: 1px solid rgba(0,245,255,0.12);
     }
@@ -1068,7 +1068,7 @@
     </div>
 
     <div class="hud-cp-wrap">
-      <div class="hud-cp-lab">GROK CHECKPOINT TIMELINE (ET)</div>
+      <div class="hud-cp-lab">CLAUDE CHECKPOINT TIMELINE (ET)</div>
       <div class="hud-cp-strip" id="hud-checkpoint-strip" aria-label="Checkpoints"></div>
     </div>
 
@@ -1098,14 +1098,14 @@
 
   <main id="page-hud-brief" class="hud-main hud-page">
     <h1 class="learn-hero">NIGHTLY AI LEARNING</h1>
-    <section class="learn-card" aria-labelledby="learn-grok-h">
-      <h2 id="learn-grok-h">SESSION DEBRIEF</h2>
-      <div id="learning-grok-dashboard" class="hint" style="padding:0;">Loading…</div>
+    <section class="learn-card" aria-labelledby="learn-claude-h">
+      <h2 id="learn-claude-h">SESSION DEBRIEF (CLAUDE)</h2>
+      <div id="learning-claude-dashboard" class="hint" style="padding:0;">Loading…</div>
     </section>
     <section class="learn-card" aria-labelledby="learn-hist-h">
       <h2 id="learn-hist-h">LAST 14 SESSIONS</h2>
       <div class="learn-table-wrap">
-        <table class="learn-table" id="learning-progress-table" aria-label="Grok debrief history">
+        <table class="learn-table" id="learning-progress-table" aria-label="Claude debrief history">
           <thead>
             <tr>
               <th scope="col">DATE</th>

@@ -856,7 +856,7 @@ Respond ONLY with a valid JSON array. One object per symbol with fields: symbol,
       }
     }
 
-    /* SOHELATOR blueprint — quality-filtered Telegram (Grok + edge / vol / catalyst) (Prompt 19) */
+    /* SOHELATOR blueprint — quality-filtered Telegram (Claude + edge / vol / catalyst) (Prompt 19) */
     if (
       alerts.length &&
       !suppressTelegram &&

@@ -153,7 +153,7 @@ function isExitStatus(s) {
   return typeof s === "string" && s.startsWith("EXIT");
 }
 
-/** Rule-based EXIT, Grok CLOSE, or other terminal state — skip autonomous / quote churn */
+/** Rule-based EXIT, Claude CLOSE, or other terminal state — skip autonomous / quote churn */
 export function isPositionTerminated(pos) {
   const s = String(pos?.status || "");
   return (
