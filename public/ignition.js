@@ -494,23 +494,17 @@ window.calculateIgnition = calculateIgnition;
     }
   }
 
+  function countOpenPositions() {
+    var list = window.__sohelPositionTrackerList;
+    if (!list || !list.length) return 0;
+    return list.filter(function (p) {
+      return !isPositionTrackerTerminated(p);
+    }).length;
+  }
+
   function renderHudStats(j) {
-    var n = !j || !Array.isArray(j.alerts) ? 0 : j.alerts.length;
-    var elA = document.getElementById("hud-stat-alerts");
-    var elW = document.getElementById("hud-stat-win");
-    var elE = document.getElementById("hud-stat-edge");
-    var elS = document.getElementById("hud-stat-setups");
-    var b7 = j && j.meta && j.meta.backtest7d;
-    if (elA) elA.textContent = String(n);
-    if (elW)
-      elW.textContent =
-        b7 && b7.winRate != null ? Math.round(Number(b7.winRate) * 100) + "%" : "—";
-    if (elE)
-      elE.textContent =
-        b7 && b7.ev != null ? Number(b7.ev).toFixed(2) : "—";
-    if (elS)
-      elS.textContent =
-        b7 && b7.totalSetups != null ? String(b7.totalSetups) : "—";
+    var elP = document.getElementById("hud-stat-positions");
+    if (elP) elP.textContent = String(countOpenPositions());
   }
 
   function etCalendarYmd(ms) {
@@ -555,6 +549,8 @@ window.calculateIgnition = calculateIgnition;
     if (!positions || !positions.length) {
       el.textContent = "$0.00";
       el.classList.remove("hud-hero-pnl--neg");
+      var elG0 = document.getElementById("hud-stat-pnl");
+      if (elG0) elG0.textContent = "$0.00";
       return;
     }
     var sum = 0;
@@ -567,6 +563,8 @@ window.calculateIgnition = calculateIgnition;
     var s = (sum >= 0 ? "+" : "") + "$" + Math.abs(sum).toFixed(2);
     el.textContent = sum < 0 ? "-" + "$" + Math.abs(sum).toFixed(2) : s;
     el.classList.toggle("hud-hero-pnl--neg", sum < 0);
+    var elGrid = document.getElementById("hud-stat-pnl");
+    if (elGrid) elGrid.textContent = el.textContent;
   }
 
   function posAccentFromStatus(status) {
@@ -740,6 +738,8 @@ window.calculateIgnition = calculateIgnition;
         window.__sohelPositionTrackerList = list;
         renderPositionTrackerList(list);
         renderSessionPnlFromPositions(list);
+        var elPos = document.getElementById("hud-stat-positions");
+        if (elPos) elPos.textContent = String(countOpenPositions());
       })
       .catch(function () {
         var host = document.getElementById("hud-positions-list");
@@ -829,13 +829,31 @@ window.calculateIgnition = calculateIgnition;
       .join("");
   }
 
+  function countAlertsTodayEt(rows) {
+    if (!rows || !rows.length) return 0;
+    var today = new Date().toLocaleDateString("en-CA", {
+      timeZone: "America/New_York",
+    });
+    return rows.filter(function (row) {
+      var iso = alertIsoFromTrackerRow(row);
+      if (!iso) return false;
+      var d = new Date(iso).toLocaleDateString("en-CA", {
+        timeZone: "America/New_York",
+      });
+      return d === today;
+    }).length;
+  }
+
   function fetchHudAlertTracker() {
     fetch("/api/alert-tracker", { cache: "no-store" })
       .then(function (r) {
         return r.json();
       })
       .then(function (j) {
-        renderHudAlertLog((j && j.alerts) || []);
+        var rows = (j && j.alerts) || [];
+        renderHudAlertLog(rows);
+        var elA = document.getElementById("hud-stat-alerts");
+        if (elA) elA.textContent = String(countAlertsTodayEt(rows));
       })
       .catch(function () {
         var host = document.getElementById("hud-alert-log");
@@ -1093,54 +1111,6 @@ window.calculateIgnition = calculateIgnition;
     var HEATING_MIN = 60;
     var HEATING_MAX = 79;
 
-    function indTagsHtml(a) {
-      if (!a || !a.details) return "";
-      var d = a.details;
-      var tags = [];
-      var vr = Number(d.volRatio);
-      if (isFinite(vr)) {
-        if (vr >= 2)
-          tags.push({ cls: "tag-vol-bull", t: "VOL " + vr.toFixed(1) + "x" });
-        else if (vr < 0.9)
-          tags.push({ cls: "tag-vol-bear", t: "VOL DRY" });
-        else tags.push({ cls: "tag-vol", t: "VOL " + vr.toFixed(1) + "x" });
-      }
-      var mh = Number(d.macdHist);
-      if (isFinite(mh)) {
-        if (mh > 0) tags.push({ cls: "tag-macd-bull", t: "MACD BULL" });
-        else tags.push({ cls: "tag-macd-bear", t: "MACD BEAR" });
-      }
-      var adx = Number(d.adx);
-      if (isFinite(adx)) {
-        if (adx < 22)
-          tags.push({
-            cls: "tag-adx-chop",
-            t: "ADX " + Math.round(adx) + " CHOP",
-          });
-        else tags.push({ cls: "tag-adx", t: "ADX " + Math.round(adx) });
-      }
-      var rsi = Number(d.rsi);
-      if (isFinite(rsi)) {
-        tags.push({ cls: "tag-rsi", t: "RSI " + Math.round(rsi) });
-      }
-      if (!tags.length) return "";
-      return (
-        '<div class="align-ind-row">' +
-        tags
-          .map(function (x) {
-            return (
-              '<span class="sohel-ind-tag ' +
-              x.cls +
-              '">' +
-              esc(x.t) +
-              "</span>"
-            );
-          })
-          .join("") +
-        "</div>"
-      );
-    }
-
     function hudTacticalCardHtml(a, idx) {
       var sym = esc(String(a.symbol || "—").toUpperCase());
       var sc = a.score != null ? Math.round(Number(a.score)) : 0;
@@ -1149,20 +1119,7 @@ window.calculateIgnition = calculateIgnition;
       var dirTag = long
         ? '<span class="hud-tag hud-tag--dir-long">LONG</span>'
         : '<span class="hud-tag hud-tag--dir-short">SHORT</span>';
-      var play = esc(String(a.playTypeLabel || a.playType || "SETUP"));
       var pt = a.last != null && isFinite(Number(a.last)) ? "$" + Number(a.last).toFixed(2) : "—";
-      var ms = a.alertedAt || (a.alertedAtIso ? Date.parse(a.alertedAtIso) : 0);
-      var timeStr = "—";
-      if (ms) {
-        timeStr =
-          new Intl.DateTimeFormat("en-US", {
-            timeZone: "America/New_York",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: false,
-          }).format(new Date(ms)) + " ET";
-      }
       var verdict = String(a.aiVerdict || a.drivingText || "").trim();
       if (verdict.length > 480) verdict = verdict.slice(0, 477) + "…";
       var ent = a.entry != null && isFinite(Number(a.entry)) ? "$" + Number(a.entry).toFixed(2) : "—";
@@ -1177,8 +1134,6 @@ window.calculateIgnition = calculateIgnition;
           (Math.abs(stk - Math.round(stk)) < 1e-6 ? String(Math.round(stk)) : stk.toFixed(2)) + letter;
         var mid =
           o.mid != null && isFinite(Number(o.mid)) ? "$" + Number(o.mid).toFixed(2) : "—";
-        var del =
-          o.delta != null && isFinite(Number(o.delta)) ? Number(o.delta).toFixed(2) : "—";
         optLine =
           '<div class="hud-tcard-opt">' +
           esc(playS) +
@@ -1186,8 +1141,6 @@ window.calculateIgnition = calculateIgnition;
           esc(String(o.expiration)) +
           " · mid " +
           esc(mid) +
-          " · Δ" +
-          esc(del) +
           "</div>";
       } else {
         optLine =
@@ -1196,19 +1149,13 @@ window.calculateIgnition = calculateIgnition;
       return (
         '<div class="hud-tcard ' +
         tierCls +
-        '"><div class="hud-tcard-ac"></div><div class="hud-tcard-in"><div class="hud-tcard-score">' +
-        esc(String(sc)) +
-        '</div><div class="hud-tcard-head"><span class="hud-tcard-sym">' +
+        '"><div class="hud-tcard-ac"></div><div class="hud-tcard-in"><div class="hud-tcard-head"><span class="hud-tcard-sym">' +
         sym +
         '</span><div class="hud-tcard-px">' +
         esc(pt) +
-        "<br/>" +
-        esc(timeStr) +
         '</div></div><div class="hud-tcard-tags">' +
         dirTag +
-        '<span class="hud-tag">' +
-        play +
-        '</span></div><div class="hud-tcard-verdict">' +
+        '</div><div class="hud-tcard-verdict">' +
         esc(verdict || "(no verdict)") +
         '</div><div class="hud-est-grid"><div class="hud-est"><span class="k">ENTRY</span><div class="v">' +
         esc(ent) +
@@ -1218,7 +1165,6 @@ window.calculateIgnition = calculateIgnition;
         esc(tg) +
         "</div></div></div>" +
         optLine +
-        indTagsHtml(a) +
         '<div class="hud-tcard-actions"><button type="button" class="hud-btn-enter" data-sohel-enter="tactical:' +
         idx +
         '">ENTER NOW</button><button type="button" class="hud-btn-wait" data-sohel-wait="1">WAIT RETEST</button><button type="button" class="hud-btn-skip">SKIP</button></div></div></div>'
@@ -1955,6 +1901,149 @@ window.calculateIgnition = calculateIgnition;
     });
   };
 
+  function updateMarketStatus(signal) {
+    var statusEl = document.getElementById("market-status-big");
+    var actionEl = document.getElementById("market-action");
+    var barEl = document.getElementById("signal-bar");
+    var qualityEl = document.getElementById("signal-quality");
+    var watchEl = document.getElementById("watch-message");
+    var supportEl = document.getElementById("level-support");
+    var resistEl = document.getElementById("level-resistance");
+    var supportDist = document.getElementById("level-support-dist");
+    var resistDist = document.getElementById("level-resistance-dist");
+    var mktStat = document.getElementById("hud-stat-market");
+
+    if (!statusEl) return;
+
+    var bias = (signal.narrative && signal.narrative.biasKey) || "NEUTRAL";
+
+    var word;
+    var color;
+    var glow;
+    var action;
+    if (bias === "STRONGLY_BULLISH") {
+      word = "BULLISH";
+      color = "var(--hud-green)";
+      glow = "0 0 30px rgba(0, 255, 136, 0.25)";
+      action = "Only take long trades — momentum is with you";
+    } else if (bias === "MILDLY_BULLISH") {
+      word = "LEANING UP";
+      color = "var(--hud-green)";
+      glow = "0 0 15px rgba(0, 255, 136, 0.13)";
+      action = "Favor longs but keep stops tight";
+    } else if (bias === "STRONGLY_BEARISH") {
+      word = "BEARISH";
+      color = "var(--hud-red)";
+      glow = "0 0 30px rgba(255, 45, 78, 0.25)";
+      action = "Only take short trades — selling pressure is strong";
+    } else if (bias === "MILDLY_BEARISH") {
+      word = "WEAKENING";
+      color = "var(--hud-amber)";
+      glow = "0 0 15px rgba(255, 170, 0, 0.13)";
+      action = "Be cautious — reduce size, possible reversal coming";
+    } else {
+      word = "WAITING";
+      color = "var(--hud-t3)";
+      glow = "none";
+      action = "No clear direction — stay flat and wait";
+    }
+
+    statusEl.textContent = word;
+    statusEl.style.color = color;
+    statusEl.style.textShadow = glow;
+    if (actionEl) actionEl.textContent = action;
+
+    if (mktStat) {
+      if (bias === "STRONGLY_BULLISH" || bias === "MILDLY_BULLISH") mktStat.textContent = "BULL";
+      else if (bias === "STRONGLY_BEARISH" || bias === "MILDLY_BEARISH") mktStat.textContent = "BEAR";
+      else mktStat.textContent = "NEUTRAL";
+    }
+
+    var pct = signal.progressPct || 0;
+    if (barEl) {
+      barEl.style.width = pct + "%";
+      if (bias.indexOf("BULL") >= 0) barEl.style.background = "var(--hud-green)";
+      else if (bias.indexOf("BEAR") >= 0) barEl.style.background = "var(--hud-red)";
+      else barEl.style.background = "var(--hud-amber)";
+    }
+    if (qualityEl) {
+      var ql;
+      var qc;
+      if (pct >= 90) {
+        ql = "FIRE — enter now";
+        qc = "var(--hud-green)";
+      } else if (pct >= 76) {
+        ql = "Strong signal — prepare";
+        qc = "var(--hud-green)";
+      } else if (pct >= 51) {
+        ql = "Getting stronger";
+        qc = "var(--hud-amber)";
+      } else if (pct >= 26) {
+        ql = "Signal building";
+        qc = "var(--hud-amber)";
+      } else {
+        ql = "No signal — watching";
+        qc = "var(--hud-t3)";
+      }
+      qualityEl.textContent = ql;
+      qualityEl.style.color = qc;
+    }
+
+    var levels = (signal.gex && signal.gex.keyLevels) || [];
+    var support = levels.find(function (l) {
+      return l.side === "support";
+    });
+    var resistance = levels.find(function (l) {
+      return l.side === "resistance";
+    });
+    var price = parseFloat(signal.currentPrice || signal.spyPrice || 0);
+
+    if (support && supportEl) {
+      supportEl.textContent = "$" + support.price;
+      if (supportDist && Number.isFinite(price) && price > 0) {
+        var ds = Math.abs(((price - support.price) / support.price) * 100).toFixed(1);
+        supportDist.textContent = ds + "% away";
+      }
+    } else if (supportEl) {
+      supportEl.textContent = "—";
+      if (supportDist) supportDist.textContent = "—";
+    }
+
+    if (resistance && resistEl) {
+      resistEl.textContent = "$" + resistance.price;
+      if (resistDist && Number.isFinite(price) && price > 0) {
+        var dr = Math.abs(((resistance.price - price) / price) * 100).toFixed(1);
+        resistDist.textContent = dr + "% away";
+      }
+    } else if (resistEl) {
+      resistEl.textContent = "—";
+      if (resistDist) resistDist.textContent = "—";
+    }
+
+    if (watchEl) {
+      var narrative = (signal.narrative && signal.narrative.text) || "";
+      var gexAlerts = signal.gexAlerts || [];
+      var approaching = gexAlerts.find(function (a) {
+        return a.type === "APPROACHING";
+      });
+      if (gexAlerts.find(function (a) {
+        return a.urgency === "HIGH";
+      })) {
+        var high = gexAlerts.find(function (a) {
+          return a.urgency === "HIGH";
+        });
+        watchEl.textContent = high.message.split("\n")[0];
+        watchEl.style.borderLeftColor = "var(--hud-red)";
+      } else if (approaching) {
+        watchEl.textContent = approaching.message.split("\n")[0];
+        watchEl.style.borderLeftColor = "var(--hud-amber)";
+      } else {
+        watchEl.textContent = narrative || "Monitoring market conditions";
+        watchEl.style.borderLeftColor = "var(--hud-cyan)";
+      }
+    }
+  }
+
   function fetchMatrixSignal() {
     fetch("/api/matrix-signal", { cache: "no-store" })
       .then(function (r) {
@@ -1962,125 +2051,7 @@ window.calculateIgnition = calculateIgnition;
       })
       .then(function (d) {
         if (d.error && d.error !== "insufficient_bars") return;
-
-        var pct = d.progressPct || 0;
-        var fill = document.getElementById("matrix-progress-fill");
-        var status = document.getElementById("matrix-status");
-        var pctEl = document.getElementById("matrix-pct");
-        var gradClass = document.getElementById("matrix-grad-class");
-        var gradTier = document.getElementById("matrix-grad-tier");
-        var strength = document.getElementById("matrix-strength");
-        var regime = document.getElementById("matrix-regime");
-        var ratios = document.getElementById("matrix-ratios");
-
-        if (!fill) return;
-
-        fill.style.width = pct + "%";
-        fill.style.background = d.primarySignal
-          ? "var(--hud-green)"
-          : d.secondarySignal
-            ? "var(--hud-amber)"
-            : "var(--hud-cyan)";
-
-        if (pctEl) pctEl.textContent = pct + "%";
-        if (pctEl)
-          pctEl.style.color = d.primarySignal ? "var(--hud-green)" : "var(--hud-cyan)";
-
-        if (gradClass) {
-          gradClass.textContent = d.gradClass || "—";
-          gradClass.style.color =
-            d.gradClass === "BULL_GRAD"
-              ? "var(--hud-green)"
-              : d.gradClass === "BEAR_GRAD"
-                ? "var(--hud-red)"
-                : "var(--hud-cyan)";
-        }
-        if (gradTier) gradTier.textContent = (d.gradTier || "—").toUpperCase();
-        if (strength) strength.textContent = d.gradStrength || "—";
-        if (regime) regime.textContent = d.macroRegime || "—";
-
-        if (status) {
-          status.textContent = d.recommendation || "No signal";
-          status.style.color = d.primarySignal
-            ? "var(--hud-green)"
-            : d.secondarySignal
-              ? "var(--hud-amber)"
-              : "var(--hud-t2)";
-        }
-
-        if (ratios && d.ratios) {
-          ratios.textContent =
-            "R4/9: " +
-            d.ratios.r_4_9 +
-            " | Rv4/9: " +
-            d.ratios.rv_4_9 +
-            " | Rv9/21: " +
-            d.ratios.rv_9_21;
-        }
-
-        var gexList = document.getElementById("gex-levels-list");
-        if (gexList) {
-          if (d.gex) {
-            var levels = d.gex.keyLevels || [];
-            if (levels.length) {
-              gexList.innerHTML = levels
-                .map(function (l) {
-                  var dist = (
-                    ((parseFloat(d.currentPrice || 0) - l.price) / l.price) *
-                    100
-                  ).toFixed(2);
-                  var color =
-                    l.side === "resistance"
-                      ? "var(--hud-red)"
-                      : l.side === "support"
-                        ? "var(--hud-green)"
-                        : "var(--hud-amber)";
-                  return (
-                    '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:var(--hud-s3);border-radius:6px;margin-bottom:4px;border-left:2px solid ' +
-                    color +
-                    '">' +
-                    '<div><div style="font-size:10px;color:var(--hud-t2)">' +
-                    l.label +
-                    '</div><div style="font-size:9px;color:var(--hud-t3)">' +
-                    dist +
-                    "% vs spot</div></div>" +
-                    '<div style="font-size:11px;font-weight:700;color:' +
-                    color +
-                    '">$' +
-                    l.price +
-                    "</div></div>"
-                  );
-                })
-                .join("");
-            } else {
-              gexList.innerHTML =
-                '<div style="font-size:10px;color:var(--hud-t3)">No GEX data — market closed</div>';
-            }
-          } else {
-            gexList.innerHTML = "";
-          }
-        }
-
-        var gexAlerts = d.gexAlerts || [];
-        var highUrgency = gexAlerts.filter(function (a) {
-          return a.urgency === "HIGH";
-        });
-
-        var narrativeEl = document.getElementById("matrix-narrative");
-        if (narrativeEl && highUrgency.length) {
-          narrativeEl.textContent = highUrgency[0].message.split("\n")[0];
-          narrativeEl.style.borderColor = "var(--hud-amber)";
-        } else if (narrativeEl && d.narrative) {
-          narrativeEl.textContent = d.narrative.emoji + " " + d.narrative.text;
-          narrativeEl.style.borderColor =
-            d.narrative.biasKey === "STRONGLY_BULLISH"
-              ? "var(--hud-g-border)"
-              : d.narrative.biasKey === "STRONGLY_BEARISH"
-                ? "var(--hud-r-border)"
-                : d.narrative.urgency === "high"
-                  ? "var(--hud-a-border)"
-                  : "var(--hud-b1)";
-        }
+        updateMarketStatus(d);
       })
       .catch(function () {});
   }

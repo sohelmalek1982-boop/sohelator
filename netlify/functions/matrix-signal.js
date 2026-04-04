@@ -352,8 +352,8 @@ function analyzeGEXContext(currentPrice, gexData, bars15) {
     const distPct = ((currentPrice - level.price) / level.price) * 100;
     const absPct = Math.abs(distPct);
     const direction = distPct > 0 ? "above" : "below";
-    const approaching = absPct < 0.8;
-    const atLevel = absPct < 0.3;
+    const approaching = absPct < 0.3;
+    const atLevel = absPct < 0.15;
 
     let rejectionDetected = false;
     let rejectionDirection = null;
@@ -458,7 +458,7 @@ function analyzeGEXContext(currentPrice, gexData, bars15) {
             ? `🔴 GEX REJECTION — SPY rejected at ${level.label} $${level.price}\nPrice closed below on 15m — consider SHORT entry\nReversal probability: ${reversalProb}%\nEntry: current | Stop: $${(level.price * 1.005).toFixed(2)} above level | Target: $${(currentPrice * 0.99).toFixed(2)}`
             : `🟢 GEX BOUNCE — SPY bounced off ${level.label} $${level.price}\nPrice closed above on 15m — consider LONG entry\nReversal probability: ${reversalProb}%\nEntry: current | Stop: $${(level.price * 0.995).toFixed(2)} below level | Target: $${(currentPrice * 1.01).toFixed(2)}`,
       });
-    } else if (approaching && absPct < 0.5) {
+    } else if (approaching) {
       alerts.push({
         type: "APPROACHING",
         urgency: "MEDIUM",
@@ -468,18 +468,8 @@ function analyzeGEXContext(currentPrice, gexData, bars15) {
         levelLabel: level.label,
         message:
           level.side === "resistance"
-            ? `⚠️ SPY approaching ${level.label} at $${level.price}\n${absPct.toFixed(2)}% away — expect potential reversal here\nReversal probability: ${reversalProb}%\nWait for rejection confirmation before shorting\nConfirmed entry win rate: ${confirmedWinRate}% vs unconfirmed: ${baseWinRate}%`
-            : `⚠️ SPY approaching ${level.label} at $${level.price}\n${absPct.toFixed(2)}% away — watch for bounce\nReversal probability: ${reversalProb}%\nWait for bounce confirmation before going long\nConfirmed entry win rate: ${confirmedWinRate}% vs unconfirmed: ${baseWinRate}%`,
-      });
-    } else if (approaching) {
-      alerts.push({
-        type: "NEAR_LEVEL",
-        urgency: "LOW",
-        direction: null,
-        level: level.price,
-        absPct: Math.round(absPct * 100) / 100,
-        levelLabel: level.label,
-        message: `📍 SPY is ${absPct.toFixed(2)}% away from ${level.label} at $${level.price}\nExpect ${level.side === "resistance" ? "resistance" : "support"} reaction — reversal probability ${reversalProb}%`,
+            ? `👀 SPY at major level — watching $${level.price}\nPrice is right at ${level.label}. Watching to see how it reacts.\nIf it gets rejected here — short opportunity. If it breaks through — longs continue.`
+            : `👀 SPY at major level — watching $${level.price}\nPrice is right at ${level.label}. Watching to see how it reacts.\nIf it bounces here — long opportunity. If it breaks down — avoid longs.`,
       });
     }
   }
@@ -788,28 +778,23 @@ export const handler = async (event) => {
           (await positionStore.get(gexSentKey, { type: "json" }).catch(() => null)) || {};
         if (typeof gexSent !== "object" || gexSent === null) gexSent = {};
 
-        function gexAlertCooldownMs(type) {
-          switch (type) {
-            case "CONFIRMATION":
-              return 6 * 60 * 60 * 1000;
-            case "REJECTION":
-              return 3 * 60 * 60 * 1000;
-            case "APPROACHING":
-              return 60 * 60 * 1000;
-            case "NEAR_LEVEL":
-              return 4 * 60 * 60 * 1000;
-            default:
-              return 4 * 60 * 60 * 1000;
-          }
-        }
-
         for (const alert of gexContext.alerts) {
           const absPct = Number(alert.absPct);
           const distBucket = Number.isFinite(absPct)
             ? Math.round(absPct * 10)
             : 0;
-          const dedupeKey = `${alert.type}-${alert.level}-${distBucket}`;
-          const cooldown = gexAlertCooldownMs(alert.type);
+          const dedupeKey =
+            alert.type === "APPROACHING"
+              ? `APPROACHING-${alert.level}-${ymdEt()}`
+              : `${alert.type}-${alert.level}-${distBucket}`;
+          const cooldown =
+            alert.type === "CONFIRMATION"
+              ? 8 * 60 * 60 * 1000
+              : alert.type === "REJECTION"
+                ? 4 * 60 * 60 * 1000
+                : alert.type === "APPROACHING"
+                  ? 6 * 60 * 60 * 1000
+                  : 24 * 60 * 60 * 1000;
           const lastSent = gexSent[dedupeKey] || 0;
 
           if (Date.now() - lastSent < cooldown) continue;

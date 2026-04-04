@@ -360,7 +360,7 @@
       justify-content: space-between;
       align-items: flex-start;
       gap: 8px;
-      padding-left: 52px;
+      padding-left: 0;
       min-height: 36px;
     }
     .hud-tcard-sym {
@@ -943,6 +943,7 @@
     .sohel-health.sohel-health--stale { border-color: rgba(255, 170, 0, 0.45); color: var(--hud-amber); }
 
     .hint { color: var(--hud-muted); font-size: 0.85rem; padding: 12px; font-family: var(--hud-sans); }
+
   </style>
 </head>
 <body class="hud-v1">
@@ -972,55 +973,73 @@
       <div class="hud-hero-lab">SESSION P&amp;L (OPEN POSITIONS)</div>
       <div class="hud-hero-pnl" id="hud-session-pnl">—</div>
       <div class="hud-stat-grid">
-        <div class="hud-stat-cell"><span class="k">ALERTS</span><span class="v" id="hud-stat-alerts">—</span></div>
-        <div class="hud-stat-cell"><span class="k">WIN RATE</span><span class="v" id="hud-stat-win">—</span></div>
-        <div class="hud-stat-cell"><span class="k">EDGE EV</span><span class="v" id="hud-stat-edge">—</span></div>
-        <div class="hud-stat-cell"><span class="k">SETUPS</span><span class="v" id="hud-stat-setups">—</span></div>
+        <div class="hud-stat-cell"><span class="k">ALERTS TODAY</span><span class="v" id="hud-stat-alerts">—</span></div>
+        <div class="hud-stat-cell"><span class="k">POSITIONS</span><span class="v" id="hud-stat-positions">—</span></div>
+        <div class="hud-stat-cell"><span class="k">MARKET</span><span class="v" id="hud-stat-market">—</span></div>
+        <div class="hud-stat-cell"><span class="k">P&amp;L</span><span class="v" id="hud-stat-pnl">—</span></div>
       </div>
     </section>
+
+    <div class="sec" id="matrix-section" style="margin-bottom:12px">
+      <div id="market-status-big" style="
+        font-size:52px;
+        font-weight:700;
+        text-align:center;
+        letter-spacing:0.1em;
+        padding:20px 16px 8px;
+        line-height:1;
+      ">LOADING</div>
+      <div id="market-action" style="
+        font-size:14px;
+        text-align:center;
+        color:var(--hud-t2);
+        padding:0 20px 16px;
+        line-height:1.5;
+        font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+      "></div>
+      <div style="padding:0 16px 16px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <div id="signal-label" style="font-size:10px;color:var(--hud-t3);letter-spacing:0.1em">SIGNAL STRENGTH</div>
+          <div id="signal-quality" style="font-size:10px;font-weight:700;letter-spacing:0.08em">—</div>
+        </div>
+        <div style="height:8px;background:var(--hud-s4);border-radius:4px;overflow:hidden">
+          <div id="signal-bar" style="height:100%;border-radius:4px;width:0%;transition:width 0.8s,background 0.5s"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 16px 16px">
+        <div style="background:var(--hud-s2);border:1px solid var(--hud-g-border);border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:9px;color:var(--hud-green);letter-spacing:0.1em;margin-bottom:4px">SUPPORT</div>
+          <div id="level-support" style="font-size:24px;font-weight:700;color:var(--hud-green)">—</div>
+          <div id="level-support-dist" style="font-size:10px;color:var(--hud-t3);margin-top:2px">—</div>
+        </div>
+        <div style="background:var(--hud-s2);border:1px solid var(--hud-r-border);border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:9px;color:var(--hud-red);letter-spacing:0.1em;margin-bottom:4px">RESISTANCE</div>
+          <div id="level-resistance" style="font-size:24px;font-weight:700;color:var(--hud-red)">—</div>
+          <div id="level-resistance-dist" style="font-size:10px;color:var(--hud-t3);margin-top:2px">—</div>
+        </div>
+      </div>
+      <div id="watch-message" style="
+        margin:0 16px 16px;
+        padding:12px 14px;
+        background:var(--hud-s2);
+        border-radius:12px;
+        border-left:3px solid var(--hud-amber);
+        font-size:13px;
+        color:var(--hud-t2);
+        line-height:1.55;
+        font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+      "></div>
+    </div>
 
     <div class="hud-cp-wrap">
       <div class="hud-cp-lab">GROK CHECKPOINT TIMELINE (ET)</div>
       <div class="hud-cp-strip" id="hud-checkpoint-strip" aria-label="Checkpoints"></div>
     </div>
 
-    <section class="hud-intel" aria-label="Grok intel">
-      <span class="hud-intel-cap">GROK INTEL · <span id="hud-intel-time">—</span></span>
+    <section class="hud-intel" aria-label="Market brief">
+      <span class="hud-intel-cap">MARKET BRIEF · <span id="hud-intel-time">—</span></span>
       <div class="hud-intel-body" id="hud-intel-body">Loading pre-market brief…</div>
     </section>
-
-    <div class="sec" id="matrix-section">
-      <div class="sec-row">
-        <div class="sec-title">EMA MATRIX — SPY</div>
-        <div id="matrix-regime" style="font-size:9px;color:var(--hud-cyan);letter-spacing:0.08em">—</div>
-      </div>
-      <div style="background:var(--hud-s1);border:1px solid var(--hud-b2);border-radius:12px;padding:14px;margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <div>
-            <div id="matrix-grad-class" style="font-size:14px;font-weight:700;color:var(--hud-cyan);letter-spacing:0.1em">—</div>
-            <div id="matrix-grad-tier" style="font-size:10px;color:var(--hud-t3);margin-top:2px;letter-spacing:0.08em">—</div>
-          </div>
-          <div style="text-align:right">
-            <div id="matrix-strength" style="font-size:18px;font-weight:700;color:var(--hud-t1)">—</div>
-            <div style="font-size:9px;color:var(--hud-t3);letter-spacing:0.06em">STRENGTH</div>
-          </div>
-        </div>
-        <div style="font-size:9px;color:var(--hud-t3);letter-spacing:0.08em;margin-bottom:5px">SIGNAL PROGRESS</div>
-        <div style="height:6px;background:var(--hud-s4);border-radius:3px;overflow:hidden;margin-bottom:6px">
-          <div id="matrix-progress-fill" style="height:100%;border-radius:3px;background:var(--hud-cyan);width:0%;transition:width 0.5s"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div id="matrix-status" style="font-size:11px;color:var(--hud-t2)">Waiting for market hours</div>
-          <div id="matrix-pct" style="font-size:13px;font-weight:700;color:var(--hud-cyan)">0%</div>
-        </div>
-        <div id="matrix-ratios" style="font-size:9px;color:var(--hud-t3);margin-top:8px;letter-spacing:0.04em"></div>
-        <div id="gex-levels-section" style="margin-top:10px">
-          <div style="font-size:9px;color:var(--hud-t3);letter-spacing:0.1em;margin-bottom:6px">GEX KEY LEVELS</div>
-          <div id="gex-levels-list"></div>
-        </div>
-        <div id="matrix-narrative" style="margin-top:10px;padding:10px;background:var(--hud-s3);border-radius:8px;border:1px solid var(--hud-b1);font-size:12px;color:var(--hud-t2);line-height:1.55;font-family:-apple-system,BlinkMacSystemFont,sans-serif"></div>
-      </div>
-    </div>
 
     <p class="hud-sec-title">TACTICAL ALERTS</p>
     <div class="hud-tactical-list" id="hud-tactical-cards"></div>
