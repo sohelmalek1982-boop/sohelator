@@ -31,8 +31,9 @@
   schedule = "55 13 * * 1-5"
   timeout = 60
 
+# EOD scan — 20:00 UTC ≈ 4pm ET (EST); adjust if you need 3pm ET in EDT
 [functions."scan-eod"]
-  schedule = "5 20,21 * * 1-5"
+  schedule = "0 20 * * 1-5"
   timeout = 60
 
 [functions."scanner-core"]
@@ -71,9 +72,9 @@
 [functions."trigger"]
   timeout = 60
 
-# SOHELATOR blueprint — Prompt 7: cheap 5-min monitor (ET RTH filtered in function)
+# Cheap monitor — every 5m UTC 13–20 (weekdays); function also filters ET RTH
 [functions."cheap-monitor"]
-  schedule = "*/5 * * * *"
+  schedule = "*/5 13-20 * * 1-5"
   timeout = 120
 
 [functions."matrix-signal"]

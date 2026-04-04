@@ -115,8 +115,8 @@ export const appendSessionLogEntry = appendSessionLog;
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, X-Scanner-Secret",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
 function positionsStore() {
@@ -428,11 +428,80 @@ export async function handler(event) {
     return { statusCode: 204, headers, body: "" };
   }
 
+  /** POST: clear positions and/or session log (requires SCANNER_TRIGGER_SECRET if set). */
+  if (event.httpMethod === "POST") {
+    const secret = process.env.SCANNER_TRIGGER_SECRET;
+    if (secret) {
+      const h =
+        event.headers["x-scanner-secret"] ||
+        event.headers["X-Scanner-Secret"] ||
+        "";
+      if (h !== secret) {
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ ok: false, error: "Unauthorized" }),
+        };
+      }
+    }
+    let body = {};
+    try {
+      body = JSON.parse(event.body || "{}");
+    } catch {
+      body = {};
+    }
+    const store = positionsStore();
+    if (!store) {
+      return {
+        statusCode: 503,
+        headers,
+        body: JSON.stringify({
+          ok: false,
+          error: "NETLIFY_SITE_ID / NETLIFY_TOKEN required",
+        }),
+      };
+    }
+    try {
+      const cleared = [];
+      if (body.clearPositions === true) {
+        await store.setJSON(BLOB_KEY, {});
+        cleared.push("positions");
+      }
+      if (body.clearSessionLog === true) {
+        await store.setJSON(SESSION_LOG_KEY, []);
+        cleared.push("session-log");
+      }
+      if (!cleared.length) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({
+            ok: false,
+            error:
+              "Set clearPositions and/or clearSessionLog to true in JSON body",
+          }),
+        };
+      }
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ ok: true, cleared }),
+      };
+    } catch (e) {
+      console.error("position-tracker POST", e);
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ ok: false, error: String(e?.message || e) }),
+      };
+    }
+  }
+
   if (event.httpMethod !== "GET") {
     return {
       statusCode: 405,
       headers,
-      body: JSON.stringify({ ok: false, error: "GET only" }),
+      body: JSON.stringify({ ok: false, error: "GET or POST only" }),
     };
   }
 
