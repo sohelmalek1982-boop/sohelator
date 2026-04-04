@@ -1,4 +1,4 @@
-import { getTimesales, getDailyHistory } from "../../src/lib/tradier.js";
+import { getTimesales, getDailyHistory, getQuote } from "../../src/lib/tradier.js";
 import { getStore } from "@netlify/blobs";
 
 const cors = {
@@ -80,8 +80,19 @@ function calculateMarketProbability(cur, gradClass, macroRegime) {
   if (macroRegime === "BULL_REGIME") bullW += 1;
   if (macroRegime === "BEAR_REGIME") bearW += 1;
   const t = bullW + bearW || 1;
-  const bullPct = Math.round((bullW / t) * 100);
-  const bearPct = 100 - bullPct;
+  let bullPct = Math.round((bullW / t) * 100);
+  let bearPct = 100 - bullPct;
+
+  if (macroRegime === "TRANSITION") {
+    if (bullPct >= bearPct) {
+      bullPct = Math.min(65, bullPct);
+      bearPct = 100 - bullPct;
+    } else {
+      bearPct = Math.min(65, bearPct);
+      bullPct = 100 - bearPct;
+    }
+  }
+
   return { bullPct, bearPct };
 }
 
@@ -341,7 +352,7 @@ function analyzeGEXContext(currentPrice, gexData, bars15) {
     const distPct = ((currentPrice - level.price) / level.price) * 100;
     const absPct = Math.abs(distPct);
     const direction = distPct > 0 ? "above" : "below";
-    const approaching = absPct < 1.5;
+    const approaching = absPct < 0.8;
     const atLevel = absPct < 0.3;
 
     let rejectionDetected = false;
@@ -427,6 +438,7 @@ function analyzeGEXContext(currentPrice, gexData, bars15) {
         urgency: "HIGH",
         direction: confirmationDirection,
         level: level.price,
+        absPct: Math.round(absPct * 100) / 100,
         levelLabel: level.label,
         message:
           confirmationDirection === "long"
@@ -439,6 +451,7 @@ function analyzeGEXContext(currentPrice, gexData, bars15) {
         urgency: "HIGH",
         direction: rejectionDirection,
         level: level.price,
+        absPct: Math.round(absPct * 100) / 100,
         levelLabel: level.label,
         message:
           rejectionDirection === "short"
@@ -451,6 +464,7 @@ function analyzeGEXContext(currentPrice, gexData, bars15) {
         urgency: "MEDIUM",
         direction: level.side === "resistance" ? "watch_short" : "watch_long",
         level: level.price,
+        absPct: Math.round(absPct * 100) / 100,
         levelLabel: level.label,
         message:
           level.side === "resistance"
@@ -463,6 +477,7 @@ function analyzeGEXContext(currentPrice, gexData, bars15) {
         urgency: "LOW",
         direction: null,
         level: level.price,
+        absPct: Math.round(absPct * 100) / 100,
         levelLabel: level.label,
         message: `📍 SPY is ${absPct.toFixed(2)}% away from ${level.label} at $${level.price}\nExpect ${level.side === "resistance" ? "resistance" : "support"} reaction — reversal probability ${reversalProb}%`,
       });
@@ -541,7 +556,18 @@ export const handler = async (event) => {
       return { statusCode: 200, headers, body: JSON.stringify({ error: "insufficient_bars", progressPct: 0 }) };
     }
 
-    const currentPrice = parseFloat(bars15[bars15.length - 1].close);
+    let currentPrice = parseFloat(bars15[bars15.length - 1].close);
+    try {
+      const freshQuote = await getQuote("SPY");
+      const q = parseFloat(
+        freshQuote?.last ?? freshQuote?.bid ?? freshQuote?.ask ?? ""
+      );
+      if (Number.isFinite(q) && q > 0) {
+        currentPrice = q;
+      }
+    } catch (e) {
+      console.warn("matrix-signal getQuote", e?.message || e);
+    }
 
     // Calculate GEX levels
     let gexData = null;
@@ -690,6 +716,9 @@ export const handler = async (event) => {
       macroRegime,
       prevBias
     );
+    if (macroRegime === "TRANSITION") {
+      nar.sendAlert = false;
+    }
 
     const signal = {
       timestamp: new Date().toISOString(),
@@ -759,15 +788,28 @@ export const handler = async (event) => {
           (await positionStore.get(gexSentKey, { type: "json" }).catch(() => null)) || {};
         if (typeof gexSent !== "object" || gexSent === null) gexSent = {};
 
-        for (const alert of gexContext.alerts) {
-          const cooldown =
-            alert.type === "CONFIRMATION" || alert.type === "REJECTION"
-              ? 2 * 60 * 60 * 1000
-              : alert.type === "APPROACHING"
-                ? 30 * 60 * 1000
-                : 60 * 60 * 1000;
+        function gexAlertCooldownMs(type) {
+          switch (type) {
+            case "CONFIRMATION":
+              return 6 * 60 * 60 * 1000;
+            case "REJECTION":
+              return 3 * 60 * 60 * 1000;
+            case "APPROACHING":
+              return 60 * 60 * 1000;
+            case "NEAR_LEVEL":
+              return 4 * 60 * 60 * 1000;
+            default:
+              return 4 * 60 * 60 * 1000;
+          }
+        }
 
-          const dedupeKey = `${alert.type}-${alert.level}`;
+        for (const alert of gexContext.alerts) {
+          const absPct = Number(alert.absPct);
+          const distBucket = Number.isFinite(absPct)
+            ? Math.round(absPct * 10)
+            : 0;
+          const dedupeKey = `${alert.type}-${alert.level}-${distBucket}`;
+          const cooldown = gexAlertCooldownMs(alert.type);
           const lastSent = gexSent[dedupeKey] || 0;
 
           if (Date.now() - lastSent < cooldown) continue;
@@ -790,7 +832,12 @@ export const handler = async (event) => {
       }
     }
 
-    if (nar.sendAlert) {
+    const narrativeBiasChanged =
+      !prevBiasData ||
+      prevBiasData.biasKey !== nar.biasKey ||
+      Math.abs((prevBiasData.bullPct || 0) - marketProb.bullPct) >= 15;
+
+    if (nar.sendAlert && narrativeBiasChanged) {
       const bot = process.env.TELEGRAM_BOT_TOKEN;
       const chat = process.env.TELEGRAM_CHAT_ID;
       if (bot && chat) {
