@@ -33,6 +33,56 @@ function pctFromQuote(q) {
   return ((last - prev) / prev) * 100;
 }
 
+/** Pull SOHELATOR_JSON line off the end for storage + scanner; return cleaned prose. */
+function extractAfternoonWatchlistJson(text) {
+  const s = String(text || "");
+  const marker = "SOHELATOR_JSON:";
+  const idx = s.lastIndexOf(marker);
+  if (idx === -1) {
+    return { cleaned: s.trim(), afternoonWatchlist: null };
+  }
+  const rest = s.slice(idx + marker.length).trim();
+  const jsonStart = rest.indexOf("{");
+  if (jsonStart === -1) {
+    return { cleaned: s.slice(0, idx).trim(), afternoonWatchlist: null };
+  }
+  let depth = 0;
+  let end = -1;
+  for (let i = jsonStart; i < rest.length; i++) {
+    const c = rest[i];
+    if (c === "{") depth++;
+    if (c === "}") {
+      depth--;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+  if (end === -1) {
+    return { cleaned: s.slice(0, idx).trim(), afternoonWatchlist: null };
+  }
+  try {
+    const raw = JSON.parse(rest.slice(jsonStart, end + 1));
+    const normArr = (x) =>
+      Array.isArray(x)
+        ? [...new Set(x.map((t) => String(t || "").trim().toUpperCase()).filter(Boolean))]
+        : [];
+    const afternoonWatchlist = {
+      bulls: normArr(raw.bulls),
+      bears: normArr(raw.bears),
+      focus: normArr(raw.focus),
+      drop: normArr(raw.drop),
+    };
+    return {
+      cleaned: s.slice(0, idx).trim(),
+      afternoonWatchlist,
+    };
+  } catch {
+    return { cleaned: s.slice(0, idx).trim(), afternoonWatchlist: null };
+  }
+}
+
 async function runBrief1pm() {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) {
@@ -167,7 +217,8 @@ You have:
 Your job:
 1. Compare morning vs reality: what played out, what didn't.
 2. Say clearly what the morning call **got right** and **got wrong or missed** (no sugarcoating).
-3. What to watch and how to pursue edge **from now through the close** (not generic advice).
+3. **Revise the watchlist for the afternoon** — keep winners, drop names that are wrong or done, add new symbols if the tape/news warrants it (use tickers from the data when possible).
+4. Explain **how to trade the rest of the day through the close** (styles, bias, what to fade, sizing mindset — not personalized investment advice).
 
 Use ONLY the data provided + sound judgment. Do not invent prices or headlines.
 
@@ -176,11 +227,19 @@ Use these Markdown sections in order:
 ## MORNING VS REALITY
 ## WHAT WE GOT RIGHT
 ## WHAT WE GOT WRONG OR MISSED
-## SECOND HALF — WHAT TO WATCH
-## BEST WAYS TO MAKE $ THIS AFTERNOON
+## REVISED WATCHLIST (AFTERNOON)
+Explain each line: symbol — keep / add / trim and why (vs the 9:25 bull/bear lists).
+## HOW TO TRADE THE AFTERNOON (through the close)
+Concrete playbook: bias, sectors, timing, what would invalidate the plan.
+## SECOND HALF — LEVELS & CATALYSTS TO WATCH
 ## BE CAREFUL
 
-Max ~700 words. No JSON in the prose. Trader-to-trader tone.`,
+After the last section, on its own line at the very end, output EXACTLY one line (no markdown fences):
+SOHELATOR_JSON: {"bulls":["TICK"],"bears":["TICK"],"focus":["highest priority"],"drop":["morning symbols to stop prioritizing"]}
+
+Rules for JSON: valid JSON object; use ticker strings only (1–5 letters); use [] if empty; **bulls** = long-bias names for the afternoon, **bears** = short/fade names, **focus** = top priority (max ~5), **drop** = symbols to de-prioritize vs morning. Max ~8 symbols total across bulls+bears+focus unless tape is very broad.
+
+Max ~900 words in the Markdown sections. Trader-to-trader tone.`,
     tradingCtx
   );
 
@@ -188,11 +247,14 @@ Max ~700 words. No JSON in the prose. Trader-to-trader tone.`,
 
   let analysis = "Brief unavailable.";
   try {
-    analysis = await callClaudeWithFallback(fullPrompt, 2800);
+    analysis = await callClaudeWithFallback(fullPrompt, 3200);
   } catch (e) {
     console.error("brief-1pm Claude", e);
     analysis = `Brief failed: ${e?.message || e}`;
   }
+
+  const extracted = extractAfternoonWatchlistJson(analysis);
+  const claudeClean = extracted.cleaned || analysis;
 
   const scanData = {
     type: "brief_1pm",
@@ -202,7 +264,8 @@ Max ~700 words. No JSON in the prose. Trader-to-trader tone.`,
     morningIsToday,
     afternoonTape,
     spyPctNow,
-    claudeAnalysis: analysis,
+    claudeAnalysis: claudeClean,
+    afternoonWatchlist: extracted.afternoonWatchlist,
     model: process.env.ANTHROPIC_MODEL_PREMARKET || "claude-sonnet-4-6",
   };
 

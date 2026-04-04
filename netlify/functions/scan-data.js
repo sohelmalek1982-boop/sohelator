@@ -47,6 +47,7 @@ function getPipelineStatus() {
 function emptyScanPayload(extra = {}) {
   return {
     scan925: null,
+    brief1pm: null,
     scan955: null,
     eodLatest: null,
     runningStats: null,
@@ -115,6 +116,7 @@ exports.handler = async (event) => {
 
     const [
       scan925,
+      brief1pm,
       scan955,
       eodLatest,
       runningStats,
@@ -123,6 +125,7 @@ exports.handler = async (event) => {
       lastScanLegacy,
     ] = await Promise.all([
       store.get("scan_925_latest", { type: "json" }),
+      store.get("brief_1pm_latest", { type: "json" }),
       store.get("scan_955_latest", { type: "json" }),
       learningStore.get("eod_latest", { type: "json" }),
       learningStore.get("running_stats", { type: "json" }),
@@ -141,6 +144,7 @@ exports.handler = async (event) => {
       headers,
       body: JSON.stringify({
         scan925,
+        brief1pm,
         scan955,
         eodLatest,
         runningStats,

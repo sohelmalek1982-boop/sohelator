@@ -430,6 +430,7 @@ window.calculateIgnition = calculateIgnition;
           .then(function (pm) {
             var bodyPm = document.getElementById("hud-intel-body-pm");
             var tmPm = document.getElementById("hud-intel-time-pm");
+            var wlPm = document.getElementById("hud-pm-wl");
             var txt =
               pm && pm.claudeAnalysis ? String(pm.claudeAnalysis) : "";
             if (bodyPm) {
@@ -442,10 +443,41 @@ window.calculateIgnition = calculateIgnition;
                 new Date(pm.timestamp).toISOString()
               );
             }
+            if (wlPm) {
+              var aw = pm && pm.afternoonWatchlist;
+              if (
+                aw &&
+                ((aw.focus && aw.focus.length) ||
+                  (aw.bulls && aw.bulls.length) ||
+                  (aw.bears && aw.bears.length) ||
+                  (aw.drop && aw.drop.length))
+              ) {
+                var lines = ["AFTERNOON WATCHLIST (revised)"];
+                if (aw.focus && aw.focus.length) {
+                  lines.push("FOCUS: " + aw.focus.join(", "));
+                }
+                if (aw.bulls && aw.bulls.length) {
+                  lines.push("BULL: " + aw.bulls.join(", "));
+                }
+                if (aw.bears && aw.bears.length) {
+                  lines.push("BEAR: " + aw.bears.join(", "));
+                }
+                if (aw.drop && aw.drop.length) {
+                  lines.push("DROP: " + aw.drop.join(", "));
+                }
+                wlPm.textContent = lines.join("\n");
+                wlPm.style.whiteSpace = "pre-wrap";
+              } else {
+                wlPm.textContent =
+                  "(Afternoon revised symbols appear after the 1 PM brief — scanner merges them for priority.)";
+              }
+            }
           })
           .catch(function () {
             var bodyPm = document.getElementById("hud-intel-body-pm");
             if (bodyPm) bodyPm.textContent = "(1 PM brief unavailable.)";
+            var wlPm = document.getElementById("hud-pm-wl");
+            if (wlPm) wlPm.textContent = "—";
           });
         fetch("/api/health", { cache: "no-store" })
           .then(function (r) {

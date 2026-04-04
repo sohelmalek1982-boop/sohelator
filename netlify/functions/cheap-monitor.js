@@ -123,6 +123,31 @@ async function getScan925WatchlistSyms() {
   }
 }
 
+/** After 1pm ET: Claude's revised afternoon list from brief_1pm_latest (same ET calendar day). */
+async function getBrief1pmAfternoonWatchlist() {
+  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return null;
+  try {
+    const store = getStore({
+      name: "morning-scans",
+      siteID: process.env.NETLIFY_SITE_ID,
+      token: process.env.NETLIFY_TOKEN,
+    });
+    const b = await store.get("brief_1pm_latest", { type: "json" });
+    if (!b || !b.afternoonWatchlist) return null;
+    const todayLong = new Date().toLocaleDateString("en-US", {
+      timeZone: "America/New_York",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+    if (String(b.date || "").trim() !== String(todayLong).trim()) return null;
+    return b.afternoonWatchlist;
+  } catch (e) {
+    console.warn("getBrief1pmAfternoonWatchlist", e?.message || e);
+    return null;
+  }
+}
+
 /** 8:00am–4:00pm ET weekdays (Prompt 8 RTH window) */
 function isRthEt(d) {
   if (!isWeekdayEt(d)) return false;
@@ -1025,24 +1050,55 @@ exports.handler = async () => {
   if (inRth) {
     try {
       const wl925 = await getScan925WatchlistSyms();
-      if (wl925.length) {
+      const tmin = minutesEt(now);
+      const after1pm = tmin >= 13 * 60;
+      const pm = after1pm ? await getBrief1pmAfternoonWatchlist() : null;
+      let merged = wl925;
+      if (after1pm && pm) {
+        const drop = new Set(
+          (pm.drop || []).map((s) => String(s || "").trim().toUpperCase())
+        );
+        const from925 = wl925.filter((s) => !drop.has(s));
+        const focus = (pm.focus || []).map((s) =>
+          String(s || "").trim().toUpperCase()
+        );
+        const bulls = (pm.bulls || []).map((s) =>
+          String(s || "").trim().toUpperCase()
+        );
+        const bears = (pm.bears || []).map((s) =>
+          String(s || "").trim().toUpperCase()
+        );
+        merged = [
+          ...new Set([...focus, ...bulls, ...bears, ...from925]),
+        ].filter(Boolean);
+        if (!merged.length) merged = wl925;
+        out.brief1pmWatchlist = pm;
+      }
+      if (merged.length) {
         const ex = Array.isArray(scanBody.extraSymbols) ? scanBody.extraSymbols : [];
         const pr = Array.isArray(scanBody.prioritySymbols)
           ? scanBody.prioritySymbols
           : [];
+        const prevCat =
+          typeof scanBody.catalystNewsSummary === "string"
+            ? scanBody.catalystNewsSummary
+            : "";
+        let cat = prevCat;
+        if (wl925.length) {
+          cat += (cat ? "\n" : "") + "9:25 watchlist: " + wl925.join(", ");
+        }
+        if (after1pm && pm && merged.length) {
+          cat +=
+            "\n1pm revised watchlist (Claude): " + merged.join(", ");
+        }
         scanBody = {
           ...scanBody,
-          extraSymbols: [...new Set([...ex, ...wl925])],
-          prioritySymbols: [...new Set([...pr, ...wl925])],
-          catalystNewsSummary:
-            (typeof scanBody.catalystNewsSummary === "string"
-              ? scanBody.catalystNewsSummary
-              : "") +
-            (wl925.length
-              ? "\n9:25 watchlist (scanner priority): " + wl925.join(", ")
-              : ""),
+          extraSymbols: [...new Set([...ex, ...merged])],
+          prioritySymbols: [...new Set([...pr, ...merged])],
+          catalystNewsSummary: cat,
         };
         out.scan925Watchlist = wl925;
+        out.watchlistMerged = merged;
       }
     } catch (e) {
       console.warn("cheap-monitor scan925 wl merge", e?.message || e);
