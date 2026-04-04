@@ -828,6 +828,58 @@
       color: var(--hud-amber);
       margin-bottom: 8px;
     }
+    .learn-eod-today {
+      margin-bottom: 22px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid rgba(0, 245, 255, 0.15);
+    }
+    .learn-eod-today-cap {
+      font-family: var(--hud-mono);
+      font-size: 0.52rem;
+      letter-spacing: 0.16em;
+      color: var(--hud-cyan);
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .learn-eod-kl {
+      font-size: 1.28rem;
+      line-height: 1.35;
+      font-weight: 700;
+      color: var(--hud-text);
+      font-family: var(--hud-sans);
+      max-width: 36rem;
+      margin: 0 auto;
+      padding: 0 8px;
+    }
+    .learn-pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin: 12px 0 8px;
+    }
+    .learn-pill {
+      font-family: var(--hud-mono);
+      font-size: 0.62rem;
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: 1px solid currentColor;
+    }
+    .learn-pill--good { color: #4ade80; background: rgba(74, 222, 128, 0.08); }
+    .learn-pill--warn { color: #fbbf24; background: rgba(251, 191, 36, 0.1); }
+    .learn-pill--bad { color: #f87171; background: rgba(248, 113, 113, 0.08); }
+    .learn-pill--neutral { color: var(--hud-muted); border-color: rgba(0, 245, 255, 0.2); }
+    .learn-tomorrow-focus {
+      padding: 12px;
+      border: 1px solid rgba(251, 191, 36, 0.55);
+      background: rgba(40, 32, 8, 0.35);
+      font-size: 0.95rem;
+      font-weight: 600;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      color: #fcd34d;
+      font-family: var(--hud-sans);
+    }
     .learn-param-line {
       font-family: var(--hud-mono);
       font-size: 0.72rem;

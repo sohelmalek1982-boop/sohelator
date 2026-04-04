@@ -131,6 +131,17 @@ async function loadSessionLogRowsForEtYmd(ymd) {
   }
 }
 
+async function loadFullSessionLogForEod(posStore) {
+  if (!posStore) return [];
+  try {
+    const log = await posStore.get(POSITIONS_SESSION_LOG_KEY, { type: "json" });
+    return Array.isArray(log) ? log : [];
+  } catch (e) {
+    console.error("scan-eod full session-log", e);
+    return [];
+  }
+}
+
 /**
  * @param {any[]} log
  * @param {string} dateStr — ymdEt(new Date())
@@ -186,7 +197,14 @@ async function mergeOptimizedParamsFromGrokSuggestions(suggestions) {
   if (!store || !suggestions || typeof suggestions !== "object") {
     return { changed: [], diffs: [], next: null };
   }
-  const keys = ["minScore", "adxThreshold", "volIgnition", "evThreshold"];
+  const keys = [
+    "minScore",
+    "adxThreshold",
+    "volIgnition",
+    "evThreshold",
+    "alertCooldownHours",
+    "gexThresholdPct",
+  ];
   let cur = await store.get("optimized_params", { type: "json" });
   if (typeof cur === "string") {
     try {
@@ -705,11 +723,10 @@ Also briefly: Was the GEX regime directionally useful? Did options-flow / sector
     const ymdKey = ymdEt(new Date());
     const sessionRows = await loadSessionLogRowsForEtYmd(ymdKey);
     eodDebriefSummary = buildEodDebriefSummary(sessionRows, ymdKey);
-    if (process.env.GROK_API_KEY) {
-      const { callGrok } = await import("../../src/lib/grok.js");
-      const grokDebriefModel = "grok-4.20-0309-reasoning";
+    if (process.env.ANTHROPIC_API_KEY) {
+      const { callClaudeExpensive } = await import("../../src/lib/claude.js");
       const summaryJson = JSON.stringify(eodDebriefSummary, null, 2);
-      const debriefPrompt = `You are SOHELATOR's head analyst. Run the end-of-day debrief and make cheap Grok smarter for tomorrow.
+      const debriefPrompt = `You are SOHELATOR's head analyst. Run the end-of-day debrief and make the scan co-pilot smarter for tomorrow.
 
 Today's session log:
 ${summaryJson}
@@ -719,12 +736,12 @@ Respond ONLY with valid JSON in exactly this structure:
   "performanceReview": "3-4 sentences on what happened today",
   "cheapGrokAudit": "review every CLOSE/ADD/HOLD decision — score right or wrong based on outcome, identify patterns",
   "filterAssessment": "were scanner filters catching good setups or noise? be specific",
-  "tomorrowInstructions": "direct instruction set for cheap Grok to follow tomorrow — what to favor, avoid, watch for. Write as if directly addressing cheap Grok.",
-  "parameterSuggestions": { "minScore": null, "adxThreshold": null, "volIgnition": null, "evThreshold": null },
+  "tomorrowInstructions": "direct instruction set for the AI co-pilot to follow tomorrow — what to favor, avoid, watch for.",
+  "parameterSuggestions": { "minScore": null, "adxThreshold": null, "volIgnition": null, "evThreshold": null, "alertCooldownHours": null, "gexThresholdPct": null },
   "sessionGrade": "A or B or C or D or F",
   "keyLearning": "one sentence max"
 }`;
-      grokDebriefRaw = await callGrok(grokDebriefModel, debriefPrompt, 2500);
+      grokDebriefRaw = await callClaudeExpensive(debriefPrompt, 2500);
       grokDebriefParsed = parseGrokDebriefJson(grokDebriefRaw);
 
       const tuningStore = tuningLearningStore();
@@ -747,6 +764,167 @@ Respond ONLY with valid JSON in exactly this structure:
     }
   } catch (e) {
     console.error("scan-eod debrief block", e);
+  }
+
+  let comprehensiveEodReview = "";
+  let comprehensiveEodParsed = null;
+  try {
+    if (
+      process.env.ANTHROPIC_API_KEY &&
+      process.env.NETLIFY_SITE_ID &&
+      process.env.NETLIFY_TOKEN
+    ) {
+      const { callClaudeExpensive } = await import("../../src/lib/claude.js");
+      const posStore = getStore({
+        name: "sohelator-positions",
+        siteID: process.env.NETLIFY_SITE_ID,
+        token: process.env.NETLIFY_TOKEN,
+      });
+      const fullLog = await loadFullSessionLogForEod(posStore);
+      const ymdKey2 = ymdEt(new Date());
+      const todayLog = fullLog.filter(
+        (e) => e && e.tsIso && e.tsIso.startsWith(ymdKey2)
+      );
+      const sessionSummary = {
+        date: ymdKey2,
+        alertsFired: todayLog.filter((e) => e.type === "ALERT_FIRED").length,
+        positionsOpened: todayLog.filter((e) => e.type === "POSITION_OPENED")
+          .length,
+        positionsClosed: todayLog.filter((e) => e.type === "POSITION_CLOSED")
+          .length,
+        grokDecisions: todayLog.filter((e) => e.type === "GROK_DECISION"),
+        wins: todayLog.filter((e) => e.outcome === "WIN").length,
+        losses: todayLog.filter((e) => e.outcome === "LOSS").length,
+        totalPnlPct: todayLog
+          .filter((e) => e.outcome === "WIN" || e.outcome === "LOSS")
+          .reduce((sum, e) => sum + (Number(e.pnlPct) || 0), 0)
+          .toFixed(2),
+        checkpoints: todayLog.filter((e) => e.type === "CHECKPOINT"),
+        newsFlags: todayLog.filter((e) => e.type === "NEWS_FLAG"),
+      };
+      let matrixSignalLatest = null;
+      let marketProbLastBias = null;
+      try {
+        matrixSignalLatest = await posStore.get("matrix-signal-latest", {
+          type: "json",
+        });
+      } catch (_) {
+        /* ignore */
+      }
+      try {
+        marketProbLastBias = await posStore.get("market-prob-last-bias", {
+          type: "json",
+        });
+      } catch (_) {
+        /* ignore */
+      }
+      const matrixCtx = {
+        snapshot: matrixSignalLatest,
+        lastBias: marketProbLastBias,
+      };
+      const eodPrompt = `You are SOHELATOR's end-of-day analyst. Review today's trading session and provide actionable improvements.
+
+Today's session data:
+${JSON.stringify(sessionSummary, null, 2)}
+
+Matrix / bias snapshot (what the system saw):
+${JSON.stringify(matrixCtx, null, 2)}
+
+Your job is to review five things and be completely honest:
+
+1. WHAT WORKED TODAY — which alerts, signals, or decisions were correct and why
+2. WHAT FAILED TODAY — which signals were wrong, which alerts were noise, any false signals
+3. ALERT QUALITY — were the Telegram alerts useful or were they spam? Too many? Too few? Wrong timing?
+4. SIGNAL ACCURACY — did the matrix graduation signal match what actually happened in the market?
+5. TOMORROW'S PRIORITIES — what specific things should the system focus on tomorrow? Any adjustments needed?
+
+Be direct. Be specific. Use plain English. No jargon.
+
+End your response with exactly this JSON block (no markdown fences):
+{
+  "sessionGrade": "A or B or C or D or F",
+  "keyLearning": "one sentence",
+  "alertQuality": "good or noisy or missed",
+  "signalAccuracy": "accurate or mixed or off",
+  "tomorrowFocus": "one specific thing to watch tomorrow",
+  "paramSuggestions": {
+    "minScore": null,
+    "alertCooldownHours": null,
+    "gexThresholdPct": null
+  }
+}`;
+
+      comprehensiveEodReview = await callClaudeExpensive(eodPrompt, 2000);
+      const jsonM = comprehensiveEodReview.match(/\{[\s\S]*\}/);
+      let parsedComp = {};
+      if (jsonM) {
+        try {
+          parsedComp = JSON.parse(jsonM[0]);
+        } catch (_) {
+          parsedComp = {};
+        }
+      }
+      comprehensiveEodParsed = parsedComp;
+
+      const tuningStoreEod = tuningLearningStore();
+      if (tuningStoreEod && parsedComp.paramSuggestions && typeof parsedComp.paramSuggestions === "object") {
+        const mergeEod = await mergeOptimizedParamsFromGrokSuggestions(
+          parsedComp.paramSuggestions
+        );
+        if (mergeEod.changed && mergeEod.changed.length) {
+          paramTuneChanged = [
+            ...new Set([...(paramTuneChanged || []), ...mergeEod.changed]),
+          ];
+        }
+      }
+
+      if (tuningStoreEod) {
+        await tuningStoreEod.setJSON(`eod-review-${ymdKey2}`, {
+          fullText: comprehensiveEodReview,
+          parsed: parsedComp,
+          sessionSummary,
+          matrixSignalLatest,
+          marketProbLastBias,
+          savedAt: Date.now(),
+          savedAtIso: new Date().toISOString(),
+        });
+      }
+
+      const bot = process.env.TELEGRAM_BOT_TOKEN;
+      const chat = process.env.TELEGRAM_CHAT_ID;
+      if (bot && chat && comprehensiveEodReview) {
+        const reviewText = comprehensiveEodReview.split("{")[0].trim();
+        const parsed = parsedComp;
+        const g0 = String(parsed.sessionGrade || "").trim().charAt(0).toUpperCase();
+        const gradeEmoji =
+          { A: "🏆", B: "✅", C: "⚠️", D: "❌", F: "💀" }[g0] || "📊";
+        const msg = [
+          `${gradeEmoji} SOHELATOR EOD REVIEW — ${ymdKey2}`,
+          `Grade: ${parsed.sessionGrade || "—"}`,
+          ``,
+          reviewText.slice(0, 800),
+          ``,
+          `📌 Key learning: ${parsed.keyLearning || "—"}`,
+          `🎯 Tomorrow: ${parsed.tomorrowFocus || "—"}`,
+          ``,
+          `Alerts today: ${sessionSummary.alertsFired} | Positions: ${sessionSummary.positionsOpened} | W/L: ${sessionSummary.wins}/${sessionSummary.losses}`,
+          `Session P&L: ${sessionSummary.totalPnlPct}%`,
+        ]
+          .join("\n")
+          .slice(0, 4000);
+        await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chat,
+            text: msg,
+            disable_web_page_preview: true,
+          }),
+        }).catch((e) => console.warn("EOD review Telegram:", e?.message));
+      }
+    }
+  } catch (e) {
+    console.error("scan-eod comprehensive Claude review", e);
   }
 
   const gradeMatchEod = eodAnalysis.match(/Grade[:\s]+([A-F][+-]?)/i);
@@ -798,6 +976,8 @@ Respond ONLY with valid JSON in exactly this structure:
     grokDebriefParsed,
     paramTuneChanged,
     parameterMergeDiff,
+    comprehensiveEodReview,
+    comprehensiveEodParsed,
   };
 
   await learningStore.setJSON("eod_" + dateStr.replace(/\s/g, "_"), eodData);

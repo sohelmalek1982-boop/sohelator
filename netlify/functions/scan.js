@@ -26,7 +26,10 @@ import {
 } from "../../src/lib/backtester.js";
 import { formatDrivingAlert } from "../../src/lib/alert-formatter.js";
 import { num } from "../../src/lib/utils.js";
-import { callGrok } from "../../src/lib/grok.js";
+import {
+  callClaudeCheap,
+  callClaudeWithFallback,
+} from "../../src/lib/claude.js";
 import { getStore } from "@netlify/blobs";
 import { createRequire } from "module";
 
@@ -337,28 +340,14 @@ function worseGrokHealth(a, b) {
   return (GROK_HEALTH_RANK[b] || 0) > (GROK_HEALTH_RANK[a] || 0) ? b : a;
 }
 
-/** Two expensive-model attempts, then one cheap-model fallback (Prompt 8). */
-async function callGrokExpensiveWithFallback(aiPrompt, maxTok) {
-  const expensiveModel =
-    process.env.GROK_MODEL_EXPENSIVE || "grok-4.20-0309-reasoning";
-  const cheapModel =
-    process.env.GROK_MODEL_CHEAP || "grok-4-1-fast-reasoning";
-  let lastErr;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const text = await callGrok(expensiveModel, aiPrompt, maxTok);
-      return { text, health: "ok" };
-    } catch (e) {
-      lastErr = e;
-      console.warn("scan.js Grok expensive attempt", attempt + 1, e?.message || e);
-    }
-  }
+/** Claude expensive with fallback to cheap (replaces Grok two-attempt flow). */
+async function callClaudeExpensiveWithFallback(aiPrompt, maxTok) {
   try {
-    console.warn("scan.js Grok: falling back to cheap model after expensive failures");
-    const text = await callGrok(cheapModel, aiPrompt, maxTok);
-    return { text, health: "fallback_cheap" };
-  } catch (e2) {
-    throw lastErr || e2;
+    const text = await callClaudeWithFallback(aiPrompt, maxTok);
+    return { text, health: "ok" };
+  } catch (e) {
+    console.warn("scan.js Claude fallback failed:", e?.message || e);
+    return { text: "", health: "error" };
   }
 }
 
@@ -738,7 +727,7 @@ Otherwise use a normal conviction netVerdict (no catalyst prefix).`
     const symList = alerts.map((a) => a.symbol).join(", ");
 
     /* Expensive: one batched Grok call for all alerts (Netlify timeout — was N sequential calls). */
-    if (scanMode === "expensive" && process.env.GROK_API_KEY && alerts.length) {
+    if (scanMode === "expensive" && process.env.ANTHROPIC_API_KEY && alerts.length) {
       try {
         const aiPrompt = `You are SOHELATOR's aggressive trading co-pilot. Market is live. Analyze each setup below and return actionable intelligence.
 
@@ -760,7 +749,7 @@ ${catBlock}
 
 Respond ONLY with a valid JSON array. One object per symbol with fields: symbol, analysis, risks, plan, netVerdict. Include every symbol: ${symList}.`;
 
-        const { text: grokOut, health: gh } = await callGrokExpensiveWithFallback(
+        const { text: grokOut, health: gh } = await callClaudeExpensiveWithFallback(
           aiPrompt,
           BATCH_GROK_MAX_TOK
         );
@@ -781,19 +770,19 @@ Respond ONLY with a valid JSON array. One object per symbol with fields: symbol,
             if (row.plan) parts.push(`Plan: ${row.plan}`);
             if (parts.length) setup.aiCoPilot = parts.join("\n");
           } else if (verdictMap.size > 0) {
-            setup.aiCoPilot = `Grok batch: missing entry for ${sym}`;
+            setup.aiCoPilot = `AI batch: missing entry for ${sym}`;
           } else {
-            setup.aiCoPilot = `Grok batch: could not parse JSON (${String(grokOut || "").length} chars)`;
+            setup.aiCoPilot = `AI batch: could not parse JSON (${String(grokOut || "").length} chars)`;
           }
         }
         for (const a of alerts) {
           a.drivingText = formatDrivingAlert(a);
         }
       } catch (e) {
-        console.warn("scan.js batched Grok failed:", e?.message || e);
+        console.warn("scan.js batched Claude failed:", e?.message || e);
         grokHealthAgg = worseGrokHealth(grokHealthAgg, "error");
         for (const setup of alerts) {
-          setup.aiCoPilot = `Grok unavailable: ${e?.message || e}`;
+          setup.aiCoPilot = `Claude unavailable: ${e?.message || e}`;
         }
         for (const a of alerts) {
           a.drivingText = formatDrivingAlert(a);
@@ -802,15 +791,13 @@ Respond ONLY with a valid JSON array. One object per symbol with fields: symbol,
     }
 
     /* Cheap: batched Grok with yesterday's expensive EOD instructions before setups JSON. */
-    if (scanMode === "cheap" && process.env.GROK_API_KEY && alerts.length) {
+    if (scanMode === "cheap" && process.env.ANTHROPIC_API_KEY && alerts.length) {
       try {
         const grokDailyBrief = await loadGrokDailyBriefForCheapScan();
         const debriefBlock =
           grokDailyBrief
             ? `Yesterday's debrief instructions:\n${grokDailyBrief.slice(0, 3500)}\n\nApply these when making your decision today.\n\n---\n\n`
             : "";
-        const cheapModel =
-          process.env.GROK_MODEL_CHEAP || "grok-4-1-fast-reasoning";
         const aiPrompt = `You are SOHELATOR's fast intraday scan co-pilot (cheap model). Market is live. Analyze each setup below and return actionable intelligence.
 
 For each symbol provide:
@@ -831,7 +818,7 @@ ${catBlock}
 
 Respond ONLY with a valid JSON array. One object per symbol with fields: symbol, analysis, risks, plan, netVerdict. Include every symbol: ${symList}.`;
 
-        const grokOut = await callGrok(cheapModel, aiPrompt, BATCH_GROK_MAX_TOK);
+        const grokOut = await callClaudeCheap(aiPrompt, BATCH_GROK_MAX_TOK);
         grokHealthAgg = worseGrokHealth(grokHealthAgg, "ok");
         const verdictMap = parseBatchedGrokVerdicts(grokOut);
         for (const setup of alerts) {
@@ -849,19 +836,19 @@ Respond ONLY with a valid JSON array. One object per symbol with fields: symbol,
             if (row.plan) parts.push(`Plan: ${row.plan}`);
             if (parts.length) setup.aiCoPilot = parts.join("\n");
           } else if (verdictMap.size > 0) {
-            setup.aiCoPilot = `Grok batch: missing entry for ${sym}`;
+            setup.aiCoPilot = `AI batch: missing entry for ${sym}`;
           } else {
-            setup.aiCoPilot = `Grok batch: could not parse JSON (${String(grokOut || "").length} chars)`;
+            setup.aiCoPilot = `AI batch: could not parse JSON (${String(grokOut || "").length} chars)`;
           }
         }
         for (const a of alerts) {
           a.drivingText = formatDrivingAlert(a);
         }
       } catch (e) {
-        console.warn("scan.js cheap batched Grok failed:", e?.message || e);
+        console.warn("scan.js cheap batched Claude failed:", e?.message || e);
         grokHealthAgg = worseGrokHealth(grokHealthAgg, "error");
         for (const setup of alerts) {
-          setup.aiCoPilot = `Grok unavailable: ${e?.message || e}`;
+          setup.aiCoPilot = `Claude unavailable: ${e?.message || e}`;
         }
         for (const a of alerts) {
           a.drivingText = formatDrivingAlert(a);
@@ -892,6 +879,7 @@ Respond ONLY with a valid JSON array. One object per symbol with fields: symbol,
         minScore: P.minScore,
         evThreshold: P.evThreshold,
         grokHealth: grokHealthAgg,
+        claudeHealth: grokHealthAgg,
         universeSymbols: mergedUniverse.slice(0, 48),
         priorityFromNews: Array.from(prioritySyms),
         optionsSession: "rth",

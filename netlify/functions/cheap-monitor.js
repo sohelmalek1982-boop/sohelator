@@ -196,7 +196,8 @@ async function appendSessionLogRow(row) {
 const POSITION_GROK_COOLDOWN_KEY = "position-grok-cooldowns";
 const POSITION_GROK_COOLDOWN_MS = 15 * 60 * 1000;
 const POSITION_GROK_PNL_JUMP = 0.8;
-const GROK_POSITION_MODEL = "grok-4-1-fast-reasoning";
+const CLAUDE_POSITION_MODEL =
+  process.env.ANTHROPIC_MODEL_CHAT || "claude-haiku-4-5-20251001";
 
 async function getPositionGrokCooldowns() {
   const store = cheapMonitorBlobStore();
@@ -322,20 +323,20 @@ async function appendGrokPositionAuditRow(payload) {
  */
 async function runRthPositionGrokMonitor(cheapAlerts, inRth, grokDailyBrief = null) {
   if (!inRth) return;
-  if (!process.env.GROK_API_KEY || !process.env.TRADIER_TOKEN) return;
+  if (!process.env.ANTHROPIC_API_KEY || !process.env.TRADIER_TOKEN) return;
   if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return;
 
   let pt;
   let getQuote;
-  let callGrok;
+  let callClaude;
   let isPositionTerminated;
   try {
     pt = await import("./position-tracker.js");
     isPositionTerminated = pt.isPositionTerminated;
     const tradier = await import("../../src/lib/tradier.js");
     getQuote = tradier.getQuote;
-    const grok = await import("../../src/lib/grok.js");
-    callGrok = grok.callGrok;
+    const claude = await import("../../src/lib/claude.js");
+    callClaude = claude.callClaude;
   } catch (e) {
     console.warn("cheap-monitor runRthPositionGrokMonitor import", e?.message || e);
     return;
@@ -445,7 +446,7 @@ HOLD | {one line reason}`;
 
     let raw;
     try {
-      raw = await callGrok(GROK_POSITION_MODEL, prompt, 400);
+      raw = await callClaude(CLAUDE_POSITION_MODEL, prompt, 400);
     } catch (e) {
       console.warn("cheap-monitor Grok position", pos.symbol, e?.message || e);
       continue;
@@ -495,7 +496,7 @@ HOLD | {one line reason}`;
       const sign = pnlDollar >= 0 ? "+" : "";
       await sendTelegramPlain(
         `${emoji} POSITION CLOSED — ${pos.symbol}\n` +
-          `${dirU} · Grok decision\n` +
+          `${dirU} · Claude decision\n` +
           `Reason: ${decision.reason}\n` +
           `Entry $${entryPrice.toFixed(2)} → Exit $${currentPrice.toFixed(2)}\n` +
           `P&L: ${sign}$${Math.abs(pnlDollar).toFixed(2)} (${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%)\n` +
@@ -537,7 +538,7 @@ HOLD | {one line reason}`;
       };
       await sendTelegramPlain(
         `⚡ ADD SIGNAL — ${pos.symbol}\n` +
-          `${dirU} · Grok says add here\n` +
+          `${dirU} · Claude says add here\n` +
           `Reason: ${decision.reason}\n` +
           `Current: $${currentPrice.toFixed(2)} · P&L so far: ${pnlPct.toFixed(2)}%\n` +
           `Time in trade: ${timeInTrade}`

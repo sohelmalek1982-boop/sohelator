@@ -13,7 +13,7 @@ import {
   getTimesales,
   getDailyHistory,
 } from "../../src/lib/tradier.js";
-import { callGrok } from "../../src/lib/grok.js";
+import { callClaudeWithFallback } from "../../src/lib/claude.js";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -33,7 +33,7 @@ const DEFAULT_UNIVERSE = [
   "AMD",
 ];
 
-/** Prompt 8 — Grok only 8:00–16:00 ET weekdays */
+/** Prompt 8 — Claude only 8:00–16:00 ET weekdays */
 function minutesEt(d) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
@@ -64,27 +64,13 @@ function isEtGrokWindow(d) {
   return t >= 8 * 60 && t <= 16 * 60;
 }
 
-async function callGrokPremarketWithFallback(prompt, maxTok) {
-  const expensiveModel =
-    process.env.GROK_MODEL_EXPENSIVE || "grok-4.20-0309-reasoning";
-  const cheapModel =
-    process.env.GROK_MODEL_CHEAP || "grok-4-1-fast-reasoning";
-  let lastErr;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const text = await callGrok(expensiveModel, prompt, maxTok);
-      return { text, health: "ok" };
-    } catch (e) {
-      lastErr = e;
-      console.warn("premarket Grok expensive attempt", attempt + 1, e?.message || e);
-    }
-  }
+async function callClaudePremarketWithFallback(prompt, maxTok) {
   try {
-    console.warn("premarket Grok: falling back to cheap model");
-    const text = await callGrok(cheapModel, prompt, maxTok);
-    return { text, health: "fallback_cheap" };
-  } catch (e2) {
-    throw lastErr || e2;
+    const text = await callClaudeWithFallback(prompt, maxTok);
+    return { text, health: "ok" };
+  } catch (e) {
+    console.warn("premarket Claude failed:", e?.message || e);
+    return { text: "", health: "error" };
   }
 }
 
@@ -182,21 +168,18 @@ export const handler = async (event) => {
       });
     }
 
-    /* Prompt 8 — Grok 8am–4pm ET; 2× expensive + cheap fallback */
-    if (process.env.GROK_API_KEY) {
+    /* Prompt 8 — Claude 8am–4pm ET; expensive + cheap fallback */
+    if (process.env.ANTHROPIC_API_KEY) {
       if (!isEtGrokWindow(new Date())) {
         snapshot.grokBriefStatus = "outside_window";
         snapshot.aiBrief =
-          "Grok brief skipped — outside SOHELATOR window (8:00am–4:00pm ET, weekdays).";
+          "Claude brief skipped — outside SOHELATOR window (8:00am–4:00pm ET, weekdays).";
       } else {
         try {
           const briefPrompt = `Write a short pre-market brief (4–7 lines) for a driver: lead with edge vs risk, watchlist focus, no JSON. Snapshot:\n${JSON.stringify(snapshot)}`;
-          const { text, health } = await callGrokPremarketWithFallback(
-            briefPrompt,
-            900
-          );
+          const text = await callClaudeWithFallback(briefPrompt, 900);
           snapshot.aiBrief = text;
-          snapshot.grokBriefStatus = health;
+          snapshot.grokBriefStatus = "ok";
           const _bot = process.env.TELEGRAM_BOT_TOKEN;
           const _chat = process.env.TELEGRAM_CHAT_ID;
           if (_bot && _chat && snapshot.aiBrief) {
@@ -217,7 +200,7 @@ export const handler = async (event) => {
             }).catch((e) => console.warn("premarket Telegram:", e?.message));
           }
         } catch (e) {
-          console.warn("premarket Grok (all attempts failed):", e?.message || e);
+          console.warn("premarket Claude (all attempts failed):", e?.message || e);
           snapshot.grokBriefStatus = "error";
           snapshot.aiBrief = `Brief unavailable: ${e?.message || e}`;
         }

@@ -418,7 +418,7 @@ window.calculateIgnition = calculateIgnition;
         var tm = document.getElementById("hud-intel-time");
         var brief = snap && snap.aiBrief ? String(snap.aiBrief) : "";
         if (body) {
-          body.textContent = brief || "(No Grok brief yet.)";
+          body.textContent = brief || "(No Claude brief yet.)";
           body.style.whiteSpace = "pre-wrap";
         }
         if (tm && snap && snap.asOf) {
@@ -1729,7 +1729,7 @@ window.calculateIgnition = calculateIgnition;
     parts.push(scanStatusLabel);
     parts.push(openStatusLabel);
     parts.push("Poll ~" + nextMonitorMinutes() + "m");
-    parts.push("Grok " + grok);
+    parts.push("Claude " + grok);
     if (window.__sohelLastScanStatus === "outside_window") {
       parts.push("cheap outside 8–4 ET");
     }
@@ -1750,8 +1750,14 @@ window.calculateIgnition = calculateIgnition;
       window.__sohelLastScanOkAt = Date.now();
     }
     window.__sohelLastScanStatus = j && j.status;
-    if (j && j.meta && j.meta.grokHealth != null) {
-      window.__sohelLastGrokHealth = j.meta.grokHealth;
+    var mh =
+      j && j.meta
+        ? j.meta.claudeHealth != null
+          ? j.meta.claudeHealth
+          : j.meta.grokHealth
+        : null;
+    if (mh != null) {
+      window.__sohelLastGrokHealth = mh;
     }
     updateHealthBanner();
   }
@@ -1777,7 +1783,7 @@ window.calculateIgnition = calculateIgnition;
     return [
       j.status || "",
       j.mode || "",
-      m.grokHealth || "",
+      m.claudeHealth || m.grokHealth || "",
       b.ev != null ? String(b.ev) : "",
       b.winRate != null ? String(b.winRate) : "",
       Array.isArray(j.alerts) ? j.alerts.length : 0,
@@ -2202,6 +2208,69 @@ window.calculateIgnition = calculateIgnition;
     return "learn-param-line--neutral";
   }
 
+  function pillAlertClass(q) {
+    var s = String(q || "").toLowerCase();
+    if (s === "good") return "learn-pill learn-pill--good";
+    if (s === "noisy") return "learn-pill learn-pill--warn";
+    if (s === "missed") return "learn-pill learn-pill--bad";
+    return "learn-pill learn-pill--neutral";
+  }
+
+  function pillSignalClass(q) {
+    var s = String(q || "").toLowerCase();
+    if (s === "accurate") return "learn-pill learn-pill--good";
+    if (s === "mixed") return "learn-pill learn-pill--warn";
+    if (s === "off") return "learn-pill learn-pill--bad";
+    return "learn-pill learn-pill--neutral";
+  }
+
+  function renderEodTodayBlock(todayEod) {
+    if (!todayEod) return "";
+    var g = String(todayEod.sessionGrade || "?")
+      .trim()
+      .charAt(0)
+      .toUpperCase();
+    var megaCls = gradeMegaClass(g);
+    var review = String(todayEod.eodReviewPlain || "").trim();
+    var kl = String(todayEod.keyLearning || "").trim();
+    var tf = String(todayEod.tomorrowFocus || "").trim();
+    return (
+      '<div class="learn-eod-today">' +
+      '<div class="learn-eod-today-cap">TODAY · CLAUDE EOD REVIEW</div>' +
+      '<div class="learn-brief-top">' +
+      '<div class="learn-grade-mega ' +
+      megaCls +
+      '" aria-label="Session grade">' +
+      p16esc(g || "—") +
+      "</div>" +
+      '<div class="learn-eod-kl">' +
+      p16esc(kl || "—") +
+      "</div></div>" +
+      '<div class="learn-pill-row">' +
+      '<span class="' +
+      pillAlertClass(todayEod.alertQuality) +
+      '">Alerts: ' +
+      p16esc(String(todayEod.alertQuality || "—")) +
+      "</span>" +
+      '<span class="' +
+      pillSignalClass(todayEod.signalAccuracy) +
+      '">Signals: ' +
+      p16esc(String(todayEod.signalAccuracy || "—")) +
+      "</span></div>" +
+      (review
+        ? '<div class="learn-block"><div class="learn-k">SESSION REVIEW</div><div class="learn-prose">' +
+          p16esc(review) +
+          "</div></div>"
+        : "") +
+      (tf
+        ? '<div class="learn-block"><div class="learn-tomorrow-cap">TOMORROW</div><div class="learn-tomorrow-focus">' +
+          p16esc(tf) +
+          "</div></div>"
+        : "") +
+      "</div>"
+    );
+  }
+
   function renderParamDiffs(mergeDiff, suggestions) {
     if (mergeDiff && mergeDiff.length) {
       return mergeDiff
@@ -2269,6 +2338,7 @@ window.calculateIgnition = calculateIgnition;
       latest.parameterSuggestions
     );
     host.innerHTML =
+      eodTop +
       '<div class="learn-brief-top">' +
       '<div class="learn-grade-mega ' +
       megaCls +
@@ -2296,9 +2366,9 @@ window.calculateIgnition = calculateIgnition;
           p16esc(filt) +
           "</div></div>"
         : "") +
-      '<div class="learn-block"><div class="learn-k">CHEAP GROK AUDIT</div><div class="learn-audit-mono">' +
+      '<div class="learn-block"><div class="learn-k">CHEAP SCAN AUDIT</div><div class="learn-audit-mono">' +
       (audit ? p16esc(audit) : '<span class="hint">—</span>') +
-      '</div></div><div class="learn-block"><div class="learn-tomorrow-cap">CHEAP GROK BRIEFING · TOMORROW</div><div class="learn-tomorrow-box">' +
+      '</div></div><div class="learn-block"><div class="learn-tomorrow-cap">OVERNIGHT BRIEFING · TOMORROW</div><div class="learn-tomorrow-box">' +
       (tomorrow ? p16esc(tomorrow) : '<span class="hint">—</span>') +
       '</div></div><div class="learn-block"><div class="learn-k">PARAMETER CHANGES</div>' +
       diffBlock +
@@ -2388,7 +2458,7 @@ window.calculateIgnition = calculateIgnition;
       })
       .then(function (ld) {
         ld = ld || {};
-        renderGrokDashboard(ld.latest || null);
+        renderGrokDashboard(ld.latest || null, ld.todayEodReview || null);
         renderGrokHistory(
           Array.isArray(ld.entries) ? ld.entries.slice(0, 14) : []
         );

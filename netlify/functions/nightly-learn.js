@@ -14,7 +14,7 @@ import {
   getOptimizedParams,
   BLUEPRINT_DEFAULT_PARAMS,
 } from "../../src/lib/scanner-rules.js";
-import { callGrok } from "../../src/lib/grok.js";
+import { callClaudeCheap } from "../../src/lib/claude.js";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -268,30 +268,29 @@ export const handler = async (event) => {
     };
 
     /* Prompt 8 — nightly uses cheap model only; 2 attempts (no ET gate — job runs off-hours) */
-    if (process.env.GROK_API_KEY) {
-      const cheapModel =
-        process.env.GROK_MODEL_CHEAP || "grok-4-1-fast-reasoning";
+    if (process.env.ANTHROPIC_API_KEY) {
       const learnPrompt = `You summarize SOHELATOR nightly learning. What went right, what went wrong, and any new patterns worth noting — concise bullets. Base only on this JSON:\n${JSON.stringify(nightlyReport)}`;
       let lastErr;
       let got = false;
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          nightlyReport.grokLearningsSummary = await callGrok(
-            cheapModel,
-            learnPrompt,
-            2000
-          );
+          const summary = await callClaudeCheap(learnPrompt, 2000);
+          nightlyReport.grokLearningsSummary = summary;
+          nightlyReport.claudeLearningsSummary = summary;
           nightlyReport.grokNightlyStatus = "ok";
+          nightlyReport.claudeNightlyStatus = "ok";
           got = true;
           break;
         } catch (e) {
           lastErr = e;
-          console.warn("nightly-learn Grok attempt", attempt + 1, e?.message || e);
+          console.warn("nightly-learn Claude attempt", attempt + 1, e?.message || e);
         }
       }
       if (!got) {
         nightlyReport.grokNightlyStatus = "error";
-        nightlyReport.grokLearningsSummary = `Grok summary failed: ${lastErr?.message || lastErr}`;
+        nightlyReport.claudeNightlyStatus = "error";
+        nightlyReport.grokLearningsSummary = `Claude summary failed: ${lastErr?.message || lastErr}`;
+        nightlyReport.claudeLearningsSummary = nightlyReport.grokLearningsSummary;
       }
     }
 
