@@ -3,28 +3,41 @@
  * Schedule is UTC (Netlify): 08:00 Mon–Fri ≈ 3:00 AM America/New_York in standard time;
  * during EDT it runs ~4:00 AM local. Adjust cron if you need a different slot.
  *
- * Requires SCAN_FORCE_SECRET (same as manual POST /api/scan-925) and a public site URL.
+ * Calls scan-925 / scan-955 in-process (no public URL, no SCAN_FORCE_SECRET required).
+ * Force is applied via lib/scanForce.js `_sohelScan3amPipeline` (in-process only).
  */
-const fetch = require("node-fetch");
 const { schedule } = require("@netlify/functions");
 const { recordJobOk, recordJobError } = require("./lib/jobHealth");
+const { run925ForPipeline } = require("./scan-925");
+const { run955ForPipeline } = require("./scan-955");
 
-function siteBaseUrl() {
-  const u =
-    process.env.URL ||
-    process.env.DEPLOY_PRIME_URL ||
-    process.env.NETLIFY_SITE_URL ||
-    "";
-  return String(u).replace(/\/$/, "");
+function parseJsonBody(res) {
+  if (!res || res.body == null) return {};
+  try {
+    return JSON.parse(res.body);
+  } catch {
+    return { raw: String(res.body).slice(0, 500) };
+  }
 }
 
+const PIPELINE_EVENT = {
+  httpMethod: "POST",
+  _sohelScan3amPipeline: true,
+};
+
 async function runChain() {
-  const base = siteBaseUrl();
-  const secret = process.env.SCAN_FORCE_SECRET;
-  if (!base || !secret) {
-    const msg =
-      "scan-3am: set URL (Netlify sets URL / DEPLOY_PRIME_URL) and SCAN_FORCE_SECRET";
-    console.error(msg);
+  let r1;
+  let r2;
+  let j1;
+  let j2;
+  try {
+    r1 = await run925ForPipeline(PIPELINE_EVENT);
+    j1 = parseJsonBody(r1);
+    r2 = await run955ForPipeline(PIPELINE_EVENT);
+    j2 = parseJsonBody(r2);
+  } catch (e) {
+    const msg = String(e?.message || e);
+    console.error("scan-3am", msg);
     await recordJobError("scan-3am", msg);
     return {
       statusCode: 500,
@@ -32,34 +45,16 @@ async function runChain() {
     };
   }
 
-  const opts = {
-    method: "POST",
-    headers: { "X-Scan-Force": secret },
-  };
+  const ok =
+    r1.statusCode === 200 &&
+    r2.statusCode === 200 &&
+    !j1.skipped &&
+    !j2.skipped;
 
-  const r1 = await fetch(base + "/api/scan-925", opts);
-  const t1 = await r1.text();
-  let j1;
-  try {
-    j1 = JSON.parse(t1);
-  } catch {
-    j1 = { raw: t1.slice(0, 500) };
-  }
-
-  const r2 = await fetch(base + "/api/scan-955", opts);
-  const t2 = await r2.text();
-  let j2;
-  try {
-    j2 = JSON.parse(t2);
-  } catch {
-    j2 = { raw: t2.slice(0, 500) };
-  }
-
-  const ok = r1.ok && r2.ok && !j1.skipped && !j2.skipped;
   try {
     await recordJobOk("scan-3am", {
-      scan925Status: r1.status,
-      scan955Status: r2.status,
+      scan925Status: r1.statusCode,
+      scan955Status: r2.statusCode,
       skipped925: !!j1.skipped,
       skipped955: !!j2.skipped,
     });
@@ -71,8 +66,8 @@ async function runChain() {
     statusCode: ok ? 200 : 502,
     body: JSON.stringify({
       ok,
-      scan925: { status: r1.status, body: j1 },
-      scan955: { status: r2.status, body: j2 },
+      scan925: { status: r1.statusCode, body: j1 },
+      scan955: { status: r2.statusCode, body: j2 },
     }),
   };
 }

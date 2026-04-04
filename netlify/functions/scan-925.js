@@ -571,3 +571,5 @@ async function httpHandler(event) {
 }
 
 exports.handler = schedule("30 14 * * 1-5", httpHandler);
+/** In-process runner for scan-3am (no HTTP / URL). */
+exports.run925ForPipeline = run925;
