@@ -17,7 +17,7 @@ Trading UI (`public/`) and Netlify serverless functions: scanners, Tradier-backe
 | `ANTHROPIC_API_KEY` | AI (scanner, chat, research brief) |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Alert Telegram |
 | `RESEND_API_KEY`, `ALERT_EMAIL`, `RESEND_FROM_EMAIL` | Alert email |
-| `NETLIFY_SITE_ID` | Set automatically on Netlify; used by tooling. **Blobs inside functions** use **runtime credentials** — you do **not** need `NETLIFY_TOKEN` in env for normal serverless blob access. Keep a personal access token **only** for local scripts or off-platform API calls that talk to the Blobs API with `siteID` + `token`. |
+| `NETLIFY_SITE_ID` | Set on Netlify builds. **HTTP functions** get `NETLIFY_BLOBS_CONTEXT` automatically. **Scheduled** functions (`@netlify/functions` `schedule()`) sometimes omit that context (`MissingBlobsEnvironmentError`). The app uses `netlify/functions/lib/blobsStore.cjs`, which falls back to **`NETLIFY_SITE_ID` + `NETLIFY_BLOB_TOKEN` or `NETLIFY_TOKEN`** (PAT with **Blobs** scope) when context is missing. |
 | `SERPER_API_KEY` | Optional: scanner ticker discovery |
 | `SCANNER_TRIGGER_SECRET` | Optional: required `X-Scanner-Secret` header for `POST /api/scan-now` when set |
 

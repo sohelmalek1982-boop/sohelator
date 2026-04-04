@@ -1,5 +1,5 @@
 import { getTimesales, getDailyHistory, getQuote } from "../../src/lib/tradier.js";
-import { getStore } from "@netlify/blobs";
+import { getStore } from "./lib/blobsStore.cjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

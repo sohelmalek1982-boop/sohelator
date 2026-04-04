@@ -107,7 +107,7 @@ function optimizedParamsUrl() {
 
 async function tryLoadBlobParams() {
   try {
-    const { getStore } = await import("@netlify/blobs");
+    const { getStore } = await import("../../netlify/functions/lib/blobsStore.cjs");
     const store = getStore("sohelator-learning");
     const raw = await store.get("optimized_params", { type: "json" });
     return raw && typeof raw === "object" ? raw : null;
@@ -157,13 +157,13 @@ export async function applyOptimizedParams(force = false) {
 export async function resetOptimizedParams() {
   _runtimeMergedParams = null;
   try {
-    const { getStore } = await import("@netlify/blobs");
+    const { getStore } = await import("../../netlify/functions/lib/blobsStore.cjs");
     const store = getStore("sohelator-learning");
     await store.delete("optimized_params");
   } catch (e) {
     console.warn("resetOptimizedParams delete blob:", e?.message || e);
     try {
-      const { getStore } = await import("@netlify/blobs");
+      const { getStore } = await import("../../netlify/functions/lib/blobsStore.cjs");
       const store = getStore("sohelator-learning");
       await store.setJSON("optimized_params", {});
     } catch (e2) {

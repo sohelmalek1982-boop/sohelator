@@ -1,5 +1,5 @@
 const fetch = require("node-fetch");
-const { getStore } = require("@netlify/blobs");
+const { getStore } = require("./lib/blobsStore.cjs");
 const { withSohelContext } = require("./lib/sohelContext");
 
 const cors = {

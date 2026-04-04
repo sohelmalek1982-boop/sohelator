@@ -7,7 +7,7 @@
  * Schedule via Netlify cron or POST manually. Increase function timeout in netlify.toml if backtest exceeds default.
  */
 
-import { getStore } from "@netlify/blobs";
+import { getStore } from "./lib/blobsStore.cjs";
 import { runBacktest } from "../../src/lib/backtester.js";
 import {
   applyOptimizedParams,

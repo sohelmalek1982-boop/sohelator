@@ -3,7 +3,7 @@
  * GET: list positions (openedAt desc). Exported: appendSessionLog, logAlertAsPosition, updatePositions for cheap-monitor.
  */
 
-import { getStore } from "@netlify/blobs";
+import { getStore } from "./lib/blobsStore.cjs";
 import { getQuote } from "../../src/lib/tradier.js";
 
 const BLOB_KEY = "positions";

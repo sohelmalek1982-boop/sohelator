@@ -2,7 +2,7 @@
  * BRIEF / LEARNING tab — `learning-YYYY-MM-DD` and `eod-review-YYYY-MM-DD` in sohelator-learning.
  */
 
-const { getStore } = require("@netlify/blobs");
+const { getStore } = require("./lib/blobsStore.cjs");
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

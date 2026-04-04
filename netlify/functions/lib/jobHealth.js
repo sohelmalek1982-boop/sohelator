@@ -1,4 +1,4 @@
-const { getStore } = require("@netlify/blobs");
+const { getStore } = require("./blobsStore.cjs");
 
 const KEY = "system_job_health";
 

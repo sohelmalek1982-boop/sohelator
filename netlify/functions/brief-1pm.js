@@ -3,7 +3,7 @@
  * what worked / what didn't, second-half focus.
  */
 
-const { getStore } = require("@netlify/blobs");
+const { getStore } = require("./lib/blobsStore.cjs");
 const { schedule } = require("@netlify/functions");
 const { withSohelContext, buildTradingContext } = require("./lib/sohelContext");
 const { getMemoryContext } = require("./lib/memory.cjs");

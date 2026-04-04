@@ -5,7 +5,7 @@ const {
 } = require("./lib/memory.cjs");
 const { getMasterAnalysis } = require("./lib/masterAnalysis");
 const { forecastSetup } = require("./lib/forecast");
-const { getStore } = require("@netlify/blobs");
+const { getStore } = require("./lib/blobsStore.cjs");
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

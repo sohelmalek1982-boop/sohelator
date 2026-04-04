@@ -1,5 +1,5 @@
 const fetch = require("node-fetch");
-const { getStore } = require("@netlify/blobs");
+const { getStore } = require("./lib/blobsStore.cjs");
 const { getAlertCurrentPnl } = require("./lib/optionsData");
 const { getMemoryStore } = require("./lib/memory.cjs");
 const { forecastSetup } = require("./lib/forecast");

@@ -3,7 +3,7 @@
  * Cached per symbol per NY calendar day in Netlify Blobs.
  */
 const fetch = require("node-fetch");
-const { getStore } = require("@netlify/blobs");
+const { getStore } = require("./lib/blobsStore.cjs");
 const { getMasterAnalysis } = require("./lib/masterAnalysis");
 const { getMemoryContext } = require("./lib/memory.cjs");
 const { withSohelContext, buildTradingContext } = require("./lib/sohelContext");

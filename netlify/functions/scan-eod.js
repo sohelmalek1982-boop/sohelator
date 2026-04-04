@@ -1,5 +1,5 @@
 const fetch = require("node-fetch");
-const { getStore } = require("@netlify/blobs");
+const { getStore } = require("./lib/blobsStore.cjs");
 const { schedule } = require("@netlify/functions");
 const { withSohelContext, buildTradingContext } = require("./lib/sohelContext");
 const {

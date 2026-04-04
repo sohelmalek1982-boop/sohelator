@@ -1,5 +1,5 @@
 const webpush = require("web-push");
-const { getStore } = require("@netlify/blobs");
+const { getStore } = require("./blobsStore.cjs");
 
 function configureVapid() {
   const pub = process.env.VAPID_PUBLIC_KEY;

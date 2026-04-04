@@ -14,7 +14,7 @@
  */
 
 const fetch = globalThis.fetch || require("node-fetch");
-const { getStore } = require("@netlify/blobs");
+const { getStore } = require("./lib/blobsStore.cjs");
 const { sendPushToAll } = require("./lib/pushAll.js");
 const alertQuality = require("./lib/alertQuality.cjs");
 

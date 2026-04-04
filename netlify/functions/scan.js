@@ -30,7 +30,7 @@ import {
   callClaudeCheap,
   callClaudeWithFallback,
 } from "../../src/lib/claude.js";
-import { getStore } from "@netlify/blobs";
+import { getStore } from "./lib/blobsStore.cjs";
 import { prepareAlertsForRelay } from "./lib/alertQuality.cjs";
 
 const cors = {

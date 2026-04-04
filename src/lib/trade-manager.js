@@ -3,7 +3,7 @@
  * Persists open/closed trades via Netlify Blobs when configured; merges with static public/trade_log.json at read time.
  */
 
-import { getStore } from "@netlify/blobs";
+import { getStore } from "../../netlify/functions/lib/blobsStore.cjs";
 
 const STORE_NAME = "sohelator-trade-log";
 const BLOB_KEY = "trade_log_state";

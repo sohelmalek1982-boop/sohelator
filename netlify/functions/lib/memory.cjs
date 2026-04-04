@@ -1,4 +1,4 @@
-const { getStore } = require("@netlify/blobs");
+const { getStore } = require("./blobsStore.cjs");
 
 const DECISION_SCHEMA_VERSION = 2;
 

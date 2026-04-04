@@ -50,7 +50,7 @@ exports.handler = async (event) => {
   if (blobsConfigured) {
     try {
       const mod = await import("../../src/lib/scanner-rules.js");
-      const { getStore } = await import("@netlify/blobs");
+      const { getStore } = await import("./lib/blobsStore.cjs");
       const { SAFE_OPTIMIZED_PARAMS_BLOB } = mod;
       await mod.applyOptimizedParams(true);
       let params = mod.getOptimizedParams();
