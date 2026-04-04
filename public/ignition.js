@@ -206,7 +206,8 @@ window.calculateIgnition = calculateIgnition;
 (function initSohelatorVerbatimNeon() {
   var LOG_URL = "/api/log-trade";
   /** Poll saved scan from server (cheap-monitor writes last_hud_scan). */
-  var POLL_SCAN_MS = 45000;
+  /** Poll scan-data on the same cadence as the 5m scanner cycle so LAST refreshes when a new run lands. */
+  var POLL_SCAN_MS = 300000;
   var POLL_OPEN_MS = 30000;
   var SPY_LEVELS_SYM = "SPY";
   var EXPENSIVE_SLOTS_ET_MIN = [495, 565, 585, 660, 840, 960];
@@ -461,6 +462,7 @@ window.calculateIgnition = calculateIgnition;
   function fetchHudAuxiliary() {
     fetch("/api/premarket", { cache: "no-store" })
       .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       })
       .then(function (snap) {
@@ -471,8 +473,10 @@ window.calculateIgnition = calculateIgnition;
         var body = document.getElementById("hud-intel-body");
         var tm = document.getElementById("hud-intel-time");
         var brief = snap && snap.aiBrief ? String(snap.aiBrief) : "";
+        var briefPlaceholder =
+          "Brief runs at 8:30 AM ET on market days";
         if (body) {
-          body.textContent = brief || "(No Claude brief yet.)";
+          body.textContent = brief || briefPlaceholder;
           body.style.whiteSpace = "pre-wrap";
         }
         if (tm && snap && snap.asOf) {
@@ -508,13 +512,18 @@ window.calculateIgnition = calculateIgnition;
             );
             window.__sohelLastHealthJson = h;
             updateHealthBanner();
-            updateHudScanLast();
+            mergeScanTimeFromHealth(h);
           })
           .catch(function () {
             renderCheckpointStrip({}, window.__sohelPremarketAsOf, window.__sohelLastScanOkAt);
           });
       })
       .catch(function () {
+        var body = document.getElementById("hud-intel-body");
+        if (body) {
+          body.textContent = "Brief runs at 8:30 AM ET on market days";
+          body.style.whiteSpace = "pre-wrap";
+        }
         renderCheckpointStrip({}, 0, window.__sohelLastScanOkAt);
       });
   }
@@ -534,7 +543,7 @@ window.calculateIgnition = calculateIgnition;
           window.__sohelLastScanOkAt
         );
         updateHealthBanner();
-        updateHudScanLast();
+        mergeScanTimeFromHealth(h);
       })
       .catch(function (e) {
         if (pre) pre.textContent = String(e.message || e);
@@ -569,11 +578,29 @@ window.calculateIgnition = calculateIgnition;
     }
   }
 
+  /**
+   * Open positions: isOpen, status 'open', or no close reason (closeReason/closedReason) while still active.
+   * Tracker uses LIVE/HOLD/DANGER — treat as open when closeReason is unset and status is not exit/closed.
+   */
+  function isPositionOpenForHud(p) {
+    if (!p || typeof p !== "object") return false;
+    if (p.closeReason != null && String(p.closeReason).trim() !== "") return false;
+    if (p.closedReason != null && String(p.closedReason).trim() !== "") return false;
+    if (p.isOpen === true) return true;
+    var st = String(p.status || "").trim().toLowerCase();
+    if (st === "open") return true;
+    if (isPositionTrackerTerminated(p)) return false;
+    if (p.closeReason == null && (p.closedReason == null || p.closedReason === "")) {
+      return /^(live|hold|danger|risk)/.test(st);
+    }
+    return false;
+  }
+
   function countOpenPositions() {
     var list = window.__sohelPositionTrackerList;
     if (!list || !list.length) return 0;
     return list.filter(function (p) {
-      return !isPositionTrackerTerminated(p);
+      return isPositionOpenForHud(p);
     }).length;
   }
 
@@ -659,7 +686,7 @@ window.calculateIgnition = calculateIgnition;
     }
     var session = positions.filter(positionVisibleThisSession);
     var active = session.filter(function (p) {
-      return !isPositionTrackerTerminated(p);
+      return isPositionOpenForHud(p);
     });
     var closed = session.filter(function (p) {
       return isPositionTrackerTerminated(p);
@@ -837,8 +864,19 @@ window.calculateIgnition = calculateIgnition;
 
   function alertIsoFromTrackerRow(a) {
     if (a.alertedAtIso) return a.alertedAtIso;
+    if (a.firedAt != null) {
+      var fd = Date.parse(String(a.firedAt));
+      if (isFinite(fd)) return new Date(fd).toISOString();
+    }
+    if (a.ts != null && isFinite(Number(a.ts))) {
+      var ts0 = Number(a.ts);
+      if (ts0 > 0 && ts0 < 1e12) ts0 *= 1000;
+      return new Date(ts0).toISOString();
+    }
     if (a.timestamp != null && isFinite(Number(a.timestamp))) {
-      return new Date(Number(a.timestamp)).toISOString();
+      var ts = Number(a.timestamp);
+      if (ts > 0 && ts < 1e12) ts *= 1000;
+      return new Date(ts).toISOString();
     }
     return "";
   }
@@ -919,33 +957,46 @@ window.calculateIgnition = calculateIgnition;
 
   function countAlertsTodayEt(rows) {
     if (!rows || !rows.length) return 0;
-    var today = new Date().toLocaleDateString("en-CA", {
+    var todayET = new Date().toLocaleDateString("en-CA", {
       timeZone: "America/New_York",
     });
-    return rows.filter(function (row) {
-      var iso = alertIsoFromTrackerRow(row);
-      if (!iso) return false;
-      var d = new Date(iso).toLocaleDateString("en-CA", {
+    return rows.filter(function (a) {
+      var iso = alertIsoFromTrackerRow(a);
+      var ms = iso ? Date.parse(iso) : NaN;
+      if (!isFinite(ms)) {
+        var raw = a.firedAt != null ? a.firedAt : a.timestamp != null ? a.timestamp : a.ts;
+        if (raw != null && isFinite(Number(raw))) {
+          ms = Number(raw);
+          if (ms > 0 && ms < 1e12) ms *= 1000;
+        }
+      }
+      if (!isFinite(ms)) return false;
+      var alertDate = new Date(ms).toLocaleDateString("en-CA", {
         timeZone: "America/New_York",
       });
-      return d === today;
+      return alertDate === todayET;
     }).length;
   }
 
   function fetchHudAlertTracker() {
     fetch("/api/alert-tracker", { cache: "no-store" })
       .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       })
       .then(function (j) {
-        var rows = (j && j.alerts) || [];
+        var rows = j && j.alerts;
+        if (!Array.isArray(rows)) rows = [];
         renderHudAlertLog(rows);
+        var nToday = countAlertsTodayEt(rows);
         var elA = document.getElementById("hud-stat-alerts");
-        if (elA) elA.textContent = String(countAlertsTodayEt(rows));
+        if (elA) elA.textContent = String(nToday);
       })
       .catch(function () {
         var host = document.getElementById("hud-alert-log");
         if (host) host.innerHTML = '<p class="hint">Alert tracker unavailable.</p>';
+        var elA = document.getElementById("hud-stat-alerts");
+        if (elA) elA.textContent = "0";
       });
   }
 
@@ -1723,6 +1774,7 @@ window.calculateIgnition = calculateIgnition;
           window.__sohelPremarketAsOf,
           window.__sohelLastScanOkAt
         );
+        mergeScanTimeFromHealth(h);
       })
       .catch(function () {});
   }
@@ -1782,41 +1834,52 @@ window.calculateIgnition = calculateIgnition;
     body.style.whiteSpace = "pre-wrap";
   }
 
-  /** Set last scan clock from scan-data (savedAt, jobHealth fallbacks). */
+  /** Bump last-scan clock from /api/health jobHealth (merge with blob scan time). */
+  function mergeScanTimeFromHealth(h) {
+    if (!h || !h.jobHealth) return;
+    var jh = h.jobHealth;
+    var times = [];
+    if (window.__sohelLastScanOkAt != null && isFinite(Number(window.__sohelLastScanOkAt))) {
+      times.push(Number(window.__sohelLastScanOkAt));
+    }
+    Object.keys(jh).forEach(function (k) {
+      var job = jh[k];
+      if (job && typeof job.lastOk === "number") times.push(job.lastOk);
+    });
+    if (!times.length) return;
+    var t = Math.max.apply(null, times);
+    window.__sohelLastScanOkAt = t;
+    updateHudScanLast();
+  }
+
+  /** Set last scan clock from scan-data — use newest of savedAt, jobHealth lastOk, lastUpdated. */
   function syncLastScanTimeFromScanData(data) {
-    var t = null;
+    var times = [];
     var j = data && data.lastScan;
-    if (j && typeof j.savedAt === "number") t = j.savedAt;
-    else if (j && typeof j.timestamp === "number") t = j.timestamp;
-    if (t == null && data && data.jobHealth) {
+    if (j && typeof j.savedAt === "number") times.push(j.savedAt);
+    if (j && typeof j.timestamp === "number") times.push(j.timestamp);
+    if (data && data.jobHealth) {
       var jh = data.jobHealth;
-      var candidates = [
-        jh["cheap-monitor"],
-        jh["scanner"],
-        jh["scanner-core"],
-        jh.scan,
-      ];
-      for (var i = 0; i < candidates.length; i++) {
-        var job = candidates[i];
-        if (job && typeof job.lastOk === "number") {
-          t = job.lastOk;
-          break;
-        }
-      }
+      Object.keys(jh).forEach(function (k) {
+        var job = jh[k];
+        if (job && typeof job.lastOk === "number") times.push(job.lastOk);
+      });
     }
-    if (t == null && data && typeof data.lastUpdated === "number") {
-      t = data.lastUpdated;
+    if (data && typeof data.lastUpdated === "number") times.push(data.lastUpdated);
+    if (window.__sohelLastScanOkAt != null && isFinite(Number(window.__sohelLastScanOkAt))) {
+      times.push(Number(window.__sohelLastScanOkAt));
     }
-    if (t != null) {
-      window.__sohelLastScanOkAt = t;
-      updateHudScanLast();
-    }
+    if (!times.length) return;
+    var t = Math.max.apply(null, times);
+    window.__sohelLastScanOkAt = t;
+    updateHudScanLast();
   }
 
   /** Sync HUD from GET /api/scan-data (POST /api/scan results saved by scheduled cheap-monitor). */
   function pullScanData() {
     fetch("/api/scan-data", { cache: "no-store" })
       .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       })
       .then(function (data) {
