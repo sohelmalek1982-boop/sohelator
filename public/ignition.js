@@ -403,6 +403,61 @@ window.calculateIgnition = calculateIgnition;
     host.innerHTML = html;
   }
 
+  function applyBrief1pmPayload(pm) {
+    var txt = pm && pm.claudeAnalysis ? String(pm.claudeAnalysis) : "";
+    var fallback =
+      "(No 1 PM brief yet — runs ~1:00 PM ET on weekdays.)";
+    var bodyPm = document.getElementById("hud-intel-body-pm");
+    var bodyBrief = document.getElementById("brief-tab-pm-body");
+    [bodyPm, bodyBrief].forEach(function (el) {
+      if (!el) return;
+      el.textContent = txt || fallback;
+      el.style.whiteSpace = "pre-wrap";
+    });
+    var tmPm = document.getElementById("hud-intel-time-pm");
+    var tmBrief = document.getElementById("brief-tab-pm-time");
+    var timeIso = pm && pm.timestamp ? new Date(pm.timestamp).toISOString() : "";
+    var timeLabel = timeIso ? formatAlertTime(timeIso) : "—";
+    if (tmPm && timeIso) tmPm.textContent = timeLabel;
+    if (tmBrief) tmBrief.textContent = timeLabel;
+
+    var wlHome = document.getElementById("hud-pm-wl");
+    var wlBrief = document.getElementById("brief-tab-pm-wl");
+    var aw = pm && pm.afternoonWatchlist;
+    var wlText;
+    var wlHint =
+      "(Afternoon revised symbols appear after the 1 PM brief — scanner merges them for priority.)";
+    if (
+      aw &&
+      ((aw.focus && aw.focus.length) ||
+        (aw.bulls && aw.bulls.length) ||
+        (aw.bears && aw.bears.length) ||
+        (aw.drop && aw.drop.length))
+    ) {
+      var lines = ["AFTERNOON WATCHLIST (revised)"];
+      if (aw.focus && aw.focus.length) {
+        lines.push("FOCUS: " + aw.focus.join(", "));
+      }
+      if (aw.bulls && aw.bulls.length) {
+        lines.push("BULL: " + aw.bulls.join(", "));
+      }
+      if (aw.bears && aw.bears.length) {
+        lines.push("BEAR: " + aw.bears.join(", "));
+      }
+      if (aw.drop && aw.drop.length) {
+        lines.push("DROP: " + aw.drop.join(", "));
+      }
+      wlText = lines.join("\n");
+    } else {
+      wlText = wlHint;
+    }
+    [wlHome, wlBrief].forEach(function (el) {
+      if (!el) return;
+      el.textContent = wlText;
+      el.style.whiteSpace = "pre-wrap";
+    });
+  }
+
   function fetchHudAuxiliary() {
     fetch("/api/premarket", { cache: "no-store" })
       .then(function (r) {
@@ -428,56 +483,17 @@ window.calculateIgnition = calculateIgnition;
             return r.json();
           })
           .then(function (pm) {
-            var bodyPm = document.getElementById("hud-intel-body-pm");
-            var tmPm = document.getElementById("hud-intel-time-pm");
-            var wlPm = document.getElementById("hud-pm-wl");
-            var txt =
-              pm && pm.claudeAnalysis ? String(pm.claudeAnalysis) : "";
-            if (bodyPm) {
-              bodyPm.textContent =
-                txt || "(No 1 PM brief yet — runs ~1:00 PM ET on weekdays.)";
-              bodyPm.style.whiteSpace = "pre-wrap";
-            }
-            if (tmPm && pm && pm.timestamp) {
-              tmPm.textContent = formatAlertTime(
-                new Date(pm.timestamp).toISOString()
-              );
-            }
-            if (wlPm) {
-              var aw = pm && pm.afternoonWatchlist;
-              if (
-                aw &&
-                ((aw.focus && aw.focus.length) ||
-                  (aw.bulls && aw.bulls.length) ||
-                  (aw.bears && aw.bears.length) ||
-                  (aw.drop && aw.drop.length))
-              ) {
-                var lines = ["AFTERNOON WATCHLIST (revised)"];
-                if (aw.focus && aw.focus.length) {
-                  lines.push("FOCUS: " + aw.focus.join(", "));
-                }
-                if (aw.bulls && aw.bulls.length) {
-                  lines.push("BULL: " + aw.bulls.join(", "));
-                }
-                if (aw.bears && aw.bears.length) {
-                  lines.push("BEAR: " + aw.bears.join(", "));
-                }
-                if (aw.drop && aw.drop.length) {
-                  lines.push("DROP: " + aw.drop.join(", "));
-                }
-                wlPm.textContent = lines.join("\n");
-                wlPm.style.whiteSpace = "pre-wrap";
-              } else {
-                wlPm.textContent =
-                  "(Afternoon revised symbols appear after the 1 PM brief — scanner merges them for priority.)";
-              }
-            }
+            applyBrief1pmPayload(pm);
           })
           .catch(function () {
             var bodyPm = document.getElementById("hud-intel-body-pm");
             if (bodyPm) bodyPm.textContent = "(1 PM brief unavailable.)";
+            var bodyB = document.getElementById("brief-tab-pm-body");
+            if (bodyB) bodyB.textContent = "(1 PM brief unavailable.)";
             var wlPm = document.getElementById("hud-pm-wl");
             if (wlPm) wlPm.textContent = "—";
+            var wlB = document.getElementById("brief-tab-pm-wl");
+            if (wlB) wlB.textContent = "—";
           });
         fetch("/api/health", { cache: "no-store" })
           .then(function (r) {
@@ -2647,7 +2663,10 @@ window.calculateIgnition = calculateIgnition;
             ? "brief"
             : which;
     if (typeof window.__sohelShowHudPage === "function") window.__sohelShowHudPage(w);
-    if (w === "brief") fetchLearningIfStale(true);
+    if (w === "brief") {
+      fetchLearningIfStale(true);
+      fetchHudAuxiliary();
+    }
     if (w === "sys" && typeof window.__sohelFetchSysHealth === "function") {
       window.__sohelFetchSysHealth();
     }
