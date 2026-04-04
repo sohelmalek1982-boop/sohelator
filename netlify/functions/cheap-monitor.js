@@ -17,6 +17,10 @@ const fetch = globalThis.fetch || require("node-fetch");
 const { getStore } = require("@netlify/blobs");
 const { sendPushToAll } = require("./lib/pushAll.js");
 
+/** In-memory dedupe for Telegram alert buckets (per warm instance). */
+const SESSION_DEDUPE = new Map();
+const SESSION_DEDUPE_TTL_MS = 30 * 60 * 1000;
+
 /** Must match DEFAULT_UNIVERSE in netlify/functions/scan.js for headline intersection. */
 const SCAN_UNIVERSE = new Set([
   "SPY",
@@ -129,7 +133,7 @@ function isWild(a) {
 }
 
 /* ─── Prompt 19 — mirror scan.js Telegram formatting (keep in sync with netlify/functions/scan.js) ─── */
-const TELEGRAM_ALERT_MIN_SCORE = 65;
+const TELEGRAM_ALERT_MIN_SCORE = 85;
 
 /** After each scan: refresh P&L on open positions, log new alerts as positions (blob). */
 async function runPositionSync(cheapAlerts, expAlerts) {
@@ -598,8 +602,8 @@ HOLD | {one line reason}`;
 }
 
 const ALERT_COOLDOWNS_BLOB_KEY = "alert-cooldowns";
-const ALERT_TELEGRAM_COOLDOWN_MS = 20 * 60 * 1000;
-const ALERT_TELEGRAM_SCORE_JUMP = 5;
+const ALERT_TELEGRAM_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours (was 20–30 min)
+const ALERT_TELEGRAM_SCORE_JUMP = 15; // was 5
 
 function cheapMonitorBlobStore() {
   if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return null;
@@ -676,6 +680,26 @@ function historicalMatchesShortP19(a) {
   return "—";
 }
 
+async function getDailyTelegramCount(store) {
+  if (!store) return 0;
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const d = await store.get(`telegram-daily-${today}`, { type: "json" });
+    return d?.count || 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function incrementDailyTelegramCount(store) {
+  if (!store) return;
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const current = await getDailyTelegramCount(store);
+    await store.setJSON(`telegram-daily-${today}`, { count: current + 1 });
+  } catch {}
+}
+
 function buildTelegramPrompt19Message(a) {
   const sym = String(a.symbol || "—").toUpperCase();
   const play = String(a.playTypeLabel || a.playType || "SETUP");
@@ -741,12 +765,22 @@ async function relayPrompt19Telegrams(alerts, dedupeSet) {
   const bot = process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TELEGRAM_CHAT_ID;
   if (!bot || !chat || !Array.isArray(alerts)) return;
+  const store = cheapMonitorBlobStore();
+  const dailyCount = await getDailyTelegramCount(store);
+  if (dailyCount >= 3) {
+    console.log("cheap-monitor: daily Telegram cap reached (3)");
+    return;
+  }
   const cooldowns = await getAlertCooldowns();
   for (let i = 0; i < alerts.length; i++) {
     const a = alerts[i];
     if (Number(a.score) < TELEGRAM_ALERT_MIN_SCORE) continue;
     const sym = String(a.symbol || "").trim().toUpperCase();
     const newScore = Math.round(Number(a.score) || 0);
+    const memKey = `${sym}-${Math.floor(newScore / 10) * 10}`;
+    const memEntry = SESSION_DEDUPE.get(memKey);
+    if (memEntry && Date.now() - memEntry < SESSION_DEDUPE_TTL_MS) continue;
+    SESSION_DEDUPE.set(memKey, Date.now());
     const prev = sym ? cooldowns[sym] : null;
     if (prev && typeof prev.firedAt === "number") {
       const within =
@@ -778,6 +812,7 @@ async function relayPrompt19Telegrams(alerts, dedupeSet) {
       console.warn("cheap-monitor Prompt19 Telegram:", e?.message || e);
       continue;
     }
+    await incrementDailyTelegramCount(store);
     cooldowns[sym] = { score: newScore, firedAt: Date.now() };
     await setAlertCooldown(sym, newScore);
     await new Promise((r) => setTimeout(r, 300));
@@ -841,6 +876,11 @@ function universeSymsFromNews(items) {
 }
 
 exports.handler = async () => {
+  const _now = Date.now();
+  for (const [_k, _t] of SESSION_DEDUPE.entries()) {
+    if (_now - _t > SESSION_DEDUPE_TTL_MS) SESSION_DEDUPE.delete(_k);
+  }
+
   const headers = { "Content-Type": "application/json" };
   const out = {
     ok: true,
@@ -1007,6 +1047,9 @@ exports.handler = async () => {
     });
 
     await relayPrompt19Telegrams(alerts, telegramDedupe);
+
+    // Trigger matrix signal check (fire and forget)
+    fetch(`${base}/api/matrix-signal`).catch(() => {});
 
     const wild = alerts.filter(isWild);
     out.wildCount = wild.length;

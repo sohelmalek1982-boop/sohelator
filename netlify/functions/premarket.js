@@ -197,6 +197,37 @@ export const handler = async (event) => {
           );
           snapshot.aiBrief = text;
           snapshot.grokBriefStatus = health;
+          // Auto-push brief to Telegram
+          const _tgBot = process.env.TELEGRAM_BOT_TOKEN;
+          const _tgChat = process.env.TELEGRAM_CHAT_ID;
+          if (_tgBot && _tgChat && snapshot.aiBrief && snapshot.grokBriefStatus === "ok") {
+            const _today = new Date().toLocaleDateString("en-US", {
+              timeZone: "America/New_York",
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+            });
+            const _briefMsg = [
+              `🌅 SOHELATOR PREMARKET — ${_today}`,
+              ``,
+              snapshot.aiBrief,
+              ``,
+              `SPY: $${snapshot.futuresBias?.es || "—"} | Bias: ${snapshot.futuresBias?.bias || "neutral"}`,
+              `Next: 9:25 AM checkpoint`,
+            ]
+              .join("\n")
+              .slice(0, 4000);
+
+            fetch(`https://api.telegram.org/bot${_tgBot}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: _tgChat,
+                text: _briefMsg,
+                disable_web_page_preview: true,
+              }),
+            }).catch((e) => console.warn("premarket auto-Telegram:", e?.message));
+          }
         } catch (e) {
           console.warn("premarket Grok (all attempts failed):", e?.message || e);
           snapshot.grokBriefStatus = "error";

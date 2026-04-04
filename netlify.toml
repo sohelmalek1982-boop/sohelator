@@ -77,6 +77,9 @@
   schedule = "*/5 * * * *"
   timeout = 120
 
+[functions."matrix-signal"]
+  timeout = 30
+
 [functions."position-tracker"]
   timeout = 60
 
@@ -237,6 +240,11 @@
 [[redirects]]
   from = "/api/cheap-monitor"
   to = "/.netlify/functions/cheap-monitor"
+  status = 200
+
+[[redirects]]
+  from = "/api/matrix-signal"
+  to = "/.netlify/functions/matrix-signal"
   status = 200
 
 [[redirects]]

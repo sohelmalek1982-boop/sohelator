@@ -980,6 +980,34 @@
       <div class="hud-intel-body" id="hud-intel-body">Loading pre-market brief…</div>
     </section>
 
+    <div class="sec" id="matrix-section">
+      <div class="sec-row">
+        <div class="sec-title">EMA MATRIX — SPY</div>
+        <div id="matrix-regime" style="font-size:9px;color:var(--hud-cyan);letter-spacing:0.08em">—</div>
+      </div>
+      <div style="background:var(--hud-s1);border:1px solid var(--hud-b2);border-radius:12px;padding:14px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div>
+            <div id="matrix-grad-class" style="font-size:14px;font-weight:700;color:var(--hud-cyan);letter-spacing:0.1em">—</div>
+            <div id="matrix-grad-tier" style="font-size:10px;color:var(--hud-t3);margin-top:2px;letter-spacing:0.08em">—</div>
+          </div>
+          <div style="text-align:right">
+            <div id="matrix-strength" style="font-size:18px;font-weight:700;color:var(--hud-t1)">—</div>
+            <div style="font-size:9px;color:var(--hud-t3);letter-spacing:0.06em">STRENGTH</div>
+          </div>
+        </div>
+        <div style="font-size:9px;color:var(--hud-t3);letter-spacing:0.08em;margin-bottom:5px">SIGNAL PROGRESS</div>
+        <div style="height:6px;background:var(--hud-s4);border-radius:3px;overflow:hidden;margin-bottom:6px">
+          <div id="matrix-progress-fill" style="height:100%;border-radius:3px;background:var(--hud-cyan);width:0%;transition:width 0.5s"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div id="matrix-status" style="font-size:11px;color:var(--hud-t2)">Waiting for market hours</div>
+          <div id="matrix-pct" style="font-size:13px;font-weight:700;color:var(--hud-cyan)">0%</div>
+        </div>
+        <div id="matrix-ratios" style="font-size:9px;color:var(--hud-t3);margin-top:8px;letter-spacing:0.04em"></div>
+      </div>
+    </div>
+
     <p class="hud-sec-title">TACTICAL ALERTS</p>
     <div class="hud-tactical-list" id="hud-tactical-cards"></div>
   </main>

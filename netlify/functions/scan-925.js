@@ -509,40 +509,28 @@ ${allHeadlines.slice(0, 8).join("\n")}`;
   const bot = process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TELEGRAM_CHAT_ID;
   if (bot && chat) {
-    const vixEmoji = vixLevel < 18 ? "🟢" : vixLevel < 25 ? "🟡" : "🔴";
-    const gexLine = gexSpy
-      ? `\n<b>GEX (SPY):</b> ${gexSpy.gexRegime} — ${escapeHtml(gexSpy.interpretation.slice(0, 140))}…`
-      : "";
-    const flowLine = masterSnapshots.find(
-      (m) => m.ok && m.data?.optionsFlow?.smartMoneyBias
-    );
-    const flowBit = flowLine?.data?.optionsFlow
-      ? `\n<b>Flow bias:</b> ${flowLine.data.optionsFlow.smartMoneyBias}`
-      : "";
-    const msg = `🌅 <b>SOHELATOR — 9:25 MORNING BRIEF</b>
-${dateStr} | Opens in 5 min
+    const _watchlist =
+      watchlistBull.map((w) => w.symbol).join(", ") || "—";
+    const _brief = analysis || "No analysis available";
+    const _msg = [
+      `⏰ SOHELATOR 9:25 CHECKPOINT`,
+      ``,
+      String(_brief).slice(0, 500),
+      ``,
+      `Watchlist: ${_watchlist}`,
+    ]
+      .join("\n")
+      .slice(0, 4000);
 
-${escapeHtml(analysis)}
-${gexLine}${flowBit}
-━━━━━━━━━━━━━━━━━━
-${vixEmoji} <b>VIX: ${vixLevel.toFixed(2)}</b> | SPY: ${spyPreMktPct >= 0 ? "+" : ""}${spyPreMktPct.toFixed(2)}% | QQQ: ${qqqPreMktPct >= 0 ? "+" : ""}${qqqPreMktPct.toFixed(2)}%
-
-👀 <b>DISCOVERED:</b>
-${watchlistBull.map((t) => `✅ ${t.symbol} +${t.preMktChange.toFixed(1)}% (score ${t.score})`).join("\n")}
-${watchlistBear.map((t) => `🔴 ${t.symbol} ${t.preMktChange.toFixed(1)}%`).join("\n")}
-${watchlistAvoid.map((t) => `⚠️ ${t.symbol} — SKIP (earnings)`).join("\n")}
-━━━━━━━━━━━━━━━━━━
-📊 <i>9:55 opening range scan coming...</i>`;
-
-    await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
+    fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: chat,
-        text: msg,
-        parse_mode: "HTML",
+        text: _msg,
+        disable_web_page_preview: true,
       }),
-    });
+    }).catch((e) => console.warn("scan-925 Telegram:", e?.message));
   }
 
   try {
@@ -555,13 +543,6 @@ ${watchlistAvoid.map((t) => `⚠️ ${t.symbol} — SKIP (earnings)`).join("\n")
   }
 
   return { statusCode: 200, body: JSON.stringify({ ok: true, scanData }) };
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
 }
 
 const cors = {

@@ -822,14 +822,21 @@ ${keyLearning}
 Cheap Grok audit: ${audit120 || "—"}
 Tomorrow: ${tom100 || "—"}
 Params updated: ${paramsLine}`;
-      await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
+      fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: chat,
           text: debriefMsg.slice(0, 3900),
         }),
-      });
+      })
+        .then(async (r) => {
+          if (!r.ok) {
+            const t = await r.text().catch(() => "");
+            console.error("scan-eod Telegram debrief http", r.status, t.slice(0, 200));
+          }
+        })
+        .catch((e) => console.error("scan-eod Telegram debrief", e?.message || e));
     }
     if (eodAnalysis) {
       const gradeMatch = eodAnalysis.match(/Grade[:\s]+([A-D][+-]?)/i);
@@ -859,7 +866,7 @@ ${results
 ${eodAnalysis.slice(0, 800)}…
 
 📈 <i>Full review in dashboard → SCAN tab</i>`;
-      await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
+      fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -867,7 +874,14 @@ ${eodAnalysis.slice(0, 800)}…
           text: msg,
           parse_mode: "HTML",
         }),
-      });
+      })
+        .then(async (r) => {
+          if (!r.ok) {
+            const t = await r.text().catch(() => "");
+            console.error("scan-eod Telegram EOD review http", r.status, t.slice(0, 200));
+          }
+        })
+        .catch((e) => console.error("scan-eod Telegram EOD review", e?.message || e));
     }
   }
 
@@ -904,4 +918,4 @@ async function httpHandler(event) {
   });
 }
 
-exports.handler = schedule("5 21 * * 1-5", httpHandler);
+exports.handler = schedule("0 19 * * 1-5", httpHandler);

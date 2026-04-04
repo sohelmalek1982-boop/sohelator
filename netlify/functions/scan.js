@@ -157,7 +157,18 @@ function isUsEquityOptionsRthEt(d) {
 }
 
 /** SOHELATOR blueprint — ALL alerts to Telegram (user wants to review everything) (Prompt 19) */
-const TELEGRAM_ALERT_MIN_SCORE = 65;
+function shouldSendTelegram(a) {
+  const hasRealGrok =
+    a.grokAnalysis &&
+    a.grokAnalysis.length > 50 &&
+    !String(a.grokAnalysis).includes("Rules edge") &&
+    !String(a.grokAnalysis).includes("unavailable");
+  const highScore = Number(a.score) >= 85;
+  const hasOption =
+    a.suggestedOption?.description &&
+    !String(a.suggestedOption.description).includes("undefined");
+  return hasRealGrok && highScore && hasOption;
+}
 
 function volRatioOfAlert(a) {
   return Number(a?.details?.volRatio ?? a?.volRatio ?? 0);
@@ -825,7 +836,7 @@ Respond ONLY with a valid JSON array. One object per symbol with fields: symbol,
       process.env.TELEGRAM_CHAT_ID
     ) {
       for (const a of alerts) {
-        if (Number(a.score) < TELEGRAM_ALERT_MIN_SCORE) continue;
+        if (!shouldSendTelegram(a)) continue;
         await sendTelegramScanAlert(buildTelegramPrompt19Message(a));
       }
     }

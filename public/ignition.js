@@ -535,6 +535,17 @@ window.calculateIgnition = calculateIgnition;
     return od === today || cd === today;
   }
 
+  function isToday(isoString) {
+    if (!isoString) return false;
+    var posDate = new Date(isoString).toLocaleDateString("en-CA", {
+      timeZone: "America/New_York",
+    });
+    var today = new Date().toLocaleDateString("en-CA", {
+      timeZone: "America/New_York",
+    });
+    return posDate === today;
+  }
+
   function renderSessionPnlFromPositions(positions) {
     var el = document.getElementById("hud-session-pnl");
     if (!el) return;
@@ -546,6 +557,8 @@ window.calculateIgnition = calculateIgnition;
     var sum = 0;
     positions.forEach(function (p) {
       if (isPositionTrackerTerminated(p)) return;
+      var openedIso = p.openedAtIso || p.openedAt;
+      if (!isToday(openedIso)) return;
       sum += Number(p.pnlDollar) || 0;
     });
     var s = (sum >= 0 ? "+" : "") + "$" + Math.abs(sum).toFixed(2);
@@ -1885,6 +1898,72 @@ window.calculateIgnition = calculateIgnition;
     });
   };
 
+  function fetchMatrixSignal() {
+    fetch("/api/matrix-signal")
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (d) {
+        if (d.error && d.error !== "insufficient_bars") return;
+
+        var pct = d.progressPct || 0;
+        var fill = document.getElementById("matrix-progress-fill");
+        var status = document.getElementById("matrix-status");
+        var pctEl = document.getElementById("matrix-pct");
+        var gradClass = document.getElementById("matrix-grad-class");
+        var gradTier = document.getElementById("matrix-grad-tier");
+        var strength = document.getElementById("matrix-strength");
+        var regime = document.getElementById("matrix-regime");
+        var ratios = document.getElementById("matrix-ratios");
+
+        if (!fill) return;
+
+        fill.style.width = pct + "%";
+        fill.style.background = d.primarySignal
+          ? "var(--hud-green)"
+          : d.secondarySignal
+            ? "var(--hud-amber)"
+            : "var(--hud-cyan)";
+
+        if (pctEl) pctEl.textContent = pct + "%";
+        if (pctEl)
+          pctEl.style.color = d.primarySignal ? "var(--hud-green)" : "var(--hud-cyan)";
+
+        if (gradClass) {
+          gradClass.textContent = d.gradClass || "—";
+          gradClass.style.color =
+            d.gradClass === "BULL_GRAD"
+              ? "var(--hud-green)"
+              : d.gradClass === "BEAR_GRAD"
+                ? "var(--hud-red)"
+                : "var(--hud-cyan)";
+        }
+        if (gradTier) gradTier.textContent = (d.gradTier || "—").toUpperCase();
+        if (strength) strength.textContent = d.gradStrength || "—";
+        if (regime) regime.textContent = d.macroRegime || "—";
+
+        if (status) {
+          status.textContent = d.recommendation || "No signal";
+          status.style.color = d.primarySignal
+            ? "var(--hud-green)"
+            : d.secondarySignal
+              ? "var(--hud-amber)"
+              : "var(--hud-t2)";
+        }
+
+        if (ratios && d.ratios) {
+          ratios.textContent =
+            "R4/9: " +
+            d.ratios.r_4_9 +
+            " | Rv4/9: " +
+            d.ratios.rv_4_9 +
+            " | Rv9/21: " +
+            d.ratios.rv_9_21;
+        }
+      })
+      .catch(function () {});
+  }
+
   function start() {
     showHudPage("home");
     refreshHeaderQuotes();
@@ -1892,6 +1971,8 @@ window.calculateIgnition = calculateIgnition;
     if (hudClockTimer) clearInterval(hudClockTimer);
     hudClockTimer = setInterval(tickHudClock, 1000);
     fetchHudAuxiliary();
+    fetchMatrixSignal();
+    setInterval(fetchMatrixSignal, 15 * 60 * 1000);
     fetchPositionTracker();
     fetchHudAlertTracker();
     if (positionTtiTimer) clearInterval(positionTtiTimer);
