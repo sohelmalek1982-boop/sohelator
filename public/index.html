@@ -45,7 +45,7 @@
       color: var(--hud-text);
       font-family: var(--hud-sans);
       padding-top: calc(10px + var(--safe-t));
-      padding-bottom: calc(var(--nav-h) + var(--health-h) + 20px + var(--safe-b));
+      padding-bottom: calc(var(--nav-h) + var(--health-h) + 80px + env(safe-area-inset-bottom, 0px));
       -webkit-font-smoothing: antialiased;
     }
 
@@ -139,7 +139,7 @@
     .hud-main {
       max-width: 560px;
       margin: 0 auto;
-      padding: 14px 14px 8px;
+      padding: 14px 14px 80px;
     }
     .hud-page { display: none; }
     .hud-page.active { display: block; }
@@ -1070,13 +1070,13 @@
       position: fixed;
       left: 0;
       right: 0;
-      bottom: calc(var(--health-h) + 8px + var(--safe-b));
+      bottom: calc(var(--health-h) + env(safe-area-inset-bottom, 0px));
       display: flex;
       max-width: 560px;
       margin: 0 auto;
-      padding: 0 8px;
+      padding: 0 8px max(6px, env(safe-area-inset-bottom, 0px));
       gap: 6px;
-      z-index: 150;
+      z-index: 200;
     }
     .hud-bottom-nav button {
       flex: 1;
@@ -1179,7 +1179,7 @@
         letter-spacing:0.1em;
         padding:20px 16px 8px;
         line-height:1;
-      ">LOADING</div>
+      ">WAITING</div>
       <div id="market-action" style="
         font-size:14px;
         text-align:center;
@@ -1236,7 +1236,7 @@
         color:var(--hud-t2);
         line-height:1.55;
         font-family:-apple-system,BlinkMacSystemFont,sans-serif;
-      "></div>
+      ">Market closed — analysis resumes Monday at 8:30 AM ET</div>
     </div>
 
     <div class="hud-cp-wrap">
@@ -1354,6 +1354,6 @@
 
   <div id="health-banner" class="sohel-health"></div>
 
-  <script src="/ignition.js?v=1.1.9"></script>
+  <script src="/ignition.js?v=1.2.0"></script>
 </body>
 </html>

@@ -507,6 +507,8 @@ window.calculateIgnition = calculateIgnition;
               window.__sohelLastScanOkAt
             );
             window.__sohelLastHealthJson = h;
+            updateHealthBanner();
+            updateHudScanLast();
           })
           .catch(function () {
             renderCheckpointStrip({}, window.__sohelPremarketAsOf, window.__sohelLastScanOkAt);
@@ -531,6 +533,8 @@ window.calculateIgnition = calculateIgnition;
           window.__sohelPremarketAsOf,
           window.__sohelLastScanOkAt
         );
+        updateHealthBanner();
+        updateHudScanLast();
       })
       .catch(function (e) {
         if (pre) pre.textContent = String(e.message || e);
@@ -1778,6 +1782,37 @@ window.calculateIgnition = calculateIgnition;
     body.style.whiteSpace = "pre-wrap";
   }
 
+  /** Set last scan clock from scan-data (savedAt, jobHealth fallbacks). */
+  function syncLastScanTimeFromScanData(data) {
+    var t = null;
+    var j = data && data.lastScan;
+    if (j && typeof j.savedAt === "number") t = j.savedAt;
+    else if (j && typeof j.timestamp === "number") t = j.timestamp;
+    if (t == null && data && data.jobHealth) {
+      var jh = data.jobHealth;
+      var candidates = [
+        jh["cheap-monitor"],
+        jh["scanner"],
+        jh["scanner-core"],
+        jh.scan,
+      ];
+      for (var i = 0; i < candidates.length; i++) {
+        var job = candidates[i];
+        if (job && typeof job.lastOk === "number") {
+          t = job.lastOk;
+          break;
+        }
+      }
+    }
+    if (t == null && data && typeof data.lastUpdated === "number") {
+      t = data.lastUpdated;
+    }
+    if (t != null) {
+      window.__sohelLastScanOkAt = t;
+      updateHudScanLast();
+    }
+  }
+
   /** Sync HUD from GET /api/scan-data (POST /api/scan results saved by scheduled cheap-monitor). */
   function pullScanData() {
     fetch("/api/scan-data", { cache: "no-store" })
@@ -1785,6 +1820,7 @@ window.calculateIgnition = calculateIgnition;
         return r.json();
       })
       .then(function (data) {
+        syncLastScanTimeFromScanData(data);
         var s = data && data.scan925;
         renderWatchlist925(s || null);
         var j = data && data.lastScan;
@@ -1932,12 +1968,17 @@ window.calculateIgnition = calculateIgnition;
         ? now - window.__sohelPageLoadAt > 600000
         : now - okAt > 600000;
     hb.classList.toggle("sohel-health--stale", stale);
-    var ch = claudeHealthLabel(window.__sohelLastClaudeHealth);
+    var pipeline =
+      window.__sohelLastHealthJson && window.__sohelLastHealthJson.pipelineStatus;
+    var claudePart =
+      pipeline && pipeline.anthropic
+        ? "Claude OK"
+        : "Claude " + claudeHealthLabel(window.__sohelLastClaudeHealth);
     var parts = [];
     parts.push(scanStatusLabel);
     parts.push(openStatusLabel);
     parts.push("Poll ~" + nextMonitorMinutes() + "m");
-    parts.push("Claude " + ch);
+    parts.push(claudePart);
     if (window.__sohelLastScanStatus === "outside_window") {
       parts.push("cheap outside 8–4 ET");
     }
@@ -1948,7 +1989,9 @@ window.calculateIgnition = calculateIgnition;
     parts.push("Self-tuned nightly");
     if (stale) parts.push("Scanner idle 10+ min");
     hb.textContent = parts.join(" · ");
-    var errCh = ch === "ERROR";
+    var errCh =
+      claudeHealthLabel(window.__sohelLastClaudeHealth) === "ERROR" &&
+      !(pipeline && pipeline.anthropic);
     var bad = errCh || !scanStatusOk || !openStatusOk;
     hb.style.color = bad ? (errCh ? "#f87171" : "#fbbf24") : "#bef264";
   }
@@ -2104,6 +2147,27 @@ window.calculateIgnition = calculateIgnition;
 
     if (!statusEl) return;
 
+    signal = signal || {};
+    if (!signal.narrative || typeof signal.narrative.biasKey !== "string") {
+      var gc = signal.gradClass || "";
+      if (gc === "BULL_GRAD") {
+        signal.narrative = {
+          biasKey: "MILDLY_BULLISH",
+          text: signal.signalLine || "",
+        };
+      } else if (gc === "BEAR_GRAD") {
+        signal.narrative = {
+          biasKey: "MILDLY_BEARISH",
+          text: signal.signalLine || "",
+        };
+      } else {
+        signal.narrative = {
+          biasKey: "NEUTRAL",
+          text: (signal.narrative && signal.narrative.text) || "",
+        };
+      }
+    }
+
     var bias = (signal.narrative && signal.narrative.biasKey) || "NEUTRAL";
 
     var word;
@@ -2148,34 +2212,45 @@ window.calculateIgnition = calculateIgnition;
       else mktStat.textContent = "NEUTRAL";
     }
 
-    var pct = signal.progressPct || 0;
-    if (barEl) {
-      barEl.style.width = pct + "%";
-      if (bias.indexOf("BULL") >= 0) barEl.style.background = "var(--hud-green)";
-      else if (bias.indexOf("BEAR") >= 0) barEl.style.background = "var(--hud-red)";
-      else barEl.style.background = "var(--hud-amber)";
-    }
-    if (qualityEl) {
-      var ql;
-      var qc;
-      if (pct >= 90) {
-        ql = "FIRE — enter now";
-        qc = "var(--hud-green)";
-      } else if (pct >= 76) {
-        ql = "Strong signal — prepare";
-        qc = "var(--hud-green)";
-      } else if (pct >= 51) {
-        ql = "Getting stronger";
-        qc = "var(--hud-amber)";
-      } else if (pct >= 26) {
-        ql = "Signal building";
-        qc = "var(--hud-amber)";
-      } else {
-        ql = "No signal — watching";
-        qc = "var(--hud-t3)";
+    var pct = Number(signal.progressPct) || 0;
+    if (!pct || pct === 0) {
+      if (barEl) {
+        barEl.style.width = "0%";
+        barEl.style.background = "var(--hud-t3)";
       }
-      qualityEl.textContent = ql;
-      qualityEl.style.color = qc;
+      if (qualityEl) {
+        qualityEl.textContent = "No signal";
+        qualityEl.style.color = "var(--hud-t3)";
+      }
+    } else {
+      if (barEl) {
+        barEl.style.width = pct + "%";
+        if (bias.indexOf("BULL") >= 0) barEl.style.background = "var(--hud-green)";
+        else if (bias.indexOf("BEAR") >= 0) barEl.style.background = "var(--hud-red)";
+        else barEl.style.background = "var(--hud-amber)";
+      }
+      if (qualityEl) {
+        var ql;
+        var qc;
+        if (pct >= 90) {
+          ql = "FIRE — enter now";
+          qc = "var(--hud-green)";
+        } else if (pct >= 76) {
+          ql = "Strong signal — prepare";
+          qc = "var(--hud-green)";
+        } else if (pct >= 51) {
+          ql = "Getting stronger";
+          qc = "var(--hud-amber)";
+        } else if (pct >= 26) {
+          ql = "Signal building";
+          qc = "var(--hud-amber)";
+        } else {
+          ql = "No signal — watching";
+          qc = "var(--hud-t3)";
+        }
+        qualityEl.textContent = ql;
+        qualityEl.style.color = qc;
+      }
     }
 
     var levels = (signal.gex && signal.gex.keyLevels) || [];
@@ -2195,91 +2270,134 @@ window.calculateIgnition = calculateIgnition;
       price > 0 &&
       resN > supN;
 
-    if (srSpyRangeEl) {
-      srSpyRangeEl.textContent =
-        Number.isFinite(price) && price > 0 ? "$" + price.toFixed(2) : "—";
-    }
+    var noGexOrPrice =
+      !signal.gex || !Number.isFinite(price) || price <= 0;
 
-    if (support && supportEl && Number.isFinite(supN)) {
-      supportEl.textContent = "$" + supN;
-      if (supportDist && Number.isFinite(price) && price > 0) {
-        var pctS = Math.abs(((price - supN) / supN) * 100).toFixed(1);
-        if (price < supN) {
-          supportDist.textContent = pctS + "% below band";
-        } else {
-          supportDist.textContent = pctS + "% above support";
-        }
-      }
-    } else if (supportEl) {
-      supportEl.textContent = "—";
-      if (supportDist) supportDist.textContent = "—";
-    }
-
-    if (resistance && resistEl && Number.isFinite(resN)) {
-      resistEl.textContent = "$" + resN;
-      if (resistDist && Number.isFinite(price) && price > 0) {
-        var pctR = Math.abs(((resN - price) / price) * 100).toFixed(1);
-        if (price > resN) {
-          resistDist.textContent = pctR + "% above band";
-        } else {
-          resistDist.textContent = pctR + "% below resistance";
-        }
-      }
-    } else if (resistEl) {
-      resistEl.textContent = "—";
-      if (resistDist) resistDist.textContent = "—";
-    }
-
-    if (srMarkerEl && srTrackEl) {
-      if (hasBand) {
-        srTrackEl.classList.remove("sr-ladder--dim");
-        var t = (price - supN) / (resN - supN);
-        t = Math.max(0, Math.min(1, t));
-        var leftPct = t * 100;
-        srMarkerEl.style.left = leftPct + "%";
-        var bandPct = (t * 100).toFixed(0);
-        srTrackEl.setAttribute(
-          "aria-label",
-          "SPY is about " +
-            bandPct +
-            " percent of the way from support (" +
-            supN.toFixed(2) +
-            ") toward resistance (" +
-            resN.toFixed(2) +
-            ")."
-        );
-      } else {
+    if (noGexOrPrice) {
+      if (supportEl) supportEl.textContent = "Closed";
+      if (resistEl) resistEl.textContent = "Closed";
+      if (srSpyRangeEl) srSpyRangeEl.textContent = "Market closed";
+      if (supportDist) supportDist.textContent = "Opens Monday 9:30 AM ET";
+      if (resistDist) resistDist.textContent = "";
+      if (srMarkerEl && srTrackEl) {
         srTrackEl.classList.add("sr-ladder--dim");
         srMarkerEl.style.left = "50%";
         srTrackEl.setAttribute(
           "aria-label",
-          "Support and resistance range unavailable. Need valid support below resistance and a live SPY price."
+          "GEX levels unavailable — market closed or data not loaded."
         );
+      }
+    } else {
+      if (srSpyRangeEl) {
+        srSpyRangeEl.textContent =
+          Number.isFinite(price) && price > 0 ? "$" + price.toFixed(2) : "—";
+      }
+
+      if (support && supportEl && Number.isFinite(supN)) {
+        supportEl.textContent = "$" + supN;
+        if (supportDist && Number.isFinite(price) && price > 0) {
+          var pctS = Math.abs(((price - supN) / supN) * 100).toFixed(1);
+          if (price < supN) {
+            supportDist.textContent = pctS + "% below band";
+          } else {
+            supportDist.textContent = pctS + "% above support";
+          }
+        }
+      } else if (supportEl) {
+        supportEl.textContent = "—";
+        if (supportDist) supportDist.textContent = "—";
+      }
+
+      if (resistance && resistEl && Number.isFinite(resN)) {
+        resistEl.textContent = "$" + resN;
+        if (resistDist && Number.isFinite(price) && price > 0) {
+          var pctR = Math.abs(((resN - price) / price) * 100).toFixed(1);
+          if (price > resN) {
+            resistDist.textContent = pctR + "% above band";
+          } else {
+            resistDist.textContent = pctR + "% below resistance";
+          }
+        }
+      } else if (resistEl) {
+        resistEl.textContent = "—";
+        if (resistDist) resistDist.textContent = "—";
+      }
+
+      if (srMarkerEl && srTrackEl) {
+        if (hasBand) {
+          srTrackEl.classList.remove("sr-ladder--dim");
+          var t = (price - supN) / (resN - supN);
+          t = Math.max(0, Math.min(1, t));
+          var leftPct = t * 100;
+          srMarkerEl.style.left = leftPct + "%";
+          var bandPct = (t * 100).toFixed(0);
+          srTrackEl.setAttribute(
+            "aria-label",
+            "SPY is about " +
+              bandPct +
+              " percent of the way from support (" +
+              supN.toFixed(2) +
+              ") toward resistance (" +
+              resN.toFixed(2) +
+              ")."
+          );
+        } else {
+          srTrackEl.classList.add("sr-ladder--dim");
+          srMarkerEl.style.left = "50%";
+          srTrackEl.setAttribute(
+            "aria-label",
+            "Support and resistance range unavailable. Need valid support below resistance and a live SPY price."
+          );
+        }
       }
     }
 
     if (watchEl) {
       var narrative = (signal.narrative && signal.narrative.text) || "";
       var gexAlerts = signal.gexAlerts || [];
-      var approaching = gexAlerts.find(function (a) {
-        return a.type === "APPROACHING";
-      });
-      if (gexAlerts.find(function (a) {
-        return a.urgency === "HIGH";
-      })) {
-        var high = gexAlerts.find(function (a) {
-          return a.urgency === "HIGH";
-        });
-        watchEl.textContent = high.message.split("\n")[0];
-        watchEl.style.borderLeftColor = "var(--hud-red)";
-      } else if (approaching) {
-        watchEl.textContent = approaching.message.split("\n")[0];
+      if (noGexOrPrice) {
+        watchEl.textContent =
+          narrative ||
+          "Market closed — analysis resumes Monday at 8:30 AM ET";
         watchEl.style.borderLeftColor = "var(--hud-amber)";
       } else {
-        watchEl.textContent = narrative || "Monitoring market conditions";
-        watchEl.style.borderLeftColor = "var(--hud-cyan)";
+        var approaching = gexAlerts.find(function (a) {
+          return a.type === "APPROACHING";
+        });
+        if (gexAlerts.find(function (a) {
+          return a.urgency === "HIGH";
+        })) {
+          var high = gexAlerts.find(function (a) {
+            return a.urgency === "HIGH";
+          });
+          watchEl.textContent = high.message.split("\n")[0];
+          watchEl.style.borderLeftColor = "var(--hud-red)";
+        } else if (approaching) {
+          watchEl.textContent = approaching.message.split("\n")[0];
+          watchEl.style.borderLeftColor = "var(--hud-amber)";
+        } else {
+          watchEl.textContent = narrative || "Monitoring market conditions";
+          watchEl.style.borderLeftColor = "var(--hud-cyan)";
+        }
       }
     }
+  }
+
+  function matrixSignalClosedFallback() {
+    return {
+      gradClass: "MIXED",
+      progressPct: 0,
+      narrative: {
+        biasKey: "NEUTRAL",
+        text: "Market closed — monitoring resumes Monday",
+        emoji: "⚪",
+        urgency: "low",
+      },
+      marketProb: { bullPct: 50, bearPct: 50, bias: "NEUTRAL" },
+      gex: null,
+      gexAlerts: [],
+      currentPrice: 0,
+    };
   }
 
   function fetchMatrixSignal() {
@@ -2288,10 +2406,24 @@ window.calculateIgnition = calculateIgnition;
         return r.json();
       })
       .then(function (d) {
-        if (d.error && d.error !== "insufficient_bars") return;
+        d = d || {};
+        if (d.error && d.error !== "insufficient_bars") {
+          updateMarketStatus(matrixSignalClosedFallback());
+          return;
+        }
+        if (d.error === "insufficient_bars" && d.gradClass == null && !d.narrative) {
+          updateMarketStatus(matrixSignalClosedFallback());
+          return;
+        }
+        if (d.gradClass == null && !d.narrative) {
+          updateMarketStatus(matrixSignalClosedFallback());
+          return;
+        }
         updateMarketStatus(d);
       })
-      .catch(function () {});
+      .catch(function () {
+        updateMarketStatus(matrixSignalClosedFallback());
+      });
   }
 
   function start() {
