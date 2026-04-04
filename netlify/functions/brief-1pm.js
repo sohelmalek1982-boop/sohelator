@@ -307,31 +307,40 @@ Max ~900 words in the Markdown sections. Trader-to-trader tone.`,
 }
 
 async function httpHandler(event) {
-  if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers: cors, body: "" };
-  }
-  if (event.httpMethod === "GET") {
-    const store = getStore('morning-scans');
-    const data = await store.get("brief_1pm_latest", { type: "json" });
+  try {
+    if (event.httpMethod === "OPTIONS") {
+      return { statusCode: 204, headers: cors, body: "" };
+    }
+    if (event.httpMethod === "GET") {
+      const store = getStore("morning-scans");
+      const data = await store.get("brief_1pm_latest", { type: "json" });
+      return {
+        statusCode: 200,
+        headers: { ...cors, "Content-Type": "application/json" },
+        body: JSON.stringify(data || null),
+      };
+    }
+    return await runBrief1pm().catch(async (e) => {
+      console.error(e);
+      try {
+        await recordJobError("brief-1pm", e.message);
+      } catch (err) {
+        /* ignore */
+      }
+      return {
+        statusCode: 200,
+        headers: { ...cors, "Content-Type": "application/json" },
+        body: JSON.stringify({ ok: false, error: String(e?.message || e) }),
+      };
+    });
+  } catch (e) {
+    console.error("brief-1pm httpHandler", e);
     return {
       statusCode: 200,
       headers: { ...cors, "Content-Type": "application/json" },
-      body: JSON.stringify(data || null),
+      body: JSON.stringify({ ok: false, error: String(e?.message || e) }),
     };
   }
-  return runBrief1pm().catch(async (e) => {
-    console.error(e);
-    try {
-      await recordJobError("brief-1pm", e.message);
-    } catch (err) {
-      /* ignore */
-    }
-    return {
-      statusCode: 500,
-      headers: { ...cors, "Content-Type": "application/json" },
-      body: JSON.stringify({ ok: false, error: e.message }),
-    };
-  });
 }
 
 /** 17:00 UTC Mon–Fri ≈ 1:00 PM Eastern during EDT (Mar–Nov). Adjust to 18:00 UTC in EST-only if needed. */
