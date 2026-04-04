@@ -54,6 +54,23 @@ function nyHM() {
   };
 }
 
+/** Minutes since midnight in America/New_York (DST-aware). */
+function minutesEtNow() {
+  const p = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  }).formatToParts(new Date());
+  let h = 0;
+  let m = 0;
+  for (const x of p) {
+    if (x.type === "hour") h = +x.value;
+    if (x.type === "minute") m = +x.value;
+  }
+  return h * 60 + m;
+}
+
 function dateStrUs() {
   return new Date().toLocaleDateString("en-US", {
     timeZone: "America/New_York",
@@ -220,11 +237,18 @@ async function listAlertJsonKeys(alertStore) {
 }
 
 async function runEod() {
-  const { h, m } = nyHM();
-  if (h !== 16 || m > 15) {
+  /**
+   * Netlify cron is UTC. Old schedule `0 19` = 3pm ET in summer — always skipped vs 4pm gate.
+   * Allow ~4:00–5:35pm ET; cron uses `5 20,21 * * 1-5` (4:05pm / 5:05pm UTC slots → 4pm ET winter/summer).
+   */
+  const mt = minutesEtNow();
+  if (mt < 16 * 60 || mt > 17 * 60 + 35) {
     return {
       statusCode: 200,
-      body: JSON.stringify({ skipped: true, reason: "Outside EOD window (4:00–4:15pm ET)" }),
+      body: JSON.stringify({
+        skipped: true,
+        reason: "Outside EOD window (4:00–5:35pm ET)",
+      }),
     };
   }
 
@@ -244,6 +268,21 @@ async function runEod() {
     siteID: process.env.NETLIFY_SITE_ID,
     token: process.env.NETLIFY_TOKEN,
   });
+
+  try {
+    const existing = await learningStore.get("eod_latest", { type: "json" });
+    if (existing && existing.date === dateStr) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          skipped: true,
+          reason: "EOD already completed for this session",
+        }),
+      };
+    }
+  } catch {
+    /* continue */
+  }
 
   const [scan925, scan955] = await Promise.all([
     store.get("scan_925_latest", { type: "json" }),
@@ -918,4 +957,4 @@ async function httpHandler(event) {
   });
 }
 
-exports.handler = schedule("0 19 * * 1-5", httpHandler);
+exports.handler = schedule("5 20,21 * * 1-5", httpHandler);

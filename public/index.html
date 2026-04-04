@@ -15,10 +15,19 @@
       --hud-s0: #010c10;
       --hud-s1: #011418;
       --hud-s2: #021c22;
+      --hud-s3: #031a20;
+      --hud-s4: #0a2830;
+      --hud-b1: rgba(0, 229, 255, 0.22);
+      --hud-b2: rgba(0, 229, 255, 0.14);
+      --hud-t2: #b8dce8;
+      --hud-t3: #6a9aaa;
       --hud-cyan: #00e5ff;
       --hud-green: #00ff88;
       --hud-red: #ff2d4e;
       --hud-amber: #ffaa00;
+      --hud-g-border: rgba(0, 255, 136, 0.45);
+      --hud-r-border: rgba(255, 45, 78, 0.45);
+      --hud-a-border: rgba(255, 170, 0, 0.45);
       --hud-text: #e8faff;
       --hud-muted: #2d6878;
       --hud-mono: "SF Mono", "Fira Code", "Courier New", monospace;
@@ -1005,6 +1014,11 @@
           <div id="matrix-pct" style="font-size:13px;font-weight:700;color:var(--hud-cyan)">0%</div>
         </div>
         <div id="matrix-ratios" style="font-size:9px;color:var(--hud-t3);margin-top:8px;letter-spacing:0.04em"></div>
+        <div id="gex-levels-section" style="margin-top:10px">
+          <div style="font-size:9px;color:var(--hud-t3);letter-spacing:0.1em;margin-bottom:6px">GEX KEY LEVELS</div>
+          <div id="gex-levels-list"></div>
+        </div>
+        <div id="matrix-narrative" style="margin-top:10px;padding:10px;background:var(--hud-s3);border-radius:8px;border:1px solid var(--hud-b1);font-size:12px;color:var(--hud-t2);line-height:1.55;font-family:-apple-system,BlinkMacSystemFont,sans-serif"></div>
       </div>
     </div>
 

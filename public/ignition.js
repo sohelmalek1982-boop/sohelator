@@ -207,7 +207,8 @@ window.calculateIgnition = calculateIgnition;
   var SCAN_URL = "/api/scan";
   var LOG_URL = "/api/log-trade";
   var SCAN_HOOK = "/api/scan";
-  var POLL_SCAN_MS = 60000;
+  /** Poll saved scan from server (cheap-monitor writes last_hud_scan); avoids manual SCAN. */
+  var POLL_SCAN_MS = 45000;
   var POLL_OPEN_MS = 30000;
   var SPY_LEVELS_SYM = "SPY";
   var EXPENSIVE_SLOTS_ET_MIN = [495, 565, 585, 660, 840, 960];
@@ -217,6 +218,8 @@ window.calculateIgnition = calculateIgnition;
   var spyLevelsTimer = null;
   var hudClockTimer = null;
   var positionTtiTimer = null;
+  /** Dedupes pullScanData vs manual POST when savedAt matches. */
+  var lastAppliedHudSavedAt = 0;
 
   function timeInTrade(openedAt) {
     var ms = Date.now() - new Date(openedAt).getTime();
@@ -1548,7 +1551,9 @@ window.calculateIgnition = calculateIgnition;
     if (j && j.alerts) window.__sohelLastAlerts = j.alerts;
     setPanelStatus(res && res.ok ? "SCAN OK" : "SCAN HTTP", !!(res && res.ok));
     if (res && res.ok && j && j.success !== false) {
-      window.__sohelLastScanOkAt = Date.now();
+      window.__sohelLastScanOkAt =
+        typeof j.savedAt === "number" ? j.savedAt : Date.now();
+      if (typeof j.savedAt === "number") lastAppliedHudSavedAt = j.savedAt;
     }
     updateRiskPillFromScan(j);
     renderHudStats(j);
@@ -1570,6 +1575,58 @@ window.calculateIgnition = calculateIgnition;
         );
       })
       .catch(function () {});
+  }
+
+  function isHudScanShape(j) {
+    return j && typeof j === "object" && Array.isArray(j.alerts);
+  }
+
+  /** Sync HUD from GET /api/scan-data (POST /api/scan results saved by scheduled cheap-monitor). */
+  function pullScanData() {
+    fetch("/api/scan-data", { cache: "no-store" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        var j = data && data.lastScan;
+        if (!isHudScanShape(j)) return;
+        if (j.savedAt && Date.now() - j.savedAt > 72 * 3600000) return;
+        if (typeof j.savedAt === "number" && j.savedAt === lastAppliedHudSavedAt) {
+          return;
+        }
+        lastAppliedHudSavedAt = typeof j.savedAt === "number" ? j.savedAt : 0;
+        applyScanPayload(j, { ok: true });
+        try {
+          onScanNotifyAndRefreshOpen(j);
+          onNeonScan(j);
+        } catch (e0) {}
+      })
+      .catch(function () {});
+  }
+
+  /** First paint: use recent blob if scheduled scan already ran; else POST once. */
+  function fetchOrSeedHudScan() {
+    fetch("/api/scan-data", { cache: "no-store" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        var j = data && data.lastScan;
+        var ageMs = j && j.savedAt ? Date.now() - j.savedAt : Infinity;
+        if (isHudScanShape(j) && ageMs < 15 * 60 * 1000) {
+          lastAppliedHudSavedAt = typeof j.savedAt === "number" ? j.savedAt : 0;
+          applyScanPayload(j, { ok: true });
+          try {
+            onScanNotifyAndRefreshOpen(j);
+            onNeonScan(j);
+          } catch (e1) {}
+          return;
+        }
+        pullScan();
+      })
+      .catch(function () {
+        pullScan();
+      });
   }
 
   function pullScan() {
@@ -1899,7 +1956,7 @@ window.calculateIgnition = calculateIgnition;
   };
 
   function fetchMatrixSignal() {
-    fetch("/api/matrix-signal")
+    fetch("/api/matrix-signal", { cache: "no-store" })
       .then(function (r) {
         return r.json();
       })
@@ -1960,6 +2017,70 @@ window.calculateIgnition = calculateIgnition;
             " | Rv9/21: " +
             d.ratios.rv_9_21;
         }
+
+        var gexList = document.getElementById("gex-levels-list");
+        if (gexList) {
+          if (d.gex) {
+            var levels = d.gex.keyLevels || [];
+            if (levels.length) {
+              gexList.innerHTML = levels
+                .map(function (l) {
+                  var dist = (
+                    ((parseFloat(d.currentPrice || 0) - l.price) / l.price) *
+                    100
+                  ).toFixed(2);
+                  var color =
+                    l.side === "resistance"
+                      ? "var(--hud-red)"
+                      : l.side === "support"
+                        ? "var(--hud-green)"
+                        : "var(--hud-amber)";
+                  return (
+                    '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:var(--hud-s3);border-radius:6px;margin-bottom:4px;border-left:2px solid ' +
+                    color +
+                    '">' +
+                    '<div><div style="font-size:10px;color:var(--hud-t2)">' +
+                    l.label +
+                    '</div><div style="font-size:9px;color:var(--hud-t3)">' +
+                    dist +
+                    "% vs spot</div></div>" +
+                    '<div style="font-size:11px;font-weight:700;color:' +
+                    color +
+                    '">$' +
+                    l.price +
+                    "</div></div>"
+                  );
+                })
+                .join("");
+            } else {
+              gexList.innerHTML =
+                '<div style="font-size:10px;color:var(--hud-t3)">No GEX data — market closed</div>';
+            }
+          } else {
+            gexList.innerHTML = "";
+          }
+        }
+
+        var gexAlerts = d.gexAlerts || [];
+        var highUrgency = gexAlerts.filter(function (a) {
+          return a.urgency === "HIGH";
+        });
+
+        var narrativeEl = document.getElementById("matrix-narrative");
+        if (narrativeEl && highUrgency.length) {
+          narrativeEl.textContent = highUrgency[0].message.split("\n")[0];
+          narrativeEl.style.borderColor = "var(--hud-amber)";
+        } else if (narrativeEl && d.narrative) {
+          narrativeEl.textContent = d.narrative.emoji + " " + d.narrative.text;
+          narrativeEl.style.borderColor =
+            d.narrative.biasKey === "STRONGLY_BULLISH"
+              ? "var(--hud-g-border)"
+              : d.narrative.biasKey === "STRONGLY_BEARISH"
+                ? "var(--hud-r-border)"
+                : d.narrative.urgency === "high"
+                  ? "var(--hud-a-border)"
+                  : "var(--hud-b1)";
+        }
       })
       .catch(function () {});
   }
@@ -1979,7 +2100,7 @@ window.calculateIgnition = calculateIgnition;
     positionTtiTimer = setInterval(updateAllPositionTimeInTrade, 60000);
     setInterval(fetchPositionTracker, 60000);
     setInterval(fetchHudAlertTracker, 120000);
-    setInterval(fetchHudAuxiliary, 900000);
+    setInterval(fetchHudAuxiliary, 300000);
 
     var pageHome = document.getElementById("page-hud-home");
     if (pageHome) {
@@ -2032,9 +2153,9 @@ window.calculateIgnition = calculateIgnition;
     var refBtn = document.getElementById("btn-align-refresh");
     if (refBtn) refBtn.addEventListener("click", pullScan);
 
-    pullScan();
+    fetchOrSeedHudScan();
     if (pollScanTimer) clearInterval(pollScanTimer);
-    pollScanTimer = setInterval(pullScan, POLL_SCAN_MS);
+    pollScanTimer = setInterval(pullScanData, POLL_SCAN_MS);
 
     fetchOpenTrades();
     if (pollOpenTimer) clearInterval(pollOpenTimer);
@@ -2329,6 +2450,10 @@ window.calculateIgnition = calculateIgnition;
         lastLearningFetch = 0;
         fetchLearningIfStale(true);
       });
+
+    setInterval(function () {
+      fetchLearningIfStale(false);
+    }, 5 * 60 * 1000);
   }
 
   if (document.readyState === "loading") {

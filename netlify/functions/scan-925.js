@@ -506,31 +506,26 @@ ${allHeadlines.slice(0, 8).join("\n")}`;
   await store.setJSON("scan_925_latest", scanData);
   await store.setJSON("scan_925_" + dateStr.replace(/\s/g, "_"), scanData);
 
-  const bot = process.env.TELEGRAM_BOT_TOKEN;
-  const chat = process.env.TELEGRAM_CHAT_ID;
-  if (bot && chat) {
-    const _watchlist =
-      watchlistBull.map((w) => w.symbol).join(", ") || "—";
-    const _brief = analysis || "No analysis available";
-    const _msg = [
-      `⏰ SOHELATOR 9:25 CHECKPOINT`,
-      ``,
-      String(_brief).slice(0, 500),
-      ``,
-      `Watchlist: ${_watchlist}`,
-    ]
-      .join("\n")
-      .slice(0, 4000);
-
-    fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
+  const _b = process.env.TELEGRAM_BOT_TOKEN;
+  const _c = process.env.TELEGRAM_CHAT_ID;
+  if (_b && _c) {
+    const result = scanData;
+    const _wl =
+      (result?.watchlistTop5 || result?.watchlistBull || [])
+        .map((w) => w.symbol)
+        .join(", ") || "—";
+    const _brief =
+      String(result?.aiBrief || result?.grokBrief || result?.claudeAnalysis || "")
+        .slice(0, 600) || "Scan complete";
+    fetch(`https://api.telegram.org/bot${_b}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        chat_id: chat,
-        text: _msg,
+        chat_id: _c,
+        text: `⏰ 9:25 CHECKPOINT\n\n${_brief}\n\nWatchlist: ${_wl}`.slice(0, 4000),
         disable_web_page_preview: true,
       }),
-    }).catch((e) => console.warn("scan-925 Telegram:", e?.message));
+    }).catch(() => {});
   }
 
   try {

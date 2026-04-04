@@ -576,28 +576,23 @@ For each CONFIRMED setup: exact option, entry trigger, stop, target, time exit. 
   const bot = process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TELEGRAM_CHAT_ID;
   if (bot && chat) {
-    const _watchlist =
-      confirmedTickers.map((w) => w.symbol).join(", ") || "—";
-    const _brief = claudeOverall || "No analysis available";
-    const _msgCp = [
-      `⏰ SOHELATOR 9:55 CHECKPOINT`,
-      ``,
-      String(_brief).slice(0, 500),
-      ``,
-      `Watchlist: ${_watchlist}`,
-    ]
-      .join("\n")
-      .slice(0, 4000);
-
+    const result = scan955Data;
+    const _wl =
+      (result?.watchlistTop5 || result?.confirmedTickers || [])
+        .map((w) => w.symbol)
+        .join(", ") || "—";
+    const _brief =
+      String(result?.aiBrief || result?.grokBrief || result?.claudeAnalysis || "")
+        .slice(0, 600) || "Scan complete";
     fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: chat,
-        text: _msgCp,
+        text: `⏰ 9:55 CHECKPOINT\n\n${_brief}\n\nWatchlist: ${_wl}`.slice(0, 4000),
         disable_web_page_preview: true,
       }),
-    }).catch((e) => console.warn("scan-955 checkpoint Telegram:", e?.message));
+    }).catch(() => {});
 
     for (const t of confirmedTickers) {
       const o = t.option;

@@ -2,7 +2,7 @@
  * SOHELATOR blueprint — cheap 5-min monitor + wake-up (Prompt 7)
  * SOHELATOR blueprint — remove NVDA hardcoding + after-hours hourly scans + news/catalyst detection (Prompt 12)
  * SOHELATOR blueprint — ALL alerts to Telegram (user wants to review everything) (Prompt 19):
- *   POST /api/scan with suppressTelegram:true; this function relays every alert score≥65 (deduped) using the same body format as scan.js.
+ *   POST /api/scan with suppressTelegram:true; relays quality-filtered alerts (Grok + lib/alertQuality.cjs) via Telegram.
  *
  * Schedule: netlify.toml — cron every five minutes — this function gates:
  *   • Weekday RTH 8:00–16:00 ET: every run → cheap scan + wild wakeup (score ≥72, vol ≥2.5×, text catalyst)
@@ -16,10 +16,7 @@
 const fetch = globalThis.fetch || require("node-fetch");
 const { getStore } = require("@netlify/blobs");
 const { sendPushToAll } = require("./lib/pushAll.js");
-
-/** In-memory dedupe for Telegram alert buckets (per warm instance). */
-const SESSION_DEDUPE = new Map();
-const SESSION_DEDUPE_TTL_MS = 30 * 60 * 1000;
+const alertQuality = require("./lib/alertQuality.cjs");
 
 /** Must match DEFAULT_UNIVERSE in netlify/functions/scan.js for headline intersection. */
 const SCAN_UNIVERSE = new Set([
@@ -132,8 +129,7 @@ function isWild(a) {
   );
 }
 
-/* ─── Prompt 19 — mirror scan.js Telegram formatting (keep in sync with netlify/functions/scan.js) ─── */
-const TELEGRAM_ALERT_MIN_SCORE = 85;
+/* ─── Prompt 19 — mirror scan.js Telegram formatting (lib/alertQuality.cjs) ─── */
 
 /** After each scan: refresh P&L on open positions, log new alerts as positions (blob). */
 async function runPositionSync(cheapAlerts, expAlerts) {
@@ -155,7 +151,10 @@ async function runPositionSync(cheapAlerts, expAlerts) {
       }
     }
     for (const a of bySym.values()) {
-      if (Number(a.score) >= TELEGRAM_ALERT_MIN_SCORE) {
+      if (
+        Number(a.score) >= 88 &&
+        alertQuality.isGrokConsultedAlert(a)
+      ) {
         const opened = await pt.logAlertAsPosition(a);
         if (opened) {
           const base = {
@@ -602,8 +601,8 @@ HOLD | {one line reason}`;
 }
 
 const ALERT_COOLDOWNS_BLOB_KEY = "alert-cooldowns";
-const ALERT_TELEGRAM_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours (was 20–30 min)
-const ALERT_TELEGRAM_SCORE_JUMP = 15; // was 5
+const ALERT_TELEGRAM_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 hours
+const ALERT_TELEGRAM_SCORE_JUMP = 10; // Score must jump 10 points to override cooldown
 
 function cheapMonitorBlobStore() {
   if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return null;
@@ -680,26 +679,6 @@ function historicalMatchesShortP19(a) {
   return "—";
 }
 
-async function getDailyTelegramCount(store) {
-  if (!store) return 0;
-  const today = new Date().toISOString().slice(0, 10);
-  try {
-    const d = await store.get(`telegram-daily-${today}`, { type: "json" });
-    return d?.count || 0;
-  } catch {
-    return 0;
-  }
-}
-
-async function incrementDailyTelegramCount(store) {
-  if (!store) return;
-  const today = new Date().toISOString().slice(0, 10);
-  try {
-    const current = await getDailyTelegramCount(store);
-    await store.setJSON(`telegram-daily-${today}`, { count: current + 1 });
-  } catch {}
-}
-
 function buildTelegramPrompt19Message(a) {
   const sym = String(a.symbol || "—").toUpperCase();
   const play = String(a.playTypeLabel || a.playType || "SETUP");
@@ -761,26 +740,20 @@ function buildTelegramPrompt19Message(a) {
   );
 }
 
-async function relayPrompt19Telegrams(alerts, dedupeSet) {
+async function relayPrompt19Telegrams(alerts, dedupeSet, now, relayOpts) {
   const bot = process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TELEGRAM_CHAT_ID;
   if (!bot || !chat || !Array.isArray(alerts)) return;
-  const store = cheapMonitorBlobStore();
-  const dailyCount = await getDailyTelegramCount(store);
-  if (dailyCount >= 3) {
-    console.log("cheap-monitor: daily Telegram cap reached (3)");
-    return;
-  }
+  const prepared = alertQuality.prepareAlertsForRelay(
+    alerts,
+    now || new Date(),
+    relayOpts || {}
+  );
   const cooldowns = await getAlertCooldowns();
-  for (let i = 0; i < alerts.length; i++) {
-    const a = alerts[i];
-    if (Number(a.score) < TELEGRAM_ALERT_MIN_SCORE) continue;
+  for (let i = 0; i < prepared.length; i++) {
+    const a = prepared[i];
     const sym = String(a.symbol || "").trim().toUpperCase();
     const newScore = Math.round(Number(a.score) || 0);
-    const memKey = `${sym}-${Math.floor(newScore / 10) * 10}`;
-    const memEntry = SESSION_DEDUPE.get(memKey);
-    if (memEntry && Date.now() - memEntry < SESSION_DEDUPE_TTL_MS) continue;
-    SESSION_DEDUPE.set(memKey, Date.now());
     const prev = sym ? cooldowns[sym] : null;
     if (prev && typeof prev.firedAt === "number") {
       const within =
@@ -812,7 +785,6 @@ async function relayPrompt19Telegrams(alerts, dedupeSet) {
       console.warn("cheap-monitor Prompt19 Telegram:", e?.message || e);
       continue;
     }
-    await incrementDailyTelegramCount(store);
     cooldowns[sym] = { score: newScore, firedAt: Date.now() };
     await setAlertCooldown(sym, newScore);
     await new Promise((r) => setTimeout(r, 300));
@@ -876,11 +848,6 @@ function universeSymsFromNews(items) {
 }
 
 exports.handler = async () => {
-  const _now = Date.now();
-  for (const [_k, _t] of SESSION_DEDUPE.entries()) {
-    if (_now - _t > SESSION_DEDUPE_TTL_MS) SESSION_DEDUPE.delete(_k);
-  }
-
   const headers = { "Content-Type": "application/json" };
   const out = {
     ok: true,
@@ -1021,6 +988,7 @@ exports.handler = async () => {
   }
 
   const telegramDedupe = new Set();
+  let regimeFlipActive = false;
 
   try {
     const res = await fetch(`${base}/api/scan`, {
@@ -1046,7 +1014,41 @@ exports.handler = async () => {
       outcome: "OPEN",
     });
 
-    await relayPrompt19Telegrams(alerts, telegramDedupe);
+    try {
+      const bias = alertQuality.inferBiasFromAlerts(alerts);
+      const st = cheapMonitorBlobStore();
+      if (st) {
+        const ymd = ymdEt(now);
+        const prev = await st.get("market_bias_last", { type: "json" });
+        if (
+          prev &&
+          prev.ymd === ymd &&
+          prev.bias &&
+          prev.bias !== "mixed" &&
+          bias !== "mixed" &&
+          prev.bias !== bias
+        ) {
+          regimeFlipActive = true;
+          await appendSessionLogRow({
+            type: "REGIME_BIAS_FLIP",
+            trigger: `${prev.bias}->${bias}`,
+            score: alerts.length,
+            outcome: "OPEN",
+          });
+        }
+        await st.setJSON("market_bias_last", {
+          ymd,
+          bias,
+          at: Date.now(),
+        });
+      }
+    } catch (e) {
+      console.warn("cheap-monitor market_bias_last", e?.message || e);
+    }
+
+    const relayOpts = { regimeFlipActive };
+    out.regimeFlipActive = regimeFlipActive;
+    await relayPrompt19Telegrams(alerts, telegramDedupe, now, relayOpts);
 
     // Trigger matrix signal check (fire and forget)
     fetch(`${base}/api/matrix-signal`).catch(() => {});
@@ -1110,17 +1112,25 @@ exports.handler = async () => {
       const ej = await exp.json().catch(() => ({}));
       out.expensiveOk = !!(ej && ej.success);
       expAlerts = Array.isArray(ej.alerts) ? ej.alerts : [];
-      await relayPrompt19Telegrams(expAlerts, telegramDedupe);
+      await relayPrompt19Telegrams(expAlerts, telegramDedupe, now, relayOpts);
     }
 
+    const pushPrepared = alertQuality.prepareAlertsForRelay(
+      wild,
+      now,
+      relayOpts
+    );
     const push = await sendPushToAll({
       title: "SOHELATOR — Wild / high-conviction scan",
       body:
-        wild
+        pushPrepared
           .slice(0, 4)
           .map((w) => `${w.symbol} ${w.score}`)
           .join(" · ") || "Check dashboard",
-      data: { kind: "cheap-monitor-wild", count: wild.length },
+      data: {
+        kind: "cheap-monitor-wild",
+        count: pushPrepared.length,
+      },
     });
     out.push = push;
     out.status = "ok";

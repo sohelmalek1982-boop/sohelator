@@ -29,6 +29,7 @@ const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Cache-Control": "private, no-store, must-revalidate",
 };
 
 /** Booleans only — no secrets. Used by SCAN tab readiness strip. */
@@ -112,15 +113,28 @@ exports.handler = async (event) => {
       token,
     });
 
-    const [scan925, scan955, eodLatest, runningStats, jobHealth, lastScan] =
-      await Promise.all([
-        store.get("scan_925_latest", { type: "json" }),
-        store.get("scan_955_latest", { type: "json" }),
-        learningStore.get("eod_latest", { type: "json" }),
-        learningStore.get("running_stats", { type: "json" }),
-        getJobHealth(),
-        scannerStore.get("last_scan", { type: "json" }),
-      ]);
+    const [
+      scan925,
+      scan955,
+      eodLatest,
+      runningStats,
+      jobHealth,
+      lastHudScan,
+      lastScanLegacy,
+    ] = await Promise.all([
+      store.get("scan_925_latest", { type: "json" }),
+      store.get("scan_955_latest", { type: "json" }),
+      learningStore.get("eod_latest", { type: "json" }),
+      learningStore.get("running_stats", { type: "json" }),
+      getJobHealth(),
+      scannerStore.get("last_hud_scan", { type: "json" }),
+      scannerStore.get("last_scan", { type: "json" }),
+    ]);
+
+    const lastScan =
+      lastHudScan != null && lastHudScan.success !== false
+        ? lastHudScan
+        : lastScanLegacy;
 
     return {
       statusCode: 200,

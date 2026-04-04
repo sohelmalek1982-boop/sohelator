@@ -28,12 +28,31 @@ import { formatDrivingAlert } from "../../src/lib/alert-formatter.js";
 import { num } from "../../src/lib/utils.js";
 import { callGrok } from "../../src/lib/grok.js";
 import { getStore } from "@netlify/blobs";
+import { createRequire } from "module";
+
+const require = createRequire(import.meta.url);
+const alertQuality = require("./lib/alertQuality.cjs");
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+/** Persists latest POST /api/scan JSON for HUD GET /api/scan-data (cheap-monitor updates without opening the app). */
+async function persistLastHudScan(payload) {
+  if (!process.env.NETLIFY_SITE_ID || !process.env.NETLIFY_TOKEN) return;
+  try {
+    const scannerStore = getStore({
+      name: "scanner",
+      siteID: process.env.NETLIFY_SITE_ID,
+      token: process.env.NETLIFY_TOKEN,
+    });
+    await scannerStore.setJSON("last_hud_scan", payload);
+  } catch (e) {
+    console.warn("scan.js persist last_hud_scan", e?.message || e);
+  }
+}
 
 const DEFAULT_UNIVERSE = [
   "SPY",
@@ -107,6 +126,36 @@ function levelsFromLastBar(bars5, bull, riskPct) {
   };
 }
 
+/**
+ * Entry/stop/target are from the last 5m bar close; `last` is the live quote.
+ * Without this check we repeatedly alert after price has already hit stop/target
+ * or left the entry zone — looks "wrong" in Telegram/HUD.
+ */
+function isSetupLiveActionable(setup) {
+  const live = Number(setup.last ?? setup.underlyingAtAlert);
+  const stop = Number(setup.stop);
+  const target = Number(setup.target);
+  const entry = Number(setup.entry);
+  if (!Number.isFinite(live) || live <= 0) return true;
+  if (
+    !Number.isFinite(entry) ||
+    !Number.isFinite(stop) ||
+    !Number.isFinite(target)
+  ) {
+    return true;
+  }
+  const eps = Math.max(entry * 0.001, 0.02);
+  const isLong = String(setup.direction || "").toLowerCase() !== "short";
+  if (isLong) {
+    if (live <= stop + eps) return false;
+    if (live >= target - eps) return false;
+  } else {
+    if (live >= stop - eps) return false;
+    if (live <= target + eps) return false;
+  }
+  return true;
+}
+
 function historicalSummary(similar) {
   const n = Array.isArray(similar) ? similar.length : 0;
   if (!n) return "Historical: no close matches in last backtest cache.";
@@ -156,19 +205,6 @@ function isUsEquityOptionsRthEt(d) {
   return t >= open && t < close;
 }
 
-/** SOHELATOR blueprint — ALL alerts to Telegram (user wants to review everything) (Prompt 19) */
-function shouldSendTelegram(a) {
-  const hasRealGrok =
-    a.grokAnalysis &&
-    a.grokAnalysis.length > 50 &&
-    !String(a.grokAnalysis).includes("Rules edge") &&
-    !String(a.grokAnalysis).includes("unavailable");
-  const highScore = Number(a.score) >= 85;
-  const hasOption =
-    a.suggestedOption?.description &&
-    !String(a.suggestedOption.description).includes("undefined");
-  return hasRealGrok && highScore && hasOption;
-}
 
 function volRatioOfAlert(a) {
   return Number(a?.details?.volRatio ?? a?.volRatio ?? 0);
@@ -465,40 +501,43 @@ export const handler = async (event) => {
 
     const P0 = getOptimizedParams();
     if (!optionsRth && !forceAlertsAfterHours) {
+      const afterHoursPayload = {
+        success: true,
+        savedAt: Date.now(),
+        status: "after_hours",
+        mode: scanMode,
+        requestedMode: requestedMode !== scanMode ? requestedMode : undefined,
+        meta: {
+          minScore: P0.minScore,
+          evThreshold: P0.evThreshold,
+          grokHealth: "skipped",
+          universeSymbols: [
+            ...new Set([
+              ...DEFAULT_UNIVERSE,
+              ...(Array.isArray(body.extraSymbols)
+                ? body.extraSymbols
+                    .map((s) => String(s || "").trim().toUpperCase())
+                    .filter(Boolean)
+                : []),
+            ]),
+          ].slice(0, 48),
+          priorityFromNews: Array.isArray(body.prioritySymbols)
+            ? body.prioritySymbols
+                .map((s) => String(s || "").trim().toUpperCase())
+                .filter(Boolean)
+            : [],
+          backtest7d: null,
+          optionsSession: "after_hours",
+          optionsSessionNote:
+            "Equity options session is 9:30–16:00 ET Mon–Fri — alerts paused.",
+        },
+        alerts: [],
+      };
+      await persistLastHudScan(afterHoursPayload);
       return {
         statusCode: 200,
         headers,
-        body: JSON.stringify({
-          success: true,
-          status: "after_hours",
-          mode: scanMode,
-          requestedMode: requestedMode !== scanMode ? requestedMode : undefined,
-          meta: {
-            minScore: P0.minScore,
-            evThreshold: P0.evThreshold,
-            grokHealth: "skipped",
-            universeSymbols: [
-              ...new Set([
-                ...DEFAULT_UNIVERSE,
-                ...(Array.isArray(body.extraSymbols)
-                  ? body.extraSymbols
-                      .map((s) => String(s || "").trim().toUpperCase())
-                      .filter(Boolean)
-                  : []),
-              ]),
-            ].slice(0, 48),
-            priorityFromNews: Array.isArray(body.prioritySymbols)
-              ? body.prioritySymbols
-                  .map((s) => String(s || "").trim().toUpperCase())
-                  .filter(Boolean)
-              : [],
-            backtest7d: null,
-            optionsSession: "after_hours",
-            optionsSessionNote:
-              "Equity options session is 9:30–16:00 ET Mon–Fri — alerts paused.",
-          },
-          alerts: [],
-        }),
+        body: JSON.stringify(afterHoursPayload),
       };
     }
 
@@ -627,6 +666,8 @@ export const handler = async (event) => {
         similar,
         details: sc.details,
       };
+
+      if (!isSetupLiveActionable(setup)) continue;
 
       try {
         const sug = await suggestAtmOption(symbol, row.last, bull);
@@ -828,44 +869,47 @@ Respond ONLY with a valid JSON array. One object per symbol with fields: symbol,
       }
     }
 
-    /* SOHELATOR blueprint — ALL alerts to Telegram (user wants to review everything) (Prompt 19) */
+    /* SOHELATOR blueprint — quality-filtered Telegram (Grok + edge / vol / catalyst) (Prompt 19) */
     if (
       alerts.length &&
       !suppressTelegram &&
       process.env.TELEGRAM_BOT_TOKEN &&
       process.env.TELEGRAM_CHAT_ID
     ) {
-      for (const a of alerts) {
-        if (!shouldSendTelegram(a)) continue;
+      const toSend = alertQuality.prepareAlertsForRelay(alerts, new Date(), {});
+      for (const a of toSend) {
         await sendTelegramScanAlert(buildTelegramPrompt19Message(a));
       }
     }
 
+    const scanPayload = {
+      success: true,
+      savedAt: Date.now(),
+      status: scanStatus,
+      mode: scanMode,
+      requestedMode: requestedMode !== scanMode ? requestedMode : undefined,
+      meta: {
+        minScore: P.minScore,
+        evThreshold: P.evThreshold,
+        grokHealth: grokHealthAgg,
+        universeSymbols: mergedUniverse.slice(0, 48),
+        priorityFromNews: Array.from(prioritySyms),
+        optionsSession: "rth",
+        backtest7d: backtest7
+          ? {
+              ev: backtest7.ev,
+              winRate: backtest7.winRate,
+              totalSetups: backtest7.totalSetups,
+            }
+          : null,
+      },
+      alerts,
+    };
+    await persistLastHudScan(scanPayload);
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({
-        success: true,
-        status: scanStatus,
-        mode: scanMode,
-        requestedMode: requestedMode !== scanMode ? requestedMode : undefined,
-        meta: {
-          minScore: P.minScore,
-          evThreshold: P.evThreshold,
-          grokHealth: grokHealthAgg,
-          universeSymbols: mergedUniverse.slice(0, 48),
-          priorityFromNews: Array.from(prioritySyms),
-          optionsSession: "rth",
-          backtest7d: backtest7
-            ? {
-                ev: backtest7.ev,
-                winRate: backtest7.winRate,
-                totalSetups: backtest7.totalSetups,
-              }
-            : null,
-        },
-        alerts,
-      }),
+      body: JSON.stringify(scanPayload),
     };
   } catch (e) {
     console.error("scan.js", e);
