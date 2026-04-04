@@ -31,10 +31,7 @@ import {
   callClaudeWithFallback,
 } from "../../src/lib/claude.js";
 import { getStore } from "@netlify/blobs";
-import { createRequire } from "module";
-
-const require = createRequire(import.meta.url);
-const alertQuality = require("./lib/alertQuality.cjs");
+import { prepareAlertsForRelay } from "./lib/alertQuality.cjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -773,7 +770,7 @@ async function runScan(event) {
       process.env.TELEGRAM_BOT_TOKEN &&
       process.env.TELEGRAM_CHAT_ID
     ) {
-      const toSend = alertQuality.prepareAlertsForRelay(alerts, new Date(), {});
+      const toSend = prepareAlertsForRelay(alerts, new Date(), {});
       for (const a of toSend) {
         const sym = String(a.symbol || "").toUpperCase();
         const sc = Math.round(Number(a.score) || 0);
