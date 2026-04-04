@@ -578,7 +578,19 @@ window.calculateIgnition = calculateIgnition;
     }
   }
 
-  /** POSITIONS stat: only rows opened today (ET), not closed, still open. */
+  /** POSITIONS stat card: only explicit open rows from API payload — never use j.count. */
+  function filterStatOpenPositions(list) {
+    return (list || []).filter(function (p) {
+      return (
+        p &&
+        p.isOpen === true &&
+        !p.closeReason &&
+        !p.closedReason
+      );
+    });
+  }
+
+  /** POS tab “active” list: today ET + status heuristics (separate from stat number). */
   function isPositionOpenForHud(pos) {
     if (!pos || typeof pos !== "object") return false;
     var todayET = new Date().toLocaleDateString("en-CA", {
@@ -610,10 +622,7 @@ window.calculateIgnition = calculateIgnition;
 
   function countOpenPositions() {
     var list = window.__sohelPositionTrackerList;
-    if (!list || !list.length) return 0;
-    return list.filter(function (p) {
-      return isPositionOpenForHud(p);
-    }).length;
+    return filterStatOpenPositions(list).length;
   }
 
   function renderHudStats(j) {
@@ -856,21 +865,27 @@ window.calculateIgnition = calculateIgnition;
   }
 
   function fetchPositionTracker() {
+    var posEl = document.getElementById("hud-stat-positions");
+    if (posEl) posEl.textContent = "0";
+    window.__sohelPositionTrackerList = [];
     fetch("/api/position-tracker", { cache: "no-store" })
       .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       })
       .then(function (j) {
         var list = (j && j.positions) || [];
+        if (!Array.isArray(list)) list = [];
         window.__sohelPositionTrackerList = list;
+        var openPositions = filterStatOpenPositions(list);
+        if (posEl) posEl.textContent = String(openPositions.length);
         renderPositionTrackerList(list);
         renderSessionPnlFromPositions(list);
-        var elPos = document.getElementById("hud-stat-positions");
-        if (elPos) elPos.textContent = String(countOpenPositions());
       })
       .catch(function () {
         var host = document.getElementById("hud-positions-list");
         if (host) host.innerHTML = '<p class="hint">Position tracker unavailable.</p>';
+        if (posEl) posEl.textContent = "0";
       });
   }
 
@@ -2519,6 +2534,9 @@ window.calculateIgnition = calculateIgnition;
     fetchHudAuxiliary();
     fetchMatrixSignal();
     setInterval(fetchMatrixSignal, 15 * 60 * 1000);
+    window.__sohelPositionTrackerList = [];
+    var posElBoot = document.getElementById("hud-stat-positions");
+    if (posElBoot) posElBoot.textContent = "0";
     fetchPositionTracker();
     fetchHudAlertTracker();
     if (positionTtiTimer) clearInterval(positionTtiTimer);
