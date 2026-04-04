@@ -578,22 +578,34 @@ window.calculateIgnition = calculateIgnition;
     }
   }
 
-  /**
-   * Open positions: isOpen, status 'open', or no close reason (closeReason/closedReason) while still active.
-   * Tracker uses LIVE/HOLD/DANGER — treat as open when closeReason is unset and status is not exit/closed.
-   */
-  function isPositionOpenForHud(p) {
-    if (!p || typeof p !== "object") return false;
-    if (p.closeReason != null && String(p.closeReason).trim() !== "") return false;
-    if (p.closedReason != null && String(p.closedReason).trim() !== "") return false;
-    if (p.isOpen === true) return true;
-    var st = String(p.status || "").trim().toLowerCase();
-    if (st === "open") return true;
-    if (isPositionTrackerTerminated(p)) return false;
-    if (p.closeReason == null && (p.closedReason == null || p.closedReason === "")) {
-      return /^(live|hold|danger|risk)/.test(st);
+  /** POSITIONS stat: only rows opened today (ET), not closed, still open. */
+  function isPositionOpenForHud(pos) {
+    if (!pos || typeof pos !== "object") return false;
+    var todayET = new Date().toLocaleDateString("en-CA", {
+      timeZone: "America/New_York",
+    });
+    var raw =
+      pos.openedAt != null
+        ? pos.openedAt
+        : pos.entryTime != null
+          ? pos.entryTime
+          : pos.ts;
+    var tMs;
+    if (raw == null) return false;
+    if (typeof raw === "string" && raw !== "" && isNaN(Number(raw))) {
+      tMs = Date.parse(raw);
+    } else {
+      tMs = Number(raw);
     }
-    return false;
+    if (!isFinite(tMs) || tMs <= 0) return false;
+    var openedDate = new Date(tMs).toLocaleDateString("en-CA", {
+      timeZone: "America/New_York",
+    });
+    if (openedDate !== todayET) return false;
+    if (pos.closeReason || pos.closedReason) return false;
+    if (pos.isOpen === false) return false;
+    if (isPositionTrackerTerminated(pos)) return false;
+    return true;
   }
 
   function countOpenPositions() {

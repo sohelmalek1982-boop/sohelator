@@ -512,6 +512,54 @@ export async function handler(event) {
     return { statusCode: 204, headers, body: "" };
   }
 
+  /** GET ?clearAll=true — wipe positions map + session log (same auth as POST; optional ?secret= when env is set). */
+  if (event.httpMethod === "GET") {
+    const qs = event.queryStringParameters || {};
+    if (qs.clearAll === "true") {
+      const secret = process.env.SCANNER_TRIGGER_SECRET;
+      const authHeader =
+        event.headers["x-scanner-secret"] ||
+        event.headers["X-Scanner-Secret"] ||
+        "";
+      const authQuery = qs.secret != null ? String(qs.secret) : "";
+      if (
+        secret &&
+        authHeader !== secret &&
+        authQuery !== secret
+      ) {
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ ok: false, error: "Unauthorized" }),
+        };
+      }
+      const store = positionsStore();
+      try {
+        await store.setJSON(BLOB_KEY, {});
+        await store.setJSON(SESSION_LOG_KEY, []);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            ok: true,
+            cleared: true,
+            message: "Positions and session log cleared",
+          }),
+        };
+      } catch (e) {
+        console.error("position-tracker GET clearAll", e);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({
+            ok: false,
+            error: String(e?.message || e),
+          }),
+        };
+      }
+    }
+  }
+
   /** POST: clear positions and/or session log (requires SCANNER_TRIGGER_SECRET if set). */
   if (event.httpMethod === "POST") {
     const secret = process.env.SCANNER_TRIGGER_SECRET;
