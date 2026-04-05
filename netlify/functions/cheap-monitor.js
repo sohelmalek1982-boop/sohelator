@@ -540,8 +540,9 @@ HOLD | {one line reason}`;
       const emoji = win ? "✅" : "❌";
       const sign = pnlDollar >= 0 ? "+" : "";
       await sendTelegramPlain(
-        `${emoji} POSITION CLOSED — ${pos.symbol}\n` +
-          `${dirU} · Claude decision\n` +
+        `📊 POSITION UPDATE — ${pos.symbol}\n` +
+          `━━━━━━━━━━━━━━━━━━━━━\n` +
+          `${emoji} CLOSED · ${dirU} · Claude decision\n` +
           `Reason: ${decision.reason}\n` +
           `Entry $${entryPrice.toFixed(2)} → Exit $${currentPrice.toFixed(2)}\n` +
           `P&L: ${sign}$${Math.abs(pnlDollar).toFixed(2)} (${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%)\n` +
@@ -582,8 +583,9 @@ HOLD | {one line reason}`;
         lastUpdated: Date.now(),
       };
       await sendTelegramPlain(
-        `⚡ ADD SIGNAL — ${pos.symbol}\n` +
-          `${dirU} · Claude says add here\n` +
+        `📊 POSITION UPDATE — ${pos.symbol}\n` +
+          `━━━━━━━━━━━━━━━━━━━━━\n` +
+          `⚡ ADD SIGNAL · ${dirU} · Claude says add here\n` +
           `Reason: ${decision.reason}\n` +
           `Current: $${currentPrice.toFixed(2)} · P&L so far: ${pnlPct.toFixed(2)}%\n` +
           `Time in trade: ${timeInTrade}`
@@ -771,9 +773,16 @@ function buildTelegramPrompt19Message(a) {
   if (hasRegimeOrLevelKeywordsP19(a)) hi.push("⚡ REGIME / LEVEL / REVERSAL");
   const banner = hi.length ? hi.join("\n") + "\n\n" : "";
 
+  const header = [
+    `📡 SCANNER ALERT — ${sym}`,
+    `Source: Rules scan + Claude analysis`,
+    `━━━━━━━━━━━━━━━━━━━━━`,
+  ].join("\n");
+
   return (
+    header +
+    "\n\n" +
     banner +
-    `🔥 SOHELATOR ALERT\n` +
     `${sym} - ${play}\n` +
     `SCORE ${score} | EDGE ${edgeStr}\n` +
     `Price: ${priceStr}${chg}\n` +

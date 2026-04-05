@@ -508,7 +508,9 @@ async function maybeSendGEXConfirmationTelegram(
   }
 
   const msg = [
-    `📍 GEX CONFIRMATION — SPY $${spyPrice.toFixed(2)}`,
+    `📍 GEX NEAR LEVEL — SPY $${spyPrice.toFixed(2)}`,
+    `Source: SPY options chain (approx GEX)`,
+    `━━━━━━━━━━━━━━━━━━━━━`,
     `Near ${L.label} @ $${L.price.toFixed(2)} (${L.type})`,
     `Matrix: ${ctx.gradClass} ${ctx.gradTier} | ${ctx.macroRegime}`,
     ``,
@@ -793,12 +795,13 @@ export const handler = async (event) => {
 
           if (Date.now() - lastSent < cooldown) continue;
 
+          const gexTgPrefix = `📍 GEX ALERT — SPY\nSource: SPY options chain (approx GEX)\n━━━━━━━━━━━━━━━━━━━━━\n\n`;
           await fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               chat_id: chat,
-              text: alert.message,
+              text: gexTgPrefix + alert.message,
               disable_web_page_preview: true,
             }),
           }).catch(() => {});
@@ -821,9 +824,10 @@ export const handler = async (event) => {
       const chat = process.env.TELEGRAM_CHAT_ID;
       if (bot && chat) {
         const msg = [
-          `${nar.emoji} SOHELATOR MARKET CONTEXT`,
-          ``,
-          nar.narrative,
+          `📈 MARKET CONTEXT — narrative update`,
+          `Source: EMA velocity + bull/bear probability (HUD)`,
+          `━━━━━━━━━━━━━━━━━━━━━`,
+          `${nar.emoji} ${nar.narrative}`,
           ``,
           `Bull: ${marketProb.bullPct}% | Bear: ${marketProb.bearPct}%`,
           `Regime: ${macroRegime} | ${gradClass} ${tier}`,
@@ -871,19 +875,32 @@ export const handler = async (event) => {
           }
         }
         if (!skipPrimaryTg) {
+          const putWall =
+            gexData?.putWall != null && Number.isFinite(Number(gexData.putWall))
+              ? Number(gexData.putWall).toFixed(2)
+              : "—";
+          const callWall =
+            gexData?.callWall != null && Number.isFinite(Number(gexData.callWall))
+              ? Number(gexData.callWall).toFixed(2)
+              : "—";
           const msg = [
-            `⚡ MATRIX SIGNAL — SPY`,
-            `Variant 9 — 74% historical win rate`,
+            `🧠 MATRIX SIGNAL — SPY`,
+            `Source: EMA graduation system (74% validated)`,
+            `━━━━━━━━━━━━━━━━━━━━━`,
+            `${tier.toUpperCase()} BULL GRADUATION`,
             ``,
-            `Graduation: ${tier.toUpperCase()} ${gradClass}`,
-            `Strength: ${signal.gradStrength}`,
-            `Macro regime: ${macroRegime}`,
+            `Market is setting up for longs`,
+            `All timeframes aligned bullish`,
             ``,
-            `Entry: buy ATM call spread 7-10 DTE`,
+            `Entry: ATM call spread 7-10 DTE`,
             `Stop: 1% below SPY entry`,
             `Target: 2% above entry`,
             ``,
-            `Ratios: ${signal.ratios.r_4_9} | ${signal.ratios.rv_4_9} | ${signal.rv_9_21}`,
+            `SPY: $${currentPrice.toFixed(2)}`,
+            `Support: $${putWall} | Resistance: $${callWall}`,
+            ``,
+            `Strength: ${signal.gradStrength} | Macro: ${macroRegime} | ${gradClass}`,
+            `Ratios: ${signal.ratios.r_4_9} | ${signal.ratios.rv_4_9} | ${signal.ratios.rv_9_21}`,
           ].join("\n");
           fetch(`https://api.telegram.org/bot${bot}/sendMessage`, {
             method: "POST",

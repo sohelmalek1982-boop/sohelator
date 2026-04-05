@@ -296,9 +296,16 @@ function buildTelegramPrompt19Message(a) {
   if (hasRegimeOrLevelKeywords(a)) hi.push("⚡ REGIME / LEVEL / REVERSAL");
   const banner = hi.length ? hi.join("\n") + "\n\n" : "";
 
+  const header = [
+    `📡 SCANNER ALERT — ${sym}`,
+    `Source: Rules scan + Claude analysis`,
+    `━━━━━━━━━━━━━━━━━━━━━`,
+  ].join("\n");
+
   return (
+    header +
+    "\n\n" +
     banner +
-    `🔥 SOHELATOR ALERT\n` +
     `${sym} - ${play}\n` +
     `SCORE ${score} | EDGE ${edgeStr}\n` +
     `Price: ${priceStr}${chg}\n` +

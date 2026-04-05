@@ -223,7 +223,7 @@ ${JSON.stringify(snapshot)}`;
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 chat_id: _chat,
-                text: `🌅 SOHELATOR PREMARKET — ${_d}\n\n${snapshot.aiBrief}\n\nNext: 9:25 AM`.slice(0, 4000),
+                text: `🌅 SOHELATOR PREMARKET — morning brief\n${_d}\n━━━━━━━━━━━━━━━━━━━━━\n\n${snapshot.aiBrief}\n\nNext: 9:25 AM`.slice(0, 4000),
                 disable_web_page_preview: true,
               }),
             }).catch((e) => console.warn("premarket Telegram:", e?.message));

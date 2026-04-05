@@ -540,7 +540,7 @@ ${allHeadlines.slice(0, 8).join("\n")}`;
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: _c,
-        text: `⏰ 9:25 CHECKPOINT\n\n${_brief}\n\nWatchlist: ${_wl}`.slice(0, 4000),
+        text: `⏰ SOHELATOR 9:25 CHECKPOINT — midday update\n━━━━━━━━━━━━━━━━━━━━━\n\n${_brief}\n\nWatchlist: ${_wl}`.slice(0, 4000),
         disable_web_page_preview: true,
       }),
     }).catch(() => {});
